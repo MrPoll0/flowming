@@ -1,0 +1,85 @@
+/* Reset default margins and ensure proper box-sizing */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+}
+
+#app {
+  height: 100vh;
+  width: 100vw;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.layout {
+  height: 100%;
+  width: 100%;
+  display: grid;
+  grid-template-rows: 7.5% 92.5%;
+  grid-template-areas: 
+    "top"
+    "main";
+}
+
+.top-bar {
+  grid-area: top;
+  background-color: #f0f0f0;
+  padding: 1rem;
+  border-bottom: 1px solid #ccc;
+}
+
+.main-content {
+  grid-area: main;
+  position: relative;
+}
+
+/* Content styles */
+.left-content {
+  height: 100%;
+  padding: 1rem;
+  background-color: #e0e0e0;
+}
+
+.bottom-content {
+  height: 100%;
+  padding: 1rem;
+  background-color: #c0c0c0;
+}
+
+/* Make sure ReactFlow takes full size of its container */
+.mosaic-window .react-flow {
+  width: 100%;
+  height: 100%;
+}
+
+/* Hide Mosaic window title bar */
+.mosaic-window-toolbar {
+  display: none !important;
+}
+
+/* Adjust the content to take full height */
+.mosaic-window .mosaic-window-body {
+  height: 100% !important;
+}
+
+/* Styling for React Tabs */
+.react-tabs {
+  height: 100%;
+}
+
+.react-tabs__tab-panel {
+  height: calc(100% - 50px);
+  padding: 20px;
+}
+
+/* Make sure the mosaic layout takes full space */
+.mosaic {
+  height: 100%;
+}
