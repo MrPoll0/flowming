@@ -26,7 +26,7 @@ jobs:
 
       - name: Restart server
         run: |
-          sudo systemctl restart nginx
+          systemctl restart nginx
 
       - name: Clean up
         run: |
