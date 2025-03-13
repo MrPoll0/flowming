@@ -7,8 +7,7 @@ import {
   useReactFlow,
   useNodesState,
   useEdgesState,
-  Node,
-  Edge
+  Node
 } from '@xyflow/react';
 import { SelectedNodeContext } from '../../context/SelectedNodeContext';
 import { FlowNode, initialNodes, initialEdges } from './FlowTypes';
@@ -16,7 +15,7 @@ import { NodeBlock } from '../Toolbar/ToolbarTypes';
 
 const FlowContent: React.FC = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [edges, _setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const { setSelectedNode } = useContext(SelectedNodeContext);
   
   const [isDraggingOver, setIsDraggingOver] = useState(false);
