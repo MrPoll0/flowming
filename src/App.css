@@ -83,3 +83,8 @@ body {
 .mosaic {
   height: 100%;
 }
+
+.react-flow__pane.drop-target {
+  background-color: rgba(230, 244, 255, 0.5);
+  transition: background-color 0.2s;
+}
