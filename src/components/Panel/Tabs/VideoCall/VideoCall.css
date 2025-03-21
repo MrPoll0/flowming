@@ -1,0 +1,83 @@
+.video-call {
+  flex: 2;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background-color: #1e1e1e;
+  border-radius: 8px;
+}
+
+.video-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 15px;
+  padding: 15px;
+  min-height: 200px;
+  overflow-y: auto;
+}
+
+.video-container {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: #000;
+  aspect-ratio: 16 / 9;
+  min-height: 180px;
+}
+
+.local-video-container {
+  background-color: #101010;
+  border: 2px solid #2196f3;
+}
+
+.screen-video-container {
+  grid-column: 1 / -1;
+  border: 2px solid #4caf50;
+}
+
+.video-element {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.video-label {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  background-color: rgba(0, 0, 0, 0.6);
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 14px;
+  max-width: 80%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Handle different numbers of participants */
+.video-grid:has(.video-container:nth-child(1)) {
+  grid-template-columns: 1fr;
+}
+
+.video-grid:has(.video-container:nth-child(2)) {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.video-grid:has(.video-container:nth-child(n+5)) {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.video-grid:has(.video-container:nth-child(n+10)) {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+@media (max-width: 768px) {
+  .video-grid {
+    grid-template-columns: 1fr !important;
+  }
+} 
