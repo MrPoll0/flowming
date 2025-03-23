@@ -7,10 +7,14 @@ import {
   useReactFlow,
   useNodesState,
   useEdgesState,
-  Node
+  Node, 
+  Panel,
+  MarkerType,
+  addEdge,
+  Edge
 } from '@xyflow/react';
 import { SelectedNodeContext } from '../../context/SelectedNodeContext';
-import { FlowNode, initialNodes, initialEdges } from './FlowTypes';
+import { FlowNode, initialNodes, initialEdges, nodeTypes } from './FlowTypes';
 import { NodeBlock } from '../Toolbar/ToolbarTypes';
 
 const FlowContent: React.FC = () => {
@@ -97,15 +101,15 @@ const FlowContent: React.FC = () => {
         const block = JSON.parse(blockData) as NodeBlock;
         console.log('Parsed block data in direct drop:', block);
         
-        if (block.type !== 'node') {
+        /*if (block.type !== 'node') {
           console.error('Dropped item is not a node block');
           return;
-        }
+        }*/
         
         // Get the position where the node should be created
         const position = reactFlowInstance.screenToFlowPosition({
-          x: dragEvent.clientX - reactFlowBounds.left,
-          y: dragEvent.clientY - reactFlowBounds.top,
+          x: dragEvent.clientX,
+          y: dragEvent.clientY,
         });
         
         console.log('Creating node at position in direct drop:', position);
@@ -141,6 +145,11 @@ const FlowContent: React.FC = () => {
     };
   }, [reactFlowInstance, isDraggingOver, setNodes]);
 
+  const onConnect = (params: any) => {
+    console.log('onConnect', params);
+    _setEdges((eds: Edge[]) => addEdge(params, eds));
+  };
+
   return (
     <div 
       className="reactflow-wrapper" 
@@ -149,16 +158,39 @@ const FlowContent: React.FC = () => {
     >
       <ReactFlow
         nodes={nodes}
+        nodeTypes={nodeTypes}
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={onNodeClick}
         onPaneClick={onPaneClick}
+        onConnect={onConnect}
         fitView
         proOptions={{ hideAttribution: true }}
+        defaultEdgeOptions={{ 
+          // TODO: custom edge for custom (smoothstep) dragging handle
+          // TODO: check this for draw.io similar behavior with edges https://stackoverflow.com/questions/77831116/is-it-possible-to-shape-reactflow-edges-by-dragging-them
+          // ==> https://codesandbox.io/p/sandbox/floral-framework-forked-2ytjqc
+
+          // TODO: animated + color change edge when running
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            width: 10,
+            height: 10,
+            color: '#555',
+          },
+          style: {
+            stroke: '#555',
+            strokeWidth: 1,
+          },
+          type: 'smoothstep',
+        }}
       >
         <Controls />
         <Background variant={BackgroundVariant.Lines} gap={12} size={1} />
+        <Panel>
+          Nombre del archivo/diagrama (TODO)
+        </Panel>
       </ReactFlow>
     </div>
   );

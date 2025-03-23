@@ -1,18 +1,28 @@
 import { Block, NodeBlock } from './ToolbarTypes';
 
 // Node blocks
-const basicNodeBlock: NodeBlock = {
-  id: 'basic-node',
+const startNodeBlock: NodeBlock = {
+  id: 'start-node',
   type: 'node',
-  label: 'Basic Node',
+  label: 'Start',
   icon: '◻️',
-  nodeType: 'default',
-  description: 'A basic node with default styling',
+  nodeType: 'Start',
+  description: 'Start node',
+};
+
+const endNodeBlock: NodeBlock = {
+  id: 'end-node',
+  type: 'node',
+  label: 'End',
+  icon: '◼️',
+  nodeType: 'End',
+  description: 'End node',
 };
 
 // Export all blocks
 export const toolbarBlocksList: Block[] = [
-  basicNodeBlock
+  startNodeBlock,
+  endNodeBlock
 ];
 
 export default toolbarBlocksList; 

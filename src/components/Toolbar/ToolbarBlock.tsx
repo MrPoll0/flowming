@@ -7,10 +7,10 @@ const ToolbarBlock: React.FC<{
     
     const handleDragStart = (event: React.DragEvent) => {
       // Only allow dragging for node blocks
-      if (block.type !== 'node') {
+      /*if (block.type !== 'node') {
         event.preventDefault();
         return;
-      }
+      }*/
   
       // Set drag data - use a simple format that's easy to debug
       const dragData = JSON.stringify(block);
@@ -26,8 +26,8 @@ const ToolbarBlock: React.FC<{
     return (
       <div className="toolbar-block-container">
         <div
-          className={`toolbar-block toolbar-block-${block.type} ${block.type === 'node' ? 'draggable' : ''}`}
-          draggable={block.type === 'node'}
+          className={`toolbar-block toolbar-block-${block.type} draggable`}
+          draggable={ true }
           onDragStart={handleDragStart}
           title={block.description || block.label}
         >
