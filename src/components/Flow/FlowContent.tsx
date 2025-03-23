@@ -82,8 +82,6 @@ const FlowContent: React.FC = () => {
         return;
       }
       
-      const reactFlowBounds = reactFlowWrapper.current.getBoundingClientRect();
-      
       // Try to get the data from multiple formats
       let blockData = dragEvent.dataTransfer.getData('application/reactflow');
       if (!blockData) {
