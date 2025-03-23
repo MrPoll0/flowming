@@ -88,3 +88,18 @@ body {
   background-color: rgba(230, 244, 255, 0.5);
   transition: background-color 0.2s;
 }
+
+.react-flow__handle {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+/* When hovering over a node, handles become visible */
+.react-flow__node:hover .react-flow__handle {
+  opacity: 1;
+}
+
+/* Make handles fully visible when hovering over them */
+.react-flow__handle:hover {
+  opacity: 1;
+}
