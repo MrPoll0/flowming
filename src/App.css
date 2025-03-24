@@ -127,3 +127,28 @@ body {
   color: red;
   font-weight: bold;
 }
+
+/* Edge label style */
+.edge-label-renderer__custom-edge {
+  position: absolute;
+  background-color: #ffcc00;
+  padding: 5px;
+  border-radius: 5px;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+/* Edge label edit input style */
+.edge-label-input {
+  background: white;
+  border: 1px solid #ccc;
+  padding: 3px;
+  border-radius: 3px;
+  font-size: 9px;
+  min-width: 50px;
+  outline: none;
+}
+ 
+.react-flow__edge-textbg {
+  fill: #f7f9fb;
+}

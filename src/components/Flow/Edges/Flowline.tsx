@@ -1,11 +1,40 @@
-import { BaseEdge, getSmoothStepPath, type EdgeProps } from '@xyflow/react';
-import { memo } from 'react';
+import { BaseEdge, getSmoothStepPath, type EdgeProps, EdgeLabelRenderer, Edge } from '@xyflow/react';
+import { FC, memo, useState } from 'react';
 
 // Memoize the node component to prevent unnecessary re-renders
-export default memo(function Flowline(props: EdgeProps) {
+const Flowline: FC<EdgeProps<Edge<{ label: string, isHovered: boolean, isSelected: boolean, isEditing?: boolean }>>> = (props) => {
     const { data } = props;
     const isHovered = data?.isHovered;
     const isSelected = data?.isSelected;
+    const isEditing = data?.isEditing;
+    const [labelText, setLabelText] = useState(data?.label || '');
+    
+    // Create a unique marker ID for this edge
+    const markerId = `marker-${props.id}`;
+    
+    // Handle input change
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setLabelText(e.target.value);
+    };
+    
+    // Handle input blur (save changes)
+    const handleInputBlur = () => {
+        // Save the changes by dispatching a custom event
+        const event = new CustomEvent('edge:labelChanged', {
+            detail: { id: props.id, label: labelText }
+        });
+        document.dispatchEvent(event);
+    };
+    
+    // Handle key press (Enter to save, Escape to cancel)
+    const handleKeyPress = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            handleInputBlur();
+        } else if (e.key === 'Escape') {
+            setLabelText(data?.label || '');
+            handleInputBlur();
+        }
+    };
 
     // Determine styling based on hover/selected state
     const edgeColor = isSelected 
@@ -32,9 +61,6 @@ export default memo(function Flowline(props: EdgeProps) {
         stroke: edgeColor,
     };
 
-    // Create a unique marker ID for this edge
-    const markerId = `arrowhead-${props.id}`;
-
     return (
         <>
             <defs>
@@ -57,21 +83,47 @@ export default memo(function Flowline(props: EdgeProps) {
                 </marker>
             </defs>
             <BaseEdge
-            id={props.id}
-            path={edgePath}
-            labelX={labelX}
-            labelY={labelY}
-            label={props.label}
-            labelStyle={props.labelStyle}
-            labelShowBg={props.labelShowBg}
-            labelBgStyle={props.labelBgStyle}
-            labelBgPadding={props.labelBgPadding}
-            labelBgBorderRadius={props.labelBgBorderRadius}
-            style={edgeStyle}
-            markerEnd={`url(#${markerId})`}
-            markerStart={props.markerStart}
-            interactionWidth={props.interactionWidth}
+                id={props.id}
+                path={edgePath}
+                labelX={labelX}
+                labelY={labelY}
+                label={undefined} // hide default label
+                labelStyle={props.labelStyle}
+                labelShowBg={props.labelShowBg}
+                labelBgStyle={props.labelBgStyle}
+                labelBgPadding={props.labelBgPadding}
+                labelBgBorderRadius={props.labelBgBorderRadius}
+                style={edgeStyle}
+                markerEnd={`url(#${markerId})`}
+                markerStart={props.markerStart}
+                interactionWidth={props.interactionWidth}
             />
+            {(isEditing || labelText || data?.label) && (
+                <EdgeLabelRenderer>
+                    <div
+                        style={{
+                            transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+                        }}
+                        className="edge-label-renderer__custom-edge nodrag nopan"
+                    >
+                        {isEditing ? (
+                            <input
+                                type="text"
+                                value={labelText}
+                                onChange={handleInputChange}
+                                onBlur={handleInputBlur}
+                                onKeyDown={handleKeyPress}
+                                autoFocus
+                                className="edge-label-input"
+                            />
+                        ) : (
+                            labelText || data?.label || ''
+                        )}
+                    </div>
+                </EdgeLabelRenderer>
+            )}
         </>
     );
-});
+};
+
+export default memo(Flowline);

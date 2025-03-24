@@ -36,6 +36,9 @@ const FlowContent: React.FC = () => {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const reactFlowInstance = useReactFlow();
 
+  // Add state to track edge being edited
+  const [editingEdge, setEditingEdge] = useState<string | null>(null);
+
   // Apply visual styles based on hover and selection states
   useEffect(() => {
     // Apply styles to nodes
@@ -154,11 +157,30 @@ const FlowContent: React.FC = () => {
   };
 
   // Clear selection when clicking on the canvas
-  const onPaneClick = () => {
+  const onPaneClick = useCallback((__event: React.MouseEvent) => {
     setSelectedNode(null);
     setSelectedElement(null);
     hideContextMenu();
-  };
+    
+    // Cancel edge editing
+    if (editingEdge) {
+      setEdges((prevEdges) => 
+        prevEdges.map((edge) => {
+          if (edge.id === editingEdge) {
+            return {
+              ...edge,
+              data: {
+                ...edge.data,
+                isEditing: false
+              }
+            };
+          }
+          return edge;
+        })
+      );
+      setEditingEdge(null);
+    }
+  }, [hideContextMenu, setSelectedNode, setSelectedElement, editingEdge, setEdges]);
 
   // Handle mouse leave from ReactFlow area
   const onMouseLeave = useCallback(() => {
@@ -365,6 +387,65 @@ const FlowContent: React.FC = () => {
     event.preventDefault();
   }, []);
 
+  // Add double-click handler for edges
+  const onEdgeDoubleClick = useCallback((event: React.MouseEvent, edge: Edge) => {
+    event.stopPropagation();
+    setEditingEdge(edge.id);
+    setSelectedElement({ id: edge.id, type: 'edge' });
+  }, [setSelectedElement]);
+  
+  // Handle edge label changes
+  useEffect(() => {
+    const handleLabelChange = (event: CustomEvent) => {
+      const { id, label } = event.detail;
+      
+      setEdges((eds) => 
+        eds.map((edge) => {
+          if (edge.id === id) {
+            return {
+              ...edge,
+              data: {
+                ...edge.data,
+                label,
+                isEditing: false
+              },
+              label
+            };
+          }
+          return edge;
+        })
+      );
+      
+      setEditingEdge(null);
+    };
+    
+    document.addEventListener('edge:labelChanged' as any, handleLabelChange as EventListener);
+    
+    return () => {
+      document.removeEventListener('edge:labelChanged' as any, handleLabelChange as EventListener);
+    };
+  }, [setEdges]);
+  
+  // Add effect to update edge data for editing state
+  useEffect(() => {
+    if (editingEdge) {
+      setEdges((prevEdges) => 
+        prevEdges.map((edge) => {
+          if (edge.id === editingEdge) {
+            return {
+              ...edge,
+              data: {
+                ...edge.data,
+                isEditing: true
+              }
+            };
+          }
+          return edge;
+        })
+      );
+    }
+  }, [editingEdge, setEdges]);
+
   return (
     <div 
       className="reactflow-wrapper" 
@@ -382,6 +463,7 @@ const FlowContent: React.FC = () => {
         onEdgesChange={onEdgesChange}
         onNodeClick={onNodeClick}
         onEdgeClick={onEdgeClick}
+        onEdgeDoubleClick={onEdgeDoubleClick}
         onNodeMouseEnter={onNodeMouseEnter}
         onNodeMouseLeave={onNodeMouseLeave}
         onEdgeMouseEnter={onEdgeMouseEnter}
@@ -404,7 +486,7 @@ const FlowContent: React.FC = () => {
       >
         <Controls />
         <Background variant={BackgroundVariant.Lines} gap={12} size={1} />
-        <Panel>
+        <Panel style={{ userSelect: 'none' }}> {/* prevent text selection when double clicking on edge */}
           Nombre del archivo/diagrama (TODO)
         </Panel>
       </ReactFlow>

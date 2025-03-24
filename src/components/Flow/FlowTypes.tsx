@@ -30,4 +30,5 @@ export const initialEdges: Edge[] = [{
   sourceHandle: 'bottom',
   target: '2',
   targetHandle: 'top',
+  data: { label: 'double click me to edit' },
 }]; 
