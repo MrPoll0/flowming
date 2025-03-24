@@ -1,11 +1,30 @@
 import { Handle, Position } from '@xyflow/react';
- 
-function Start() {
+import { memo } from 'react';
+
+interface StartNodeData {
+  label?: string;
+  isHovered?: boolean;
+  isSelected?: boolean;
+  [key: string]: any;
+}
+
+function Start({ data }: { data: StartNodeData }) {
+  const { isHovered, isSelected } = data;
+  
   return (
     <div className="start-node" style={{ 
       borderRadius: '50px', 
       padding: '10px 20px',
-      border: '1px solid #000',
+      border: isSelected 
+        ? '1px solid #1a73e8' 
+        : isHovered 
+          ? '1px solid #4d9cff' 
+          : '1px solid #000',
+      boxShadow: isSelected 
+        ? '0 0 8px rgba(26, 115, 232, 0.6)' 
+        : isHovered 
+          ? '0 0 5px rgba(77, 156, 255, 0.5)' 
+          : 'none',
       backgroundColor: '#fff',
       display: 'flex',
       flexDirection: 'column',
@@ -39,4 +58,5 @@ function Start() {
   );
 }
  
-export default Start;
+// Memoize the node component to prevent unnecessary re-renders
+export default memo(Start);

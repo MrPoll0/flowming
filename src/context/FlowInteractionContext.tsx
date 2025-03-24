@@ -1,0 +1,111 @@
+import React, { createContext, useState, ReactNode, useEffect } from 'react';
+
+interface ContextMenuPosition {
+  x: number;
+  y: number;
+  visible: boolean;
+  element: { id: string; type: 'node' | 'edge' } | null;
+}
+
+interface FlowInteractionContextType {
+  hoveredElement: { id: string; type: 'node' | 'edge' } | null;
+  selectedElement: { id: string; type: 'node' | 'edge' } | null;
+  contextMenuPosition: ContextMenuPosition;
+  setHoveredElement: (element: { id: string; type: 'node' | 'edge' } | null) => void;
+  setSelectedElement: (element: { id: string; type: 'node' | 'edge' } | null) => void;
+  showContextMenu: (x: number, y: number, element: { id: string; type: 'node' | 'edge' } | null) => void;
+  hideContextMenu: () => void;
+  resetInteractions: () => void;
+}
+
+export const FlowInteractionContext = createContext<FlowInteractionContextType>({
+  hoveredElement: null,
+  selectedElement: null,
+  contextMenuPosition: { x: 0, y: 0, visible: false, element: null },
+  setHoveredElement: () => {},
+  setSelectedElement: () => {},
+  showContextMenu: () => {},
+  hideContextMenu: () => {},
+  resetInteractions: () => {},
+});
+
+interface FlowInteractionProviderProps {
+  children: ReactNode;
+}
+
+export const FlowInteractionProvider: React.FC<FlowInteractionProviderProps> = ({ children }) => {
+  const [hoveredElement, setHoveredElement] = useState<{ id: string; type: 'node' | 'edge' } | null>(null);
+  const [selectedElement, setSelectedElement] = useState<{ id: string; type: 'node' | 'edge' } | null>(null);
+  const [contextMenuPosition, setContextMenuPosition] = useState<ContextMenuPosition>({
+    x: 0,
+    y: 0,
+    visible: false,
+    element: null,
+  });
+
+  const resetInteractions = () => {
+    setHoveredElement(null);
+    setSelectedElement(null);
+    hideContextMenu();
+  };
+
+  useEffect(() => {
+    const handleDocumentClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const isReactFlowElement = target.closest('.react-flow') || 
+                                 target.closest('.context-menu');
+      
+      if (!isReactFlowElement) {
+        resetInteractions();
+      }
+    };
+
+    const handleDocumentMouseLeave = (e: MouseEvent) => {
+      if (e.relatedTarget === null) {
+        setHoveredElement(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleDocumentClick);
+    document.addEventListener('mouseleave', handleDocumentMouseLeave);
+    
+    return () => {
+      document.removeEventListener('mousedown', handleDocumentClick);
+      document.removeEventListener('mouseleave', handleDocumentMouseLeave);
+    };
+  }, [resetInteractions, setHoveredElement]);
+
+  const showContextMenu = (x: number, y: number, element: { id: string; type: 'node' | 'edge' } | null) => {
+    setContextMenuPosition({
+      x,
+      y,
+      visible: true,
+      element,
+    });
+  };
+
+  const hideContextMenu = () => {
+    setContextMenuPosition({
+      ...contextMenuPosition,
+      visible: false,
+      element: null,
+    });
+  };
+
+  return (
+    <FlowInteractionContext.Provider
+      value={{
+        hoveredElement,
+        selectedElement,
+        contextMenuPosition,
+        setHoveredElement,
+        setSelectedElement,
+        showContextMenu,
+        hideContextMenu,
+        resetInteractions,
+      }}
+    >
+      {children}
+    </FlowInteractionContext.Provider>
+  );
+}; 

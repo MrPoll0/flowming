@@ -103,3 +103,27 @@ body {
 .react-flow__handle:hover {
   opacity: 1;
 }
+
+/* Flow interaction styles */
+.context-menu {
+  position: absolute;
+  z-index: 1000;
+  background-color: white;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.context-menu-item {
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.context-menu-item:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.context-menu-item.delete {
+  color: red;
+  font-weight: bold;
+}

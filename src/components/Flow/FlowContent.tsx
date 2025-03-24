@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useContext } from 'react';
+import React, { useRef, useState, useEffect, useContext, useCallback } from 'react';
 import { 
   ReactFlow, 
   Controls, 
@@ -9,34 +9,176 @@ import {
   useEdgesState,
   Node, 
   Panel,
-  MarkerType,
   addEdge,
   Edge,
   ConnectionLineType
 } from '@xyflow/react';
 import { SelectedNodeContext } from '../../context/SelectedNodeContext';
+import { FlowInteractionContext } from '../../context/FlowInteractionContext';
 import { FlowNode, initialNodes, initialEdges, nodeTypes, edgeTypes } from './FlowTypes';
 import { NodeBlock } from '../Toolbar/ToolbarTypes';
+import ContextMenu from './ContextMenu';
 
 const FlowContent: React.FC = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, _setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const { setSelectedNode } = useContext(SelectedNodeContext);
+  const { 
+    hoveredElement, 
+    selectedElement, 
+    setHoveredElement, 
+    setSelectedElement,
+    showContextMenu,
+    hideContextMenu
+  } = useContext(FlowInteractionContext);
   
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const reactFlowInstance = useReactFlow();
 
+  // Apply visual styles based on hover and selection states
+  useEffect(() => {
+    // Apply styles to nodes
+    setNodes((prevNodes) => 
+      prevNodes.map((node) => {
+        const isHovered = hoveredElement?.id === node.id && hoveredElement?.type === 'node';
+        const isSelected = selectedElement?.id === node.id && selectedElement?.type === 'node';
+        
+        // Only create a new node object if the hover/selection state changed
+        if (node.data.isHovered === isHovered && node.data.isSelected === isSelected) {
+          return node; // Return the existing node if no changes
+        }
+        
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            isHovered,
+            isSelected,
+          },
+        };
+      })
+    );
+
+    // Apply styles to edges
+    setEdges((prevEdges) => 
+      prevEdges.map((edge) => {
+        const isHovered = hoveredElement?.id === edge.id && hoveredElement?.type === 'edge';
+        const isSelected = selectedElement?.id === edge.id && selectedElement?.type === 'edge';
+
+        // Only create a new edge object if the hover/selection state changed
+        if (edge.data?.isHovered === isHovered && edge.data?.isSelected === isSelected) {
+          return edge; // Return the existing edge if no changes
+        }
+
+        return {
+          ...edge,
+          data: {
+            ...edge.data,
+            isHovered,
+            isSelected,
+          },
+        };
+      })
+    );
+  }, [hoveredElement, selectedElement]);
+
   // Handle node selection
-  const onNodeClick = (_: React.MouseEvent, node: Node) => {
+  const onNodeClick = (event: React.MouseEvent, node: Node) => {
+    // Prevent event propagation to avoid triggering onPaneClick
+    event.stopPropagation();
+    
     console.log('Node clicked:', node);
     setSelectedNode(node as FlowNode);
+    setSelectedElement({ id: node.id, type: 'node' });
+    hideContextMenu();
+  };
+
+  // Handle edge selection
+  const onEdgeClick = (event: React.MouseEvent, edge: Edge) => {
+    // Prevent event propagation to avoid triggering onPaneClick
+    event.stopPropagation();
+    
+    console.log('Edge clicked:', edge);
+    setSelectedElement({ id: edge.id, type: 'edge' });
+    hideContextMenu();
+  };
+
+  // Handle node/edge hover
+  const onNodeMouseEnter = (__event: React.MouseEvent, node: Node) => {
+    setHoveredElement({ id: node.id, type: 'node' });
+  };
+
+  const onNodeMouseLeave = () => {
+    setHoveredElement(null);
+  };
+
+  const onEdgeMouseEnter = (__event: React.MouseEvent, edge: Edge) => {
+    setHoveredElement({ id: edge.id, type: 'edge' });
+  };
+
+  const onEdgeMouseLeave = () => {
+    setHoveredElement(null);
+  };
+
+  // Handle node/edge right-click (context menu)
+  const onNodeContextMenu = (event: React.MouseEvent, node: Node) => {
+    // Prevent the default context menu
+    event.preventDefault();
+    
+    // Select the node (same as in onNodeClick)
+    setSelectedNode(node as FlowNode);
+    setSelectedElement({ id: node.id, type: 'node' });
+    
+    // Calculate position relative to the ReactFlow wrapper
+    const reactFlowBounds = reactFlowWrapper.current?.getBoundingClientRect();
+    const x = event.clientX - (reactFlowBounds?.left || 0);
+    const y = event.clientY - (reactFlowBounds?.top || 0);
+    
+    showContextMenu(x, y, { id: node.id, type: 'node' });
+  };
+
+  const onEdgeContextMenu = (event: React.MouseEvent, edge: Edge) => {
+    // Prevent the default context menu
+    event.preventDefault();
+    
+    // Select the edge (same as in onEdgeClick)
+    setSelectedElement({ id: edge.id, type: 'edge' });
+    
+    // Calculate position relative to the ReactFlow wrapper
+    const reactFlowBounds = reactFlowWrapper.current?.getBoundingClientRect();
+    const x = event.clientX - (reactFlowBounds?.left || 0);
+    const y = event.clientY - (reactFlowBounds?.top || 0);
+    
+    showContextMenu(x, y, { id: edge.id, type: 'edge' });
   };
 
   // Clear selection when clicking on the canvas
   const onPaneClick = () => {
     setSelectedNode(null);
+    setSelectedElement(null);
+    hideContextMenu();
   };
+
+  // Handle mouse leave from ReactFlow area
+  const onMouseLeave = useCallback(() => {
+    // Reset hover state when mouse leaves the flow area
+    setHoveredElement(null);
+  }, [setHoveredElement]);
+
+  // Handle element deletion
+  const onDelete = useCallback(
+    (element: { id: string; type: 'node' | 'edge' }) => {
+      if (element.type === 'node') {
+        // Delete node and connected edges
+        setNodes((nodes) => nodes.filter((node) => node.id !== element.id));
+      } else if (element.type === 'edge') {
+        // Delete edge
+        setEdges((edges) => edges.filter((edge) => edge.id !== element.id));
+      }
+    },
+    [setNodes, setEdges]
+  );
 
   // Initialize ReactFlow when the component mounts
   useEffect(() => {
@@ -44,6 +186,47 @@ const FlowContent: React.FC = () => {
       reactFlowInstance.fitView();
     }
   }, [reactFlowInstance]);
+
+  // Enhanced document-level listeners for better outside interaction handling
+  useEffect(() => {
+    const handleDocumentClick = (event: MouseEvent) => {
+      // Only reset if the click is outside the ReactFlow wrapper
+      const isReactFlowElement = (event.target as HTMLElement).closest('.react-flow') || 
+                                 (event.target as HTMLElement).closest('.context-menu');
+      
+      if (!isReactFlowElement) {
+        setHoveredElement(null);
+        setSelectedElement(null);
+        setSelectedNode(null);
+        hideContextMenu();
+      }
+    };
+
+    const handleDocumentMouseMove = (event: MouseEvent) => {
+      // Check if mouse is outside the ReactFlow wrapper
+      if (reactFlowWrapper.current) {
+        const rect = reactFlowWrapper.current.getBoundingClientRect();
+        const isOutside = 
+          event.clientX < rect.left || 
+          event.clientX > rect.right || 
+          event.clientY < rect.top || 
+          event.clientY > rect.bottom;
+        
+        if (isOutside) {
+          setHoveredElement(null);
+        }
+      }
+    };
+
+    // Add passive: true for better performance
+    document.addEventListener('click', handleDocumentClick);
+    document.addEventListener('mousemove', handleDocumentMouseMove, { passive: true });
+
+    return () => {
+      document.removeEventListener('click', handleDocumentClick);
+      document.removeEventListener('mousemove', handleDocumentMouseMove);
+    };
+  }, [setHoveredElement, setSelectedElement, setSelectedNode, hideContextMenu]);
 
   // Add direct event listeners to the ReactFlow pane
   useEffect(() => {
@@ -149,11 +332,18 @@ const FlowContent: React.FC = () => {
     setEdges((eds: Edge[]) => addEdge(params, eds));
   };
 
+  // Add this new function to handle right-clicks on the wrapper
+  const handleContextMenu = useCallback((event: React.MouseEvent) => {
+    event.preventDefault();
+  }, []);
+
   return (
     <div 
       className="reactflow-wrapper" 
       ref={reactFlowWrapper} 
       style={{ width: '100%', height: '100%' }}
+      onMouseLeave={onMouseLeave}
+      onContextMenu={handleContextMenu}
     >
       <ReactFlow
         nodes={nodes}
@@ -163,13 +353,20 @@ const FlowContent: React.FC = () => {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={onNodeClick}
+        onEdgeClick={onEdgeClick}
+        onNodeMouseEnter={onNodeMouseEnter}
+        onNodeMouseLeave={onNodeMouseLeave}
+        onEdgeMouseEnter={onEdgeMouseEnter}
+        onEdgeMouseLeave={onEdgeMouseLeave}
+        onNodeContextMenu={onNodeContextMenu}
+        onEdgeContextMenu={onEdgeContextMenu}
         onPaneClick={onPaneClick}
+        onPaneMouseLeave={onMouseLeave}
         onConnect={onConnect}
         connectionLineType={ConnectionLineType.SmoothStep}
         fitView
         proOptions={{ hideAttribution: true }}
         defaultEdgeOptions={{ 
-          // TODO: custom edge for custom (smoothstep) dragging handle
           // TODO: check this for draw.io similar behavior with edges https://stackoverflow.com/questions/77831116/is-it-possible-to-shape-reactflow-edges-by-dragging-them
           // ==> https://codesandbox.io/p/sandbox/floral-framework-forked-2ytjqc
 
@@ -183,6 +380,7 @@ const FlowContent: React.FC = () => {
           Nombre del archivo/diagrama (TODO)
         </Panel>
       </ReactFlow>
+      <ContextMenu onDelete={onDelete} />
     </div>
   );
 };
