@@ -136,6 +136,7 @@ body {
   border-radius: 5px;
   font-size: 9px;
   font-weight: 700;
+  pointer-events: all;
 }
 
 /* Edge label edit input style */
