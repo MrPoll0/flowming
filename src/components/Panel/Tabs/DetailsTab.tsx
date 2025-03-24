@@ -5,6 +5,7 @@ import { SelectedNodeContext } from '../../../context/SelectedNodeContext';
 const DetailsTab = () => {
     const { selectedNode } = useContext(SelectedNodeContext);
     
+    // TODO: dynamic display of node data properties (need to wrap this with ReactFlowProvider? https://reactflow.dev/learn/troubleshooting#001)
     return (
       <>
         <h3>Detalles</h3>

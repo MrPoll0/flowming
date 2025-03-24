@@ -1,4 +1,5 @@
 import { Block } from "./ToolbarTypes";
+import { memo } from 'react';
 
 // Individual block component
 const ToolbarBlock: React.FC<{
@@ -38,4 +39,5 @@ const ToolbarBlock: React.FC<{
     );
 };
 
-export default ToolbarBlock;
+// Memoize the component to prevent unnecessary re-renders
+export default memo(ToolbarBlock);

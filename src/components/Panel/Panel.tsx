@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Tab, Tabs, TabList, TabPanel } from 'react-tabs';
 import { topPanelTabs, bottomPanelTabs, PanelTab } from './PanelList';
 
@@ -34,4 +34,5 @@ const Panel: React.FC<PanelProps> = ({ type }) => {
   );
 };
 
-export default Panel; 
+// Memoize the panel component to prevent unnecessary re-renders
+export default memo(Panel); 
