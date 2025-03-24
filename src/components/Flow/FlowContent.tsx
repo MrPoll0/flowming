@@ -11,10 +11,11 @@ import {
   Panel,
   MarkerType,
   addEdge,
-  Edge
+  Edge,
+  ConnectionLineType
 } from '@xyflow/react';
 import { SelectedNodeContext } from '../../context/SelectedNodeContext';
-import { FlowNode, initialNodes, initialEdges, nodeTypes } from './FlowTypes';
+import { FlowNode, initialNodes, initialEdges, nodeTypes, edgeTypes } from './FlowTypes';
 import { NodeBlock } from '../Toolbar/ToolbarTypes';
 
 const FlowContent: React.FC = () => {
@@ -145,7 +146,7 @@ const FlowContent: React.FC = () => {
 
   const onConnect = (params: any) => {
     console.log('onConnect', params);
-    _setEdges((eds: Edge[]) => addEdge(params, eds));
+    setEdges((eds: Edge[]) => addEdge(params, eds));
   };
 
   return (
@@ -158,11 +159,13 @@ const FlowContent: React.FC = () => {
         nodes={nodes}
         nodeTypes={nodeTypes}
         edges={edges}
+        edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={onNodeClick}
         onPaneClick={onPaneClick}
         onConnect={onConnect}
+        connectionLineType={ConnectionLineType.SmoothStep}
         fitView
         proOptions={{ hideAttribution: true }}
         defaultEdgeOptions={{ 
@@ -171,17 +174,7 @@ const FlowContent: React.FC = () => {
           // ==> https://codesandbox.io/p/sandbox/floral-framework-forked-2ytjqc
 
           // TODO: animated + color change edge when running
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-            width: 10,
-            height: 10,
-            color: '#555',
-          },
-          style: {
-            stroke: '#555',
-            strokeWidth: 1,
-          },
-          type: 'smoothstep',
+          type: 'Flowline',
         }}
       >
         <Controls />
