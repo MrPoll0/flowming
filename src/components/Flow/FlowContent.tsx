@@ -476,11 +476,23 @@ const FlowContent: React.FC = () => {
         connectionLineType={ConnectionLineType.SmoothStep}
         fitView
         proOptions={{ hideAttribution: true }}
+        deleteKeyCode={["Backspace", "Delete"]}
         defaultEdgeOptions={{ 
           // TODO: check this for draw.io similar behavior with edges https://stackoverflow.com/questions/77831116/is-it-possible-to-shape-reactflow-edges-by-dragging-them
           // ==> https://codesandbox.io/p/sandbox/floral-framework-forked-2ytjqc
 
           // TODO: animated + color change edge when running
+          // check: https://reactflow.dev/examples/edges/animating-edges
+
+          // also check:
+          // https://reactflow.dev/examples/interaction/drag-and-drop for drag and drop (same as current?)
+          // https://reactflow.dev/examples/interaction/interaction-props for interaction props
+          // https://reactflow.dev/examples/interaction/save-and-restore for save and restore
+          // https://reactflow.dev/examples/interaction/touch-device for mobile
+          // https://reactflow.dev/examples/interaction/prevent-cycles for cycle/while checking
+          // https://reactflow.dev/examples/interaction/zoom-transitions for zoom transitions while executing
+
+          // https://reactflow.dev/api-reference/react-flow#selection-events for selection events (same as current?)
           type: 'Flowline',
         }}
       >
