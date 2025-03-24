@@ -283,10 +283,17 @@ const FlowContent: React.FC = () => {
         const block = JSON.parse(blockData) as NodeBlock;
         console.log('Parsed block data in direct drop:', block);
         
-        /*if (block.type !== 'node') {
-          console.error('Dropped item is not a node block');
+        // Limit the number of Start nodes to 1 at a time
+        if (block.nodeType === 'Start' && nodes.some(node => node.type === 'Start')) {
+          console.warn('Only one Start node is allowed');
           return;
-        }*/
+        }
+        
+        // Limit the number of End nodes to 1 at a time
+        if (block.nodeType === 'End' && nodes.some(node => node.type === 'End')) {
+          console.warn('Only one End node is allowed');
+          return;
+        }
         
         // Get the position where the node should be created
         const position = reactFlowInstance.screenToFlowPosition({
@@ -325,11 +332,32 @@ const FlowContent: React.FC = () => {
       paneEl.removeEventListener('dragleave', handleDirectDragLeave);
       paneEl.removeEventListener('drop', handleDirectDrop);
     };
-  }, [reactFlowInstance, isDraggingOver, setNodes]);
+  }, [reactFlowInstance, isDraggingOver, setNodes, nodes]);
 
   const onConnect = (params: any) => {
     console.log('onConnect', params);
-    setEdges((eds: Edge[]) => addEdge(params, eds));
+    
+    setEdges((eds: Edge[]) => {
+      // Find source and target nodes
+      const sourceNode = nodes.find(node => node.id === params.source);
+      const targetNode = nodes.find(node => node.id === params.target);
+      
+      // Create a copy of current edges
+      let newEdges = [...eds];
+      
+      // If source is a Start node, remove any existing edge from this node
+      if (sourceNode?.type === 'Start') {
+        newEdges = newEdges.filter(edge => edge.source !== params.source);
+      }
+      
+      // If target is an End node, remove any existing edge to this node
+      if (targetNode?.type === 'End') {
+        newEdges = newEdges.filter(edge => edge.target !== params.target);
+      }
+      
+      // Add the new edge
+      return addEdge(params, newEdges);
+    });
   };
 
   // Add this new function to handle right-clicks on the wrapper
