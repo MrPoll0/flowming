@@ -202,54 +202,6 @@ const FlowContent: React.FC = () => {
     [setNodes, setEdges]
   );
 
-  // Initialize ReactFlow when the component mounts
-  useEffect(() => {
-    if (reactFlowInstance) {
-      reactFlowInstance.fitView();
-    }
-  }, [reactFlowInstance]);
-
-  // Enhanced document-level listeners for better outside interaction handling
-  useEffect(() => {
-    const handleDocumentClick = (event: MouseEvent) => {
-      // Only reset if the click is outside the ReactFlow wrapper
-      const isReactFlowElement = (event.target as HTMLElement).closest('.react-flow') || 
-                                 (event.target as HTMLElement).closest('.context-menu');
-      
-      if (!isReactFlowElement) {
-        setHoveredElement(null);
-        setSelectedElement(null);
-        setSelectedNode(null);
-        hideContextMenu();
-      }
-    };
-
-    const handleDocumentMouseMove = (event: MouseEvent) => {
-      // Check if mouse is outside the ReactFlow wrapper
-      if (reactFlowWrapper.current) {
-        const rect = reactFlowWrapper.current.getBoundingClientRect();
-        const isOutside = 
-          event.clientX < rect.left || 
-          event.clientX > rect.right || 
-          event.clientY < rect.top || 
-          event.clientY > rect.bottom;
-        
-        if (isOutside) {
-          setHoveredElement(null);
-        }
-      }
-    };
-
-    // Add passive: true for better performance
-    document.addEventListener('click', handleDocumentClick);
-    document.addEventListener('mousemove', handleDocumentMouseMove, { passive: true });
-
-    return () => {
-      document.removeEventListener('click', handleDocumentClick);
-      document.removeEventListener('mousemove', handleDocumentMouseMove);
-    };
-  }, [setHoveredElement, setSelectedElement, setSelectedNode, hideContextMenu]);
-
   // Add direct event listeners to the ReactFlow pane
   useEffect(() => {
     const paneEl = reactFlowWrapper.current?.querySelector('.react-flow__pane');
@@ -483,6 +435,7 @@ const FlowContent: React.FC = () => {
 
           // TODO: animated + color change edge when running
           // check: https://reactflow.dev/examples/edges/animating-edges
+          // https://reactflow.dev/components/edges/animated-svg-edge
 
           // also check:
           // https://reactflow.dev/examples/interaction/drag-and-drop for drag and drop (same as current?)
@@ -493,6 +446,8 @@ const FlowContent: React.FC = () => {
           // https://reactflow.dev/examples/interaction/zoom-transitions for zoom transitions while executing
 
           // https://reactflow.dev/api-reference/react-flow#selection-events for selection events (same as current?)
+
+          // https://reactflow.dev/examples/interaction/collaborative for collaborative (with yjs)
           type: 'Flowline',
         }}
       >

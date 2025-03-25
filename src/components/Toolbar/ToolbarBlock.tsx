@@ -6,13 +6,7 @@ const ToolbarBlock: React.FC<{
     block: Block;
   }> = ({ block }) => {
     
-    const handleDragStart = (event: React.DragEvent) => {
-      // Only allow dragging for node blocks
-      /*if (block.type !== 'node') {
-        event.preventDefault();
-        return;
-      }*/
-  
+    const handleDragStart = (event: React.DragEvent) => {  
       // Set drag data - use a simple format that's easy to debug
       const dragData = JSON.stringify(block);
       event.dataTransfer.setData('text/plain', dragData);

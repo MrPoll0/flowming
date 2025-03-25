@@ -1,4 +1,4 @@
-import React, { createContext, useState, ReactNode, useEffect } from 'react';
+import React, { createContext, useState, ReactNode } from 'react';
 
 interface ContextMenuPosition {
   x: number;
@@ -48,32 +48,6 @@ export const FlowInteractionProvider: React.FC<FlowInteractionProviderProps> = (
     setSelectedElement(null);
     hideContextMenu();
   };
-
-  useEffect(() => {
-    const handleDocumentClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const isReactFlowElement = target.closest('.react-flow') || 
-                                 target.closest('.context-menu');
-      
-      if (!isReactFlowElement) {
-        resetInteractions();
-      }
-    };
-
-    const handleDocumentMouseLeave = (e: MouseEvent) => {
-      if (e.relatedTarget === null) {
-        setHoveredElement(null);
-      }
-    };
-
-    document.addEventListener('mousedown', handleDocumentClick);
-    document.addEventListener('mouseleave', handleDocumentMouseLeave);
-    
-    return () => {
-      document.removeEventListener('mousedown', handleDocumentClick);
-      document.removeEventListener('mouseleave', handleDocumentMouseLeave);
-    };
-  }, [resetInteractions, setHoveredElement]);
 
   const showContextMenu = (x: number, y: number, element: { id: string; type: 'node' | 'edge' } | null) => {
     setContextMenuPosition({
