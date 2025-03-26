@@ -263,12 +263,6 @@ const FlowContent: React.FC = () => {
           return;
         }
         
-        // Limit the number of End nodes to 1 at a time
-        if (block.nodeType === 'End' && nodes.some(node => node.type === 'End')) {
-          console.warn('Only one End node is allowed');
-          return;
-        }
-        
         // Get the position where the node should be created
         const position = reactFlowInstance.screenToFlowPosition({
           x: dragEvent.clientX,
@@ -312,21 +306,14 @@ const FlowContent: React.FC = () => {
     console.log('onConnect', params);
     
     setEdges((eds: Edge[]) => {
-      // Find source and target nodes
       const sourceNode = nodes.find(node => node.id === params.source);
-      const targetNode = nodes.find(node => node.id === params.target);
       
       // Create a copy of current edges
       let newEdges = [...eds];
       
-      // If source is a Start node, remove any existing edge from this node
+      // If source is a Start node, remove any existing edge from this node (max 1 ongoing edge)
       if (sourceNode?.type === 'Start') {
         newEdges = newEdges.filter(edge => edge.source !== params.source);
-      }
-      
-      // If target is an End node, remove any existing edge to this node
-      if (targetNode?.type === 'End') {
-        newEdges = newEdges.filter(edge => edge.target !== params.target);
       }
       
       // Add the new edge
@@ -448,6 +435,11 @@ const FlowContent: React.FC = () => {
           // https://reactflow.dev/api-reference/react-flow#selection-events for selection events (same as current?)
 
           // https://reactflow.dev/examples/interaction/collaborative for collaborative (with yjs)
+
+          // implement floating edges?
+          // => https://reactflow.dev/examples/edges/floating-edges
+
+          // TODO: exactly 1 start node and at least 1 end node (checking when designing or in execute-time?)
           type: 'Flowline',
         }}
       >
