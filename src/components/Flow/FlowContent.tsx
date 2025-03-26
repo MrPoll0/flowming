@@ -440,6 +440,9 @@ const FlowContent: React.FC = () => {
           // => https://reactflow.dev/examples/edges/floating-edges
 
           // TODO: exactly 1 start node and at least 1 end node (checking when designing or in execute-time?)
+
+          // User manual: SHIFT + click (drag) to select zone for multi-select; CTRL + click to select multiple nodes/edges
+          // TODO: node type 'group' for functions
           type: 'Flowline',
         }}
       >
