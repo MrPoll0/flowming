@@ -59,11 +59,11 @@ export const FlowInteractionProvider: React.FC<FlowInteractionProviderProps> = (
   };
 
   const hideContextMenu = () => {
-    setContextMenuPosition({
-      ...contextMenuPosition,
+    setContextMenuPosition(prev => ({
+      ...prev,
       visible: false,
       element: null,
-    });
+    }));
   };
 
   return (

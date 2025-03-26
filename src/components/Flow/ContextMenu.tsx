@@ -55,6 +55,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ onDelete }) => {
         boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
         zIndex: 1000,
       }}
+      onClick={(e) => e.stopPropagation()}
     >
       <div 
         className="context-menu-item delete" 
