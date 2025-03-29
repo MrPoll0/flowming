@@ -1,23 +1,21 @@
 import { Handle, Position } from '@xyflow/react';
 import { memo } from 'react';
-import { useVariables } from '../../../context/VariablesContext';
 
-interface DeclareVariableNodeData {
+interface AssignVariableNodeData {
   label?: string;
   isHovered?: boolean;
   isSelected?: boolean;
+  expression?: {
+    leftSide: string;
+    rightSide: string;
+  };
 }
 
-const DeclareVariable = memo(function DeclareVariableComponent({ data, id: nodeId }: { data: DeclareVariableNodeData; id: string }) {
-  const { isHovered, isSelected } = data;
-  const { getNodeVariables } = useVariables();
+const AssignVariable = memo(function AssignVariableComponent({ data, id: __nodeId }: { data: AssignVariableNodeData; id: string }) {
+  const { isHovered, isSelected, expression } = data;
   
-  const nodeVariables = getNodeVariables(nodeId);
-
-  // TODO: declared variables in block are kept even when block is deleted
-
   return (
-    <div className="declare-variable-node" style={{ 
+    <div className="assign-variable-node" style={{ 
       borderRadius: '0px', 
       padding: '10px 20px',
       border: isSelected 
@@ -37,21 +35,17 @@ const DeclareVariable = memo(function DeclareVariableComponent({ data, id: nodeI
       justifyContent: 'center',
       minWidth: '250px',
     }}>
-      <div style={{ fontWeight: 'bold', textAlign: 'center', marginBottom: '10px' }}>Declare variable</div>
+      <div style={{ fontWeight: 'bold', textAlign: 'center', marginBottom: '10px' }}>Assign variable</div>
       
-      {nodeVariables.length > 0 ? (
-        <div style={{ padding: '5px 0' }}>
-          {nodeVariables.map((variable) => (
-            <div key={variable.id} style={{ 
-              marginBottom: '4px',
-              padding: '5px',
-              backgroundColor: '#f5f5f5',
-              borderRadius: '4px',
-              fontSize: '14px'
-            }}>
-              <code>{variable.type} {variable.name}</code>
-            </div>
-          ))}
+      {expression ? (
+        <div style={{ 
+          padding: '5px 10px',
+          backgroundColor: '#f5f5f5',
+          borderRadius: '4px',
+          fontSize: '14px',
+          fontFamily: 'monospace'
+        }}>
+          <code>{expression.leftSide} = {expression.rightSide}</code>
         </div>
       ) : (
         <div style={{ 
@@ -61,13 +55,9 @@ const DeclareVariable = memo(function DeclareVariableComponent({ data, id: nodeI
           fontStyle: 'italic',
           fontSize: '14px'
         }}>
-          No variables defined
+          No assignment defined
         </div>
       )}
-
-      {/* TODO: problem -> cycle/bidirectional edges (doesnt make sense) */}
-      {/* could be "fixed" with floating edges */}
-      {/* TODO: check outgoing edges limits */}
 
       {/* Top handle - both source and target */}
       <Handle 
@@ -120,4 +110,4 @@ const DeclareVariable = memo(function DeclareVariableComponent({ data, id: nodeI
   );
 });
 
-export default DeclareVariable;
+export default AssignVariable;

@@ -28,11 +28,21 @@ const declareVariableNodeBlock: NodeBlock = {
   description: 'Declare a new variable',
 };
 
+const assignVariableNodeBlock: NodeBlock = {
+  id: 'assign-variable-node',
+  type: 'node',
+  label: 'Assign variable',
+  icon: '✏️',
+  nodeType: 'AssignVariable',
+  description: 'Assign a value to a variable',
+};
+
 // Export all blocks
 export const toolbarBlocksList: Block[] = [
   startNodeBlock,
   endNodeBlock,
-  declareVariableNodeBlock
+  declareVariableNodeBlock,
+  assignVariableNodeBlock
 ];
 
-export default toolbarBlocksList; 
+export default toolbarBlocksList;
