@@ -2,6 +2,27 @@ import { useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { SelectedNodeContext } from '../../../context/SelectedNodeContext';
 import { useVariables } from '../../../context/VariablesContext';
 import { useReactFlow } from '@xyflow/react';
+import {
+  DndContext, 
+  useSensors, 
+  useSensor, 
+  PointerSensor,
+  DragOverlay,
+  useDroppable,
+  useDraggable,
+  rectIntersection
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  horizontalListSortingStrategy,
+  useSortable,
+  arrayMove
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { restrictToHorizontalAxis } from '@dnd-kit/modifiers';
+
+// TODO: dnd-kit restrict movement horizontally in expression drop area
+//               fix element original/new appearance when dragging (use DragOverlay?)
 
 // Interface for variable row in the editor
 interface VariableRow {
@@ -31,6 +52,123 @@ interface ExpressionElement {
   value: string;
 }
 
+// Draggable expression element component
+const DraggableExpressionElement = ({ element, index, removeExpressionElement }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition
+  } = useSortable({ id: element.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    backgroundColor: 
+      element.type === 'variable' ? '#d1e7ff' :
+      element.type === 'operator' ? '#ffd1d1' : '#d1ffd1',
+    padding: '4px 8px',
+    margin: '4px',
+    borderRadius: '4px',
+    cursor: 'grab',
+    display: 'inline-block',
+    fontSize: '14px',
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+    >
+      {element.value}
+      <button 
+        onClick={(e) => {
+          e.stopPropagation();
+          removeExpressionElement(element.id);
+        }}
+        style={{
+          marginLeft: '5px',
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          fontSize: '12px',
+          padding: '0',
+          display: 'inline-block',
+          verticalAlign: 'middle'
+        }}
+      >
+        ×
+      </button>
+    </div>
+  );
+};
+
+// Draggable palette item component (non-sortable)
+const DraggablePaletteItem = ({ id, type, value, backgroundColor }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+  } = useDraggable({ id });
+
+  const style = {
+    backgroundColor: backgroundColor || '#e0e0e0',
+    padding: '4px 8px',
+    margin: '4px',
+    borderRadius: '4px',
+    cursor: 'grab',
+    display: 'inline-block',
+    fontSize: '14px',
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+    >
+      {value}
+    </div>
+  );
+};
+
+// Droppable area component
+const ExpressionDropArea = ({ id, children, isEmpty }: { id: string, children: React.ReactNode, isEmpty: boolean }) => {
+  const { setNodeRef, isOver } = useDroppable({
+    id: id
+  });
+
+  return (
+    <div 
+      ref={setNodeRef}
+      style={{
+        padding: '10px',
+        border: `2px ${isOver ? 'solid' : 'dashed'} ${isOver ? '#4d9cff' : '#ccc'}`,
+        borderRadius: '4px',
+        minHeight: '60px',
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        backgroundColor: isOver ? 'rgba(77, 156, 255, 0.1)' : 'transparent'
+      }}
+    >
+      { /* 
+      {isEmpty ? (
+        <span style={{ color: '#888', fontStyle: 'italic' }}>
+          Drag elements here to build expression
+        </span>
+      ) : children}
+      */
+      }
+      {children}
+    </div>
+  );
+};
+
 // Component for Details tab that uses the context
 const DetailsTab = () => {
   const { selectedNode } = useContext(SelectedNodeContext);
@@ -44,6 +182,17 @@ const DetailsTab = () => {
   const previousNodeIdRef = useRef<string | null>(null);
   
   const reactFlowInstance = useReactFlow();
+  
+  const [activeId, setActiveId] = useState(null);
+  const [activeItem, setActiveItem] = useState(null);
+  
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  );
   
   // Cleanup function for the debounce timeout
   const clearUpdateTimeout = () => {
@@ -249,6 +398,117 @@ const DetailsTab = () => {
     }
   };
   
+  // Handle drag start
+  const handleDragStart = (event) => {
+    const { active } = event;
+    setActiveId(active.id);
+    
+    // Find the active item
+    let foundItem = null;
+    
+    // Check in expression elements
+    foundItem = expressionElements.find(item => item.id === active.id);
+    
+    // Check in variables
+    if (!foundItem && active.id.startsWith('var-')) {
+      const varId = active.id.replace('var-', '');
+      const variable = getAllVariables().find(v => v.id === varId);
+      if (variable) {
+        foundItem = { id: active.id, type: 'variable', value: variable.name };
+      }
+    }
+    
+    // Check in operators
+    if (!foundItem && active.id.startsWith('op-')) {
+      const op = active.id.replace('op-', '');
+      foundItem = { id: active.id, type: 'operator', value: op };
+    }
+    
+    // Check in literals
+    if (!foundItem && active.id.startsWith('lit-')) {
+      const [, type, value] = active.id.split('-');
+      foundItem = { id: active.id, type: 'literal', value };
+    }
+    
+    setActiveItem(foundItem);
+  };
+
+  // Handle drag end
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
+    setActiveId(null); // Reset active state
+    setActiveItem(null);
+
+    // Exit if dropped outside a valid droppable area
+    if (!over) {
+      return;
+    }
+
+    const activeId = active.id;
+    const overId = over.id;
+
+    // Find the index of the active element if it exists in the expression list
+    const activeElementIndex = expressionElements.findIndex(e => e.id === activeId);
+
+    // Check if the target ('over') is the drop area itself
+    const overIsDropArea = overId === 'expression-drop-area';
+    // Find the index of the element being dropped onto, if applicable
+    const overElementIndex = expressionElements.findIndex(e => e.id === overId);
+
+
+    // Case 1: Reordering existing expression elements
+    if (activeElementIndex > -1 && activeId !== overId) {
+      // Check if the drop target is another existing element
+      if (overElementIndex > -1) {
+         // Use arrayMove to update the order in the state
+         setExpressionElements(items => arrayMove(items, activeElementIndex, overElementIndex));
+      } else {
+         // Handle cases where an existing item is dropped onto the container background,
+         // not another item. SortableContext might handle visual positioning,
+         // but state update might be needed if dropped at beginning/end.
+         // For simplicity now, we only explicitly handle drops onto other items for reordering.
+         // Further refinement might involve checking drop coordinates if needed.
+         console.warn("Reordering drop target was not an existing item. Over ID:", overId);
+      }
+    }
+    // Case 2: Adding a new item from the palette to the expression area
+    else if (activeElementIndex === -1 && (overIsDropArea || overElementIndex > -1)) {
+        let newItemData: Omit<ExpressionElement, 'id'> | null = null;
+
+        // Determine the type and value of the new item based on its palette ID prefix
+        if (activeId.startsWith('var-')) {
+            const varId = activeId.replace('var-', '');
+            const variable = getAllVariables().find(v => v.id === varId);
+            if (variable) newItemData = { type: 'variable', value: variable.name };
+        } else if (activeId.startsWith('op-')) {
+            const op = activeId.replace('op-', '');
+            newItemData = { type: 'operator', value: op };
+        } else if (activeId.startsWith('lit-boolean-')) { // Handle draggable boolean literals
+            const value = activeId.replace('lit-boolean-', ''); // "true" or "false"
+            newItemData = { type: 'literal', value };
+        }
+        // Add logic here if other literal types (string, int, float) become draggable palette items
+
+        // If a valid new item was identified, add it to the expressionElements state
+        if (newItemData) {
+            const newItem = { ...newItemData, id: crypto.randomUUID() };
+
+            if (overElementIndex > -1) {
+                // Insert the new item *before* the existing item it was dropped onto
+                setExpressionElements(prev => [
+                    ...prev.slice(0, overElementIndex),
+                    newItem,
+                    ...prev.slice(overElementIndex)
+                ]);
+            } else {
+                // Append the new item to the end if dropped onto the drop area background
+                setExpressionElements(prev => [...prev, newItem]);
+            }
+        }
+    }
+    // else: Drag started or ended outside, or other unhandled cases.
+  };
+  
   // Render variable editor if DeclareVariable node is selected
   const renderVariableEditor = () => {
     if (!selectedNode || selectedNode.type !== 'DeclareVariable') return null;
@@ -333,17 +593,6 @@ const DetailsTab = () => {
     
     const allVariables = getAllVariables();
     
-    // Styles for drag elements
-    const dragElementStyle = {
-      padding: '4px 8px',
-      margin: '4px',
-      borderRadius: '4px',
-      backgroundColor: '#e0e0e0',
-      cursor: 'pointer',
-      display: 'inline-block',
-      fontSize: '14px',
-    };
-    
     // Style for expression box
     const expressionBoxStyle = {
       padding: '10px',
@@ -363,207 +612,253 @@ const DetailsTab = () => {
     };
     
     return (
-      <div key={selectedNode.id} style={{ 
-        marginTop: '20px',
-        maxHeight: 'calc(100vh - 300px)',  // Add max height
-        overflowY: 'auto'                 // Enable vertical scrolling
-      }}>
-        <h4>Variable Assignment</h4>
-        
-        {/* Left side (variable selection) */}
-        <div style={sectionStyle}>
-          <h5 style={{ marginTop: 0, marginBottom: '10px' }}>Select Variable to Assign (Left-hand side)</h5>
-          <select
-            value={leftSideVariable}
-            onChange={(e) => setLeftSideVariable(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '8px',
-              borderRadius: '4px',
-              border: '1px solid #ccc'
-            }}
-          >
-            <option value="">-- Select Variable --</option>
-            {allVariables.map(variable => (
-              <option key={variable.id} value={variable.id}>
-                {variable.name} ({variable.type})
-              </option>
-            ))}
-          </select>
-        </div>
-        
-        {/* Expression display box */}
-        <div style={{ marginBottom: '15px' }}>
-          <h5 style={{ marginTop: 0, marginBottom: '5px' }}>Expression</h5>
-          <div style={expressionBoxStyle}>
-            {leftSideVariable ? (
-              <>
-                <span style={{ fontWeight: 'bold' }}>
-                  {allVariables.find(v => v.id === leftSideVariable)?.name || '(select variable)'} = 
-                </span>
-                
-                {expressionElements.length > 0 ? (
-                  <div style={{ display: 'inline', marginLeft: '5px' }}>
-                    {expressionElements.map((element, index) => (
-                      <div key={element.id} style={{ 
-                        ...dragElementStyle, 
-                        display: 'inline-block',
-                        backgroundColor: 
-                          element.type === 'variable' ? '#d1e7ff' :
-                          element.type === 'operator' ? '#ffd1d1' : '#d1ffd1',
-                      }}>
-                        {element.value}
-                        <button 
-                          onClick={() => removeExpressionElement(element.id)}
-                          style={{
-                            marginLeft: '5px',
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            fontSize: '12px',
-                            padding: '0',
-                            display: 'inline-block',
-                            verticalAlign: 'middle'
-                          }}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <span style={{ color: '#888', fontStyle: 'italic' }}>Empty expression</span>
-                )}
-              </>
-            ) : (
-              <span style={{ color: '#888', fontStyle: 'italic' }}>Select a variable for the left-hand side</span>
-            )}
-          </div>
-        </div>
-        
-        {/* Building blocks section */}
-        {leftSideVariable && (
-          <>
-            {/* Variables section */}
-            <div style={sectionStyle}>
-              <h5 style={{ marginTop: 0, marginBottom: '10px' }}>Variables</h5>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={rectIntersection}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <div key={selectedNode.id}>
+          <h4>Variable Assignment</h4>
+          
+          {/* Left side (variable selection) */}
+          <div style={sectionStyle}>
+            <h5 style={{ marginTop: 0, marginBottom: '10px' }}>Select Variable to Assign (Left-hand side)</h5>
+            <select
+              value={leftSideVariable}
+              onChange={(e) => setLeftSideVariable(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px',
+                borderRadius: '4px',
+                border: '1px solid #ccc'
+              }}
+            >
+              <option value="">-- Select Variable --</option>
               {allVariables.map(variable => (
-                <div
-                  key={variable.id}
-                  style={dragElementStyle}
-                  onClick={() => addExpressionElement({ id: '', type: 'variable', value: variable.name })}
-                >
-                  {variable.name}
-                </div>
+                <option key={variable.id} value={variable.id}>
+                  {variable.name} ({variable.type})
+                </option>
               ))}
-              {allVariables.length === 0 && (
-                <div style={{ color: '#888', fontStyle: 'italic' }}>No variables declared</div>
+            </select>
+          </div>
+          
+          {/* Expression display box */}
+          <div style={{ marginBottom: '15px' }}>
+            <h5 style={{ marginTop: 0, marginBottom: '5px' }}>Expression</h5>
+            <div style={expressionBoxStyle}>
+              {leftSideVariable ? (
+                <>
+                  <span style={{ fontWeight: 'bold', marginBottom: '10px', display: 'block' }}>
+                    {allVariables.find(v => v.id === leftSideVariable)?.name || '(select variable)'} = 
+                  </span>
+                  
+                  <ExpressionDropArea id="expression-drop-area" isEmpty={expressionElements.length === 0}>
+                    <SortableContext 
+                      items={expressionElements.map(item => item.id)}
+                      strategy={horizontalListSortingStrategy}
+                    >
+                      {expressionElements.map((element, index) => (
+                        <DraggableExpressionElement 
+                          key={element.id}
+                          element={element}
+                          index={index}
+                          removeExpressionElement={removeExpressionElement}
+                        />
+                      ))}
+                    </SortableContext>
+                  </ExpressionDropArea>
+                </>
+              ) : (
+                <span style={{ color: '#888', fontStyle: 'italic' }}>Select a variable for the left-hand side</span>
               )}
             </div>
-            
-            {/* Operators section */}
-            <div style={sectionStyle}>
-              <h5 style={{ marginTop: 0, marginBottom: '10px' }}>Operators</h5>
-              {operators.map(op => (
-                <div
-                  key={op}
-                  style={{ ...dragElementStyle, backgroundColor: '#ffd1d1' }}
-                  onClick={() => addExpressionElement({ id: '', type: 'operator', value: op })}
-                >
-                  {op}
+          </div>
+          
+          {/* Building blocks section */}
+          {leftSideVariable && (
+            <>
+              {/* Variables section */}
+              <div style={sectionStyle}>
+                <h5 style={{ marginTop: 0, marginBottom: '10px' }}>Variables</h5>
+                <div>
+                  {allVariables.map(variable => (
+                    <DraggablePaletteItem
+                      key={`var-${variable.id}`}
+                      id={`var-${variable.id}`}
+                      type="variable"
+                      value={variable.name}
+                      backgroundColor="#d1e7ff"
+                    />
+                  ))}
+                  {allVariables.length === 0 && (
+                    <div style={{ color: '#888', fontStyle: 'italic' }}>No variables declared</div>
+                  )}
                 </div>
-              ))}
-            </div>
-            
-            {/* Literals section */}
-            <div style={sectionStyle}>
-              <h5 style={{ marginTop: 0, marginBottom: '10px' }}>Literals</h5>
-              {/* String literal */}
-              <div>
-                <input 
-                  type="text" 
-                  placeholder="String value" 
-                  style={{ width: '70%', padding: '4px', marginRight: '5px' }}
-                />
-                <button
-                  onClick={(e) => {
-                    const input = (e.target as HTMLButtonElement).previousElementSibling as HTMLInputElement;
-                    if (input && input.value) {
-                      addExpressionElement({ id: '', type: 'literal', value: `"${input.value}"` });
-                      input.value = '';
-                    }
-                  }}
-                  style={{ 
-                    padding: '4px 8px',
-                    backgroundColor: '#d1ffd1',
-                    border: '1px solid #ccc',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Add String
-                </button>
               </div>
               
-              {/* Number literal */}
-              <div style={{ marginTop: '5px' }}>
-                <input 
-                  type="number" 
-                  placeholder="Number value" 
-                  style={{ width: '70%', padding: '4px', marginRight: '5px' }}
-                />
-                <button
-                  onClick={(e) => {
-                    const input = (e.target as HTMLButtonElement).previousElementSibling as HTMLInputElement;
-                    if (input && input.value) {
-                      addExpressionElement({ id: '', type: 'literal', value: input.value });
-                      input.value = '';
-                    }
-                  }}
-                  style={{ 
-                    padding: '4px 8px',
-                    backgroundColor: '#d1ffd1',
-                    border: '1px solid #ccc',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Add Number
-                </button>
+              {/* Operators section */}
+              <div style={sectionStyle}>
+                <h5 style={{ marginTop: 0, marginBottom: '10px' }}>Operators</h5>
+                <div>
+                  {operators.map(op => (
+                    <DraggablePaletteItem
+                      key={`op-${op}`}
+                      id={`op-${op}`}
+                      type="operator"
+                      value={op}
+                      backgroundColor="#ffd1d1"
+                    />
+                  ))}
+                </div>
               </div>
               
-              {/* Boolean literals */}
-              <div style={{ marginTop: '5px' }}>
-                <button
-                  onClick={() => addExpressionElement({ id: '', type: 'literal', value: 'true' })}
-                  style={{ 
-                    padding: '4px 8px',
-                    marginRight: '5px',
-                    backgroundColor: '#d1ffd1',
-                    border: '1px solid #ccc',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  true
-                </button>
-                <button
-                  onClick={() => addExpressionElement({ id: '', type: 'literal', value: 'false' })}
-                  style={{ 
-                    padding: '4px 8px',
-                    backgroundColor: '#d1ffd1',
-                    border: '1px solid #ccc',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  false
-                </button>
+              {/* Literals section */}
+              <div style={sectionStyle}>
+                <h5 style={{ marginTop: 0, marginBottom: '10px' }}>Literals</h5>
+                
+                {/* String literal */}
+                <div>
+                  <h6 style={{ margin: '5px 0' }}>String</h6>
+                  <input 
+                    type="text" 
+                    placeholder="String value" 
+                    id="string-literal-input"
+                    style={{ width: '70%', padding: '4px', marginRight: '5px' }}
+                  />
+                  <button
+                    onClick={() => {
+                      const input = document.getElementById('string-literal-input') as HTMLInputElement;
+                      if (input && input.value) {
+                        const value = input.value;
+                        addExpressionElement({ 
+                          id: '', 
+                          type: 'literal', 
+                          value: `"${value}"` 
+                        });
+                        input.value = '';
+                      }
+                    }}
+                    style={{ 
+                      padding: '4px 8px',
+                      backgroundColor: '#d1ffd1',
+                      border: '1px solid #ccc',
+                      borderRadius: '4px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Add String
+                  </button>
+                </div>
+                
+                {/* Integer literal */}
+                <div style={{ marginTop: '10px' }}>
+                  <h6 style={{ margin: '5px 0' }}>Integer</h6>
+                  <input 
+                    type="number" 
+                    step="1"
+                    placeholder="Integer value" 
+                    id="integer-literal-input"
+                    style={{ width: '70%', padding: '4px', marginRight: '5px' }}
+                  />
+                  <button
+                    onClick={() => {
+                      const input = document.getElementById('integer-literal-input') as HTMLInputElement;
+                      if (input && input.value) {
+                        const value = parseInt(input.value).toString(); // Ensure it's an integer
+                        addExpressionElement({ 
+                          id: '', 
+                          type: 'literal', 
+                          value
+                        });
+                        input.value = '';
+                      }
+                    }}
+                    style={{ 
+                      padding: '4px 8px',
+                      backgroundColor: '#d1ffd1',
+                      border: '1px solid #ccc',
+                      borderRadius: '4px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Add Integer
+                  </button>
+                </div>
+                
+                {/* Float literal */}
+                <div style={{ marginTop: '10px' }}>
+                  <h6 style={{ margin: '5px 0' }}>Float</h6>
+                  <input 
+                    type="number" 
+                    step="0.1"
+                    placeholder="Float value"
+                    id="float-literal-input"
+                    style={{ width: '70%', padding: '4px', marginRight: '5px' }}
+                  />
+                  <button
+                    onClick={() => {
+                      const input = document.getElementById('float-literal-input') as HTMLInputElement;
+                      if (input && input.value) {
+                        const value = parseFloat(input.value).toString();
+                        addExpressionElement({ 
+                          id: '', 
+                          type: 'literal', 
+                          value
+                        });
+                        input.value = '';
+                      }
+                    }}
+                    style={{ 
+                      padding: '4px 8px',
+                      backgroundColor: '#d1ffd1',
+                      border: '1px solid #ccc',
+                      borderRadius: '4px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Add Float
+                  </button>
+                </div>
+                
+                {/* Boolean literals */}
+                <div style={{ marginTop: '10px' }}>
+                  <h6 style={{ margin: '5px 0' }}>Boolean</h6>
+                  <div>
+                    <DraggablePaletteItem
+                      id="lit-boolean-true"
+                      type="literal"
+                      value="true"
+                      backgroundColor="#d1ffd1"
+                    />
+                    <DraggablePaletteItem
+                      id="lit-boolean-false"
+                      type="literal"
+                      value="false"
+                      backgroundColor="#d1ffd1"
+                    />
+                  </div>
+                </div>
               </div>
+            </>
+          )}
+        </div>
+        
+        <DragOverlay>
+          {activeItem ? (
+            <div style={{
+              padding: '4px 8px',
+              borderRadius: '4px',
+              backgroundColor: 
+                activeItem.type === 'variable' ? '#d1e7ff' :
+                activeItem.type === 'operator' ? '#ffd1d1' : '#d1ffd1',
+              boxShadow: '0 0 10px rgba(0,0,0,0.3)',
+            }}>
+              {activeItem.value}
             </div>
-          </>
-        )}
-      </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
     );
   };
     
