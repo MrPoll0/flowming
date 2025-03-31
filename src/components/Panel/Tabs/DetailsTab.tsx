@@ -22,7 +22,6 @@ import { CSS } from '@dnd-kit/utilities';
 import { restrictToHorizontalAxis } from '@dnd-kit/modifiers';
 
 // TODO: dnd-kit restrict movement horizontally in expression drop area
-//               fix element original/new appearance when dragging (use DragOverlay?)
 
 // Interface for variable row in the editor
 interface VariableRow {
@@ -59,7 +58,8 @@ const DraggableExpressionElement = ({ element, index, removeExpressionElement })
     listeners,
     setNodeRef,
     transform,
-    transition
+    transition,
+    isDragging
   } = useSortable({ id: element.id });
 
   const style = {
@@ -74,6 +74,7 @@ const DraggableExpressionElement = ({ element, index, removeExpressionElement })
     cursor: 'grab',
     display: 'inline-block',
     fontSize: '14px',
+    opacity: isDragging ? 0 : 1,
   };
 
   return (
@@ -848,11 +849,14 @@ const DetailsTab = () => {
           {activeItem ? (
             <div style={{
               padding: '4px 8px',
+              margin: '4px',
               borderRadius: '4px',
+              fontSize: '14px',
               backgroundColor: 
                 activeItem.type === 'variable' ? '#d1e7ff' :
                 activeItem.type === 'operator' ? '#ffd1d1' : '#d1ffd1',
-              boxShadow: '0 0 10px rgba(0,0,0,0.3)',
+              boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
+              cursor: 'grabbing',
             }}>
               {activeItem.value}
             </div>
