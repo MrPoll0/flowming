@@ -21,8 +21,6 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { restrictToHorizontalAxis } from '@dnd-kit/modifiers';
 
-// TODO: dnd-kit restrict movement horizontally in expression drop area
-
 // Interface for variable row in the editor
 interface VariableRow {
   id: string;
@@ -186,6 +184,7 @@ const DetailsTab = () => {
   
   const [activeId, setActiveId] = useState(null);
   const [activeItem, setActiveItem] = useState(null);
+  const [isReordering, setIsReordering] = useState(false);
   
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -407,28 +406,28 @@ const DetailsTab = () => {
     // Find the active item
     let foundItem = null;
     
-    // Check in expression elements
-    foundItem = expressionElements.find(item => item.id === active.id);
-    
-    // Check in variables
-    if (!foundItem && active.id.startsWith('var-')) {
+    // Check if it's an existing expression element being reordered
+    const isExistingElement = expressionElements.find(item => item.id === active.id);
+    setIsReordering(!!isExistingElement); // Set state based on whether it's reordering
+
+    if (isExistingElement) {
+      foundItem = isExistingElement;
+    } else if (active.id.startsWith('var-')) { // Check in variables (palette)
       const varId = active.id.replace('var-', '');
       const variable = getAllVariables().find(v => v.id === varId);
       if (variable) {
         foundItem = { id: active.id, type: 'variable', value: variable.name };
       }
-    }
-    
-    // Check in operators
-    if (!foundItem && active.id.startsWith('op-')) {
+    } else if (active.id.startsWith('op-')) { // Check in operators (palette)
       const op = active.id.replace('op-', '');
       foundItem = { id: active.id, type: 'operator', value: op };
-    }
-    
-    // Check in literals
-    if (!foundItem && active.id.startsWith('lit-')) {
-      const [, type, value] = active.id.split('-');
-      foundItem = { id: active.id, type: 'literal', value };
+    } else if (active.id.startsWith('lit-')) { // Check in literals (palette)
+      const parts = active.id.split('-'); // e.g., "lit-boolean-true"
+      if (parts.length >= 3) {
+          const type = parts[1]; // e.g., "boolean"
+          const value = parts.slice(2).join('-'); // e.g., "true"
+          foundItem = { id: active.id, type: 'literal', value };
+      }
     }
     
     setActiveItem(foundItem);
@@ -437,8 +436,9 @@ const DetailsTab = () => {
   // Handle drag end
   const handleDragEnd = (event) => {
     const { active, over } = event;
-    setActiveId(null); // Reset active state
+    setActiveId(null); // Reset active state even if dropped outside
     setActiveItem(null);
+    setIsReordering(false); // Reset reordering state
 
     // Exit if dropped outside a valid droppable area
     if (!over) {
@@ -508,6 +508,11 @@ const DetailsTab = () => {
         }
     }
     // else: Drag started or ended outside, or other unhandled cases.
+
+    // Reset state after handling the drop
+    setActiveId(null);
+    setActiveItem(null);
+    setIsReordering(false); // Reset reordering state
   };
   
   // Render variable editor if DeclareVariable node is selected
@@ -618,6 +623,8 @@ const DetailsTab = () => {
         collisionDetection={rectIntersection}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
+        // TODO: horizontal restriction does not work properly with vertical scrolling
+        modifiers={isReordering ? [restrictToHorizontalAxis] : undefined}
       >
         <div key={selectedNode.id}>
           <h4>Variable Assignment</h4>
