@@ -39,7 +39,7 @@ const variableTypes = [
 
 // Available operators for expression building
 const operators = [
-  '+', '-', '*', '/', '%', '==', '!=', '>', '<', '>=', '<=', '&&', '||'
+  '+', '-', '*', '/', '%', '!', '==', '!=', '>', '<', '>=', '<=', '&&', '||', '(', ')'
 ];
 
 // Interface for expression elements
