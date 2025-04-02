@@ -14,8 +14,6 @@ const DeclareVariable = memo(function DeclareVariableComponent({ data, id: nodeI
   
   const nodeVariables = getNodeVariables(nodeId);
 
-  // TODO: declared variables in block are kept even when block is deleted
-
   return (
     <div className="declare-variable-node" style={{ 
       borderRadius: '0px', 

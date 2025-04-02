@@ -15,6 +15,7 @@ import {
 } from '@xyflow/react';
 import { SelectedNodeContext } from '../../context/SelectedNodeContext';
 import { FlowInteractionContext } from '../../context/FlowInteractionContext';
+import { useVariables } from '../../context/VariablesContext';
 import { FlowNode, initialNodes, initialEdges, nodeTypes, edgeTypes } from './FlowTypes';
 import { NodeBlock } from '../Toolbar/ToolbarTypes';
 import ContextMenu from './ContextMenu';
@@ -23,6 +24,7 @@ const FlowContent: React.FC = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const { setSelectedNode } = useContext(SelectedNodeContext);
+  const { deleteNodeVariables } = useVariables();
   const { 
     hoveredElement, 
     selectedElement, 
@@ -192,6 +194,13 @@ const FlowContent: React.FC = () => {
   const onDelete = useCallback(
     (element: { id: string; type: 'node' | 'edge' }) => {
       if (element.type === 'node') {
+        // Find the node to check its type
+        const nodeToDelete = nodes.find(node => node.id === element.id);
+        if (nodeToDelete && nodeToDelete.type === 'DeclareVariable') {
+          // Delete all variables associated with this node
+          deleteNodeVariables(element.id);
+        }
+        
         // Delete node and connected edges
         setNodes((nodes) => nodes.filter((node) => node.id !== element.id));
       } else if (element.type === 'edge') {
@@ -199,7 +208,7 @@ const FlowContent: React.FC = () => {
         setEdges((edges) => edges.filter((edge) => edge.id !== element.id));
       }
     },
-    [setNodes, setEdges]
+    [setNodes, setEdges, nodes, deleteNodeVariables]
   );
 
   // Add direct event listeners to the ReactFlow pane
@@ -385,6 +394,23 @@ const FlowContent: React.FC = () => {
     }
   }, [editingEdge, setEdges]);
 
+  // Handle nodes deleted by keyboard or other means
+  const onNodesDelete = useCallback((nodesToDelete: Node[]) => {
+    // Clean up variables for any DeclareVariable nodes
+    nodesToDelete.forEach(node => {
+      if (node.type === 'DeclareVariable') {
+        deleteNodeVariables(node.id);
+      }
+    });
+    
+    // Clear selection if the selected node was deleted
+    if (selectedElement && selectedElement.type === 'node' && 
+        nodesToDelete.some(node => node.id === selectedElement.id)) {
+      setSelectedNode(null);
+      setSelectedElement(null);
+    }
+  }, [deleteNodeVariables, selectedElement, setSelectedNode, setSelectedElement]);
+
   return (
     <div 
       className="reactflow-wrapper" 
@@ -412,6 +438,7 @@ const FlowContent: React.FC = () => {
         onPaneClick={onPaneClick}
         onPaneMouseLeave={onMouseLeave}
         onConnect={onConnect}
+        onNodesDelete={onNodesDelete}
         connectionLineType={ConnectionLineType.SmoothStep}
         fitView
         proOptions={{ hideAttribution: true }}
