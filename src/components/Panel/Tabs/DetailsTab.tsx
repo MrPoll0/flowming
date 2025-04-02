@@ -219,14 +219,23 @@ const DetailsTab = () => {
       const selectedVariable = allVariables.find(v => v.id === leftSideVariable);
       const leftSide = selectedVariable ? selectedVariable.name : '';
       
-      // Create updated node data
-      const updatedData = {
-        ...selectedNode.data,
-        expression: {
-          leftSide,
-          rightSide: rightSideExpression
-        }
-      };
+      let updatedData;
+      // Create updated node data based on whether a variable is selected
+      if (leftSideVariable) {
+        updatedData = {
+          ...selectedNode.data,
+          expression: {
+            leftSide,
+            rightSide: rightSideExpression
+          }
+        };
+      } else {
+        // Clear the expression when no variable is selected
+        updatedData = {
+          ...selectedNode.data,
+          expression: null
+        };
+      }
 
       // Update React Flow nodes state
       reactFlowInstance.setNodes(prevNodes => prevNodes.map(node => 
@@ -247,6 +256,7 @@ const DetailsTab = () => {
   
   // Update node data when expression changes
   useEffect(() => {
+    // We want to update both when a variable is selected or deselected
     if (!isInitialLoadRef.current && selectedNode && selectedNode.type === 'AssignVariable') {
       updateAssignVariableNodeData();
     }
@@ -283,8 +293,8 @@ const DetailsTab = () => {
       if (previousNodeIdRef.current !== selectedNode.id) {
         previousNodeIdRef.current = selectedNode.id;
         
-        // Initialize with existing data if available
-        if (selectedNode.data.expression) {
+        // Initialize with existing data if available, but only if there's valid data
+        if (selectedNode.data.expression && selectedNode.data.expression.leftSide) {
           // Find the variable ID by name
           const allVariables = getAllVariables();
           const variable = allVariables.find(v => v.name === selectedNode.data.expression.leftSide);
@@ -325,6 +335,7 @@ const DetailsTab = () => {
             setExpressionElements([]);
           }
         } else {
+          // Reset form state for a new or empty assignment
           setLeftSideVariable('');
           setRightSideExpression('');
           setExpressionElements([]);
@@ -634,7 +645,15 @@ const DetailsTab = () => {
             <h5 style={{ marginTop: 0, marginBottom: '10px' }}>Select Variable to Assign (Left-hand side)</h5>
             <select
               value={leftSideVariable}
-              onChange={(e) => setLeftSideVariable(e.target.value)}
+              onChange={(e) => {
+                const newValue = e.target.value;
+                setLeftSideVariable(newValue);
+                // Clear expression elements when deselecting the variable
+                if (!newValue) {
+                  setExpressionElements([]);
+                  setRightSideExpression('');
+                }
+              }}
               style={{
                 width: '100%',
                 padding: '8px',
