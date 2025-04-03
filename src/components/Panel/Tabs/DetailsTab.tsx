@@ -2,6 +2,7 @@ import { useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { SelectedNodeContext } from '../../../context/SelectedNodeContext';
 import { useVariables } from '../../../context/VariablesContext';
 import { useReactFlow } from '@xyflow/react';
+import { ExpressionElement, ExpressionElementType } from '../../Flow/Nodes/AssignVariable';
 import {
   DndContext, 
   useSensors, 
@@ -41,13 +42,6 @@ const variableTypes = [
 const operators = [
   '+', '-', '*', '/', '%', '!', '==', '!=', '>', '<', '>=', '<=', '&&', '||', '(', ')'
 ];
-
-// Interface for expression elements
-interface ExpressionElement {
-  id: string;
-  type: 'variable' | 'literal' | 'operator';
-  value: string;
-}
 
 // Draggable expression element component
 const DraggableExpressionElement = ({ element, index, removeExpressionElement }) => {
@@ -182,8 +176,8 @@ const DetailsTab = () => {
   
   const reactFlowInstance = useReactFlow();
   
-  const [activeId, setActiveId] = useState(null);
-  const [activeItem, setActiveItem] = useState(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeItem, setActiveItem] = useState<ExpressionElement | null>(null);
   const [isReordering, setIsReordering] = useState(false);
   
   const sensors = useSensors(
@@ -226,7 +220,8 @@ const DetailsTab = () => {
           ...selectedNode.data,
           expression: {
             leftSide,
-            rightSide: rightSideExpression
+            leftSideVarId: leftSideVariable, // Store the variable ID
+            elements: expressionElements // Use the elements array directly
           }
         };
       } else {
@@ -244,15 +239,7 @@ const DetailsTab = () => {
           : node
       ));
     }
-  }, [reactFlowInstance, selectedNode, leftSideVariable, rightSideExpression, getAllVariables]);
-  
-  // Update right side expression when expression elements change
-  useEffect(() => {
-    if (selectedNode && selectedNode.type === 'AssignVariable') {
-      const expressionString = expressionElements.map(e => e.value).join(' ');
-      setRightSideExpression(expressionString);
-    }
-  }, [expressionElements, selectedNode]);
+  }, [reactFlowInstance, selectedNode, leftSideVariable, expressionElements, getAllVariables]);
   
   // Update node data when expression changes
   useEffect(() => {
@@ -260,7 +247,7 @@ const DetailsTab = () => {
     if (!isInitialLoadRef.current && selectedNode && selectedNode.type === 'AssignVariable') {
       updateAssignVariableNodeData();
     }
-  }, [leftSideVariable, rightSideExpression, selectedNode, updateAssignVariableNodeData]);
+  }, [leftSideVariable, expressionElements, selectedNode, updateAssignVariableNodeData]);
   
   // Load variables when the selected node changes
   useEffect(() => {
@@ -293,25 +280,42 @@ const DetailsTab = () => {
       if (previousNodeIdRef.current !== selectedNode.id) {
         previousNodeIdRef.current = selectedNode.id;
         
-        // Initialize with existing data if available, but only if there's valid data
-        if (selectedNode.data.expression && selectedNode.data.expression.leftSide) {
-          // Find the variable ID by name
+        // Initialize with existing data if available
+        if (selectedNode.data.expression) {
           const allVariables = getAllVariables();
-          const variable = allVariables.find(v => v.name === selectedNode.data.expression.leftSide);
           
-          if (variable) {
-            setLeftSideVariable(variable.id);
+          // Check for leftSideVarId first (more reliable) and fall back to name matching
+          if (selectedNode.data.expression.leftSideVarId) {
+            const varId = selectedNode.data.expression.leftSideVarId;
+            // Check if the variable with this ID still exists
+            if (allVariables.some(v => v.id === varId)) {
+              setLeftSideVariable(varId);
+            }
+          } else if (selectedNode.data.expression.leftSide) {
+            // Find the variable ID by name (legacy support)
+            const variable = allVariables.find(v => v.name === selectedNode.data.expression.leftSide);
+            
+            if (variable) {
+              setLeftSideVariable(variable.id);
+            }
           }
           
-          // Parse the right side expression if available
-          if (selectedNode.data.expression.rightSide) {
-            setRightSideExpression(selectedNode.data.expression.rightSide);
+          // Use the structured elements directly if available, or parse legacy rightSide
+          if (selectedNode.data.expression.elements) {
+            setExpressionElements(selectedNode.data.expression.elements);
+            // Also set the string representation for compatibility
+            setRightSideExpression(selectedNode.data.expression.elements.map((e: ExpressionElement) => e.value).join(' '));
+          } else if (selectedNode.data.expression.rightSide) {
+            // Legacy support: parse the string into elements
+            const rightSide = selectedNode.data.expression.rightSide;
+            setRightSideExpression(rightSide);
             
             // Convert right side expression to elements (simple parsing)
-            const parts = selectedNode.data.expression.rightSide.split(' ');
+            const parts = rightSide.split(' ');
             const elements: ExpressionElement[] = parts.map((part: string) => {
               // Determine element type
-              let type: 'variable' | 'literal' | 'operator' = 'literal';
+              let type: ExpressionElementType = 'literal';
+              let variableId: string | undefined = undefined;
               
               if (operators.includes(part)) {
                 type = 'operator';
@@ -320,19 +324,22 @@ const DetailsTab = () => {
                 const matchingVar = allVariables.find(v => v.name === part);
                 if (matchingVar) {
                   type = 'variable';
+                  variableId = matchingVar.id;
                 }
               }
               
               return {
                 id: crypto.randomUUID(),
                 type,
-                value: part
+                value: part,
+                variableId
               };
             });
             
             setExpressionElements(elements);
           } else {
             setExpressionElements([]);
+            setRightSideExpression('');
           }
         } else {
           // Reset form state for a new or empty assignment
@@ -415,7 +422,7 @@ const DetailsTab = () => {
     setActiveId(active.id);
     
     // Find the active item
-    let foundItem = null;
+    let foundItem: ExpressionElement | null = null;
     
     // Check if it's an existing expression element being reordered
     const isExistingElement = expressionElements.find(item => item.id === active.id);
@@ -427,17 +434,22 @@ const DetailsTab = () => {
       const varId = active.id.replace('var-', '');
       const variable = getAllVariables().find(v => v.id === varId);
       if (variable) {
-        foundItem = { id: active.id, type: 'variable', value: variable.name };
+        foundItem = { 
+          id: active.id, 
+          type: 'variable' as ExpressionElementType, 
+          value: variable.name,
+          variableId: variable.id 
+        };
       }
     } else if (active.id.startsWith('op-')) { // Check in operators (palette)
       const op = active.id.replace('op-', '');
-      foundItem = { id: active.id, type: 'operator', value: op };
+      foundItem = { id: active.id, type: 'operator' as ExpressionElementType, value: op };
     } else if (active.id.startsWith('lit-')) { // Check in literals (palette)
       const parts = active.id.split('-'); // e.g., "lit-boolean-true"
       if (parts.length >= 3) {
           const type = parts[1]; // e.g., "boolean"
           const value = parts.slice(2).join('-'); // e.g., "true"
-          foundItem = { id: active.id, type: 'literal', value };
+          foundItem = { id: active.id, type: 'literal' as ExpressionElementType, value };
       }
     }
     
@@ -478,52 +490,93 @@ const DetailsTab = () => {
          // Handle cases where an existing item is dropped onto the container background,
          // not another item. SortableContext might handle visual positioning,
          // but state update might be needed if dropped at beginning/end.
-         // For simplicity now, we only explicitly handle drops onto other items for reordering.
-         // Further refinement might involve checking drop coordinates if needed.
-         console.warn("Reordering drop target was not an existing item. Over ID:", overId);
       }
     }
-    // Case 2: Adding a new item from the palette to the expression area
-    else if (activeElementIndex === -1 && (overIsDropArea || overElementIndex > -1)) {
-        let newItemData: Omit<ExpressionElement, 'id'> | null = null;
+    // Case 2: Adding a new element from the palette
+    else if (activeElementIndex === -1 && overIsDropArea) {
+      // This is a new element being added to the expression
+      if (!activeItem) return; // Safety check
 
-        // Determine the type and value of the new item based on its palette ID prefix
-        if (activeId.startsWith('var-')) {
-            const varId = activeId.replace('var-', '');
+      // Get updated item with new UUID
+      let newItem: ExpressionElement; 
+      
+      // Check if it's a variable and ensure the variableId is preserved
+      if (activeItem.type === 'variable') {
+        // For variables, extract the real variable ID from the palette ID
+        let variableId = activeItem.variableId;
+        if (!variableId) {
+          // Try to extract from the ID if not present
+          const varId = activeId.startsWith('var-') ? activeId.replace('var-', '') : null;
+          if (varId) {
             const variable = getAllVariables().find(v => v.id === varId);
-            if (variable) newItemData = { type: 'variable', value: variable.name };
-        } else if (activeId.startsWith('op-')) {
-            const op = activeId.replace('op-', '');
-            newItemData = { type: 'operator', value: op };
-        } else if (activeId.startsWith('lit-boolean-')) { // Handle draggable boolean literals
-            const value = activeId.replace('lit-boolean-', ''); // "true" or "false"
-            newItemData = { type: 'literal', value };
-        }
-        // Add logic here if other literal types (string, int, float) become draggable palette items
-
-        // If a valid new item was identified, add it to the expressionElements state
-        if (newItemData) {
-            const newItem = { ...newItemData, id: crypto.randomUUID() };
-
-            if (overElementIndex > -1) {
-                // Insert the new item *before* the existing item it was dropped onto
-                setExpressionElements(prev => [
-                    ...prev.slice(0, overElementIndex),
-                    newItem,
-                    ...prev.slice(overElementIndex)
-                ]);
-            } else {
-                // Append the new item to the end if dropped onto the drop area background
-                setExpressionElements(prev => [...prev, newItem]);
+            if (variable) {
+              variableId = variable.id;
             }
+          }
         }
+        
+        newItem = {
+          id: crypto.randomUUID(),
+          type: 'variable',
+          value: activeItem.value,
+          variableId // Store the variable ID for resilience
+        };
+      } else {
+        // For non-variables, just create a new item with a fresh ID
+        newItem = {
+          id: crypto.randomUUID(),
+          type: activeItem.type,
+          value: activeItem.value
+        };
+      }
+      
+      setExpressionElements(prev => [...prev, newItem]);
     }
-    // else: Drag started or ended outside, or other unhandled cases.
+    // Case 3: Adding an element at a specific position in the expression
+    else if (activeElementIndex === -1 && overElementIndex > -1) {
+      // This is a new element being inserted at a specific position
+      if (!activeItem) return; // Safety check
 
-    // Reset state after handling the drop
-    setActiveId(null);
-    setActiveItem(null);
-    setIsReordering(false); // Reset reordering state
+      // Get updated item with new UUID
+      let newItem: ExpressionElement;
+      
+      // Check if it's a variable and ensure the variableId is preserved
+      if (activeItem.type === 'variable') {
+        // For variables, extract the real variable ID from the palette ID
+        let variableId = activeItem.variableId;
+        if (!variableId) {
+          // Try to extract from the ID if not present
+          const varId = activeId.startsWith('var-') ? activeId.replace('var-', '') : null;
+          if (varId) {
+            const variable = getAllVariables().find(v => v.id === varId);
+            if (variable) {
+              variableId = variable.id;
+            }
+          }
+        }
+        
+        newItem = {
+          id: crypto.randomUUID(),
+          type: 'variable',
+          value: activeItem.value,
+          variableId // Store the variable ID for resilience
+        };
+      } else {
+        // For non-variables, just create a new item with a fresh ID
+        newItem = {
+          id: crypto.randomUUID(),
+          type: activeItem.type,
+          value: activeItem.value
+        };
+      }
+      
+      // Insert at the specified position
+      setExpressionElements(prev => {
+        const updated = [...prev];
+        updated.splice(overElementIndex, 0, newItem);
+        return updated;
+      });
+    }
   };
   
   // Render variable editor if DeclareVariable node is selected

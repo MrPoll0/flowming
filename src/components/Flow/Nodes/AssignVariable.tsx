@@ -1,18 +1,33 @@
 import { Handle, Position } from '@xyflow/react';
 import { memo } from 'react';
 
+// Define expression element types
+export type ExpressionElementType = 'variable' | 'operator' | 'literal';
+
+// Define an expression element structure
+export interface ExpressionElement {
+  id: string;
+  type: ExpressionElementType;
+  value: string; // The display value
+  variableId?: string; // For variables, store the ID for resilience
+}
+
 interface AssignVariableNodeData {
   label?: string;
   isHovered?: boolean;
   isSelected?: boolean;
   expression?: {
     leftSide: string;
-    rightSide: string;
+    leftSideVarId?: string;
+    elements: ExpressionElement[]; // Store expression as structured elements
   };
 }
 
 const AssignVariable = memo(function AssignVariableComponent({ data, id: __nodeId }: { data: AssignVariableNodeData; id: string }) {
   const { isHovered, isSelected, expression } = data;
+  
+  // Render the expression as a string for display
+  const expressionString = expression?.elements?.map(e => e.value).join(' ') || '';
   
   return (
     <div className="assign-variable-node" style={{ 
@@ -45,7 +60,7 @@ const AssignVariable = memo(function AssignVariableComponent({ data, id: __nodeI
           fontSize: '14px',
           fontFamily: 'monospace'
         }}>
-          <code>{expression.leftSide} = {expression.rightSide}</code>
+          <code>{expression.leftSide} = {expressionString}</code>
         </div>
       ) : (
         <div style={{ 
