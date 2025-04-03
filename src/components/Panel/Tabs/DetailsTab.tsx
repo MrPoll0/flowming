@@ -43,8 +43,15 @@ const operators = [
   '+', '-', '*', '/', '%', '!', '==', '!=', '>', '<', '>=', '<=', '&&', '||', '(', ')'
 ];
 
+// Define props interfaces for components
+interface DraggableExpressionElementProps {
+  element: ExpressionElement;
+  index: number; // Keep this even if unused now, it might be needed later
+  removeExpressionElement: (id: string) => void;
+}
+
 // Draggable expression element component
-const DraggableExpressionElement = ({ element, index, removeExpressionElement }) => {
+const DraggableExpressionElement = ({ element, removeExpressionElement }: DraggableExpressionElementProps) => {
   const {
     attributes,
     listeners,
@@ -77,11 +84,8 @@ const DraggableExpressionElement = ({ element, index, removeExpressionElement })
       {...listeners}
     >
       {element.value}
-      <button 
-        onClick={(e) => {
-          e.stopPropagation();
-          removeExpressionElement(element.id);
-        }}
+      <button
+        onClick={() => removeExpressionElement(element.id)}
         style={{
           marginLeft: '5px',
           background: 'none',
@@ -99,13 +103,19 @@ const DraggableExpressionElement = ({ element, index, removeExpressionElement })
   );
 };
 
+// Define types for palette item props
+interface DraggablePaletteItemProps {
+  id: string;
+  type: string; // Keep this even if unused now
+  value: string;
+  backgroundColor: string;
+}
+
 // Draggable palette item component (non-sortable)
-const DraggablePaletteItem = ({ id, type, value, backgroundColor }) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-  } = useDraggable({ id });
+const DraggablePaletteItem = ({ id, value, backgroundColor }: DraggablePaletteItemProps) => {
+  const { attributes, listeners, setNodeRef } = useDraggable({
+    id: id,
+  });
 
   const style = {
     backgroundColor: backgroundColor || '#e0e0e0',
@@ -130,7 +140,7 @@ const DraggablePaletteItem = ({ id, type, value, backgroundColor }) => {
 };
 
 // Droppable area component
-const ExpressionDropArea = ({ id, children, isEmpty }: { id: string, children: React.ReactNode, isEmpty: boolean }) => {
+const ExpressionDropArea = ({ id, children }: { id: string, children: React.ReactNode }) => {
   const { setNodeRef, isOver } = useDroppable({
     id: id
   });
@@ -168,7 +178,7 @@ const DetailsTab = () => {
   const { getNodeVariables, updateNodeVariables, getAllVariables } = useVariables();
   const [variables, setVariables] = useState<VariableRow[]>([]);
   const [leftSideVariable, setLeftSideVariable] = useState<string>('');
-  const [rightSideExpression, setRightSideExpression] = useState<string>('');
+  const [_rightSideExpression, setRightSideExpression] = useState<string>('');
   const [expressionElements, setExpressionElements] = useState<ExpressionElement[]>([]);
   const isInitialLoadRef = useRef(true);
   const updateTimeoutRef = useRef<number | null>(null);
@@ -176,7 +186,7 @@ const DetailsTab = () => {
   
   const reactFlowInstance = useReactFlow();
   
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [_activeId, setActiveId] = useState<string | null>(null);
   const [activeItem, setActiveItem] = useState<ExpressionElement | null>(null);
   const [isReordering, setIsReordering] = useState(false);
   
@@ -417,7 +427,7 @@ const DetailsTab = () => {
   };
   
   // Handle drag start
-  const handleDragStart = (event) => {
+  const handleDragStart = (event: any) => {
     const { active } = event;
     setActiveId(active.id);
     
@@ -447,7 +457,6 @@ const DetailsTab = () => {
     } else if (active.id.startsWith('lit-')) { // Check in literals (palette)
       const parts = active.id.split('-'); // e.g., "lit-boolean-true"
       if (parts.length >= 3) {
-          const type = parts[1]; // e.g., "boolean"
           const value = parts.slice(2).join('-'); // e.g., "true"
           foundItem = { id: active.id, type: 'literal' as ExpressionElementType, value };
       }
@@ -457,7 +466,7 @@ const DetailsTab = () => {
   };
 
   // Handle drag end
-  const handleDragEnd = (event) => {
+  const handleDragEnd = (event: any) => {
     const { active, over } = event;
     setActiveId(null); // Reset active state even if dropped outside
     setActiveItem(null);
@@ -733,7 +742,7 @@ const DetailsTab = () => {
                     {allVariables.find(v => v.id === leftSideVariable)?.name || '(select variable)'} = 
                   </span>
                   
-                  <ExpressionDropArea id="expression-drop-area" isEmpty={expressionElements.length === 0}>
+                  <ExpressionDropArea id="expression-drop-area">
                     <SortableContext 
                       items={expressionElements.map(item => item.id)}
                       strategy={horizontalListSortingStrategy}
