@@ -15,6 +15,7 @@ import {
 } from '@xyflow/react';
 import { SelectedNodeContext } from '../../context/SelectedNodeContext';
 import { FlowInteractionContext } from '../../context/FlowInteractionContext';
+import { useVariables } from '../../context/VariablesContext';
 import { FlowNode, initialNodes, initialEdges, nodeTypes, edgeTypes } from './FlowTypes';
 import { NodeBlock } from '../Toolbar/ToolbarTypes';
 import ContextMenu from './ContextMenu';
@@ -23,6 +24,7 @@ const FlowContent: React.FC = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const { setSelectedNode } = useContext(SelectedNodeContext);
+  const { variables, deleteNodeVariables } = useVariables();
   const { 
     hoveredElement, 
     selectedElement, 
@@ -192,6 +194,13 @@ const FlowContent: React.FC = () => {
   const onDelete = useCallback(
     (element: { id: string; type: 'node' | 'edge' }) => {
       if (element.type === 'node') {
+        // Find the node to check its type
+        const nodeToDelete = nodes.find(node => node.id === element.id);
+        if (nodeToDelete && nodeToDelete.type === 'DeclareVariable') {
+          // Delete all variables associated with this node
+          deleteNodeVariables(element.id);
+        }
+        
         // Delete node and connected edges
         setNodes((nodes) => nodes.filter((node) => node.id !== element.id));
       } else if (element.type === 'edge') {
@@ -199,7 +208,7 @@ const FlowContent: React.FC = () => {
         setEdges((edges) => edges.filter((edge) => edge.id !== element.id));
       }
     },
-    [setNodes, setEdges]
+    [setNodes, setEdges, nodes, deleteNodeVariables]
   );
 
   // Add direct event listeners to the ReactFlow pane
@@ -385,6 +394,150 @@ const FlowContent: React.FC = () => {
     }
   }, [editingEdge, setEdges]);
 
+  // Handle nodes deleted by keyboard or other means
+  const onNodesDelete = useCallback((nodesToDelete: Node[]) => {
+    // Clean up variables for any DeclareVariable nodes
+    nodesToDelete.forEach(node => {
+      if (node.type === 'DeclareVariable') {
+        deleteNodeVariables(node.id);
+      }
+    });
+    
+    // Clear selection if the selected node was deleted
+    if (selectedElement && selectedElement.type === 'node' && 
+        nodesToDelete.some(node => node.id === selectedElement.id)) {
+      setSelectedNode(null);
+      setSelectedElement(null);
+    }
+  }, [deleteNodeVariables, selectedElement, setSelectedNode, setSelectedElement]);
+
+  // Update AssignVariable nodes when variables change
+  useEffect(() => {
+    // Find all AssignVariable nodes
+    const assignVarNodes = nodes.filter(node => node.type === 'AssignVariable');
+    if (assignVarNodes.length === 0) return; // No AssignVariable nodes to update
+
+    // Create a map of variable ids to names for quick lookups
+    const variableMap = new Map(variables.map(v => [v.id, v.name]));
+    
+    // Track if we actually need to update any nodes
+    let needsGlobalUpdate = false;
+    
+    // Create new nodes array with updated values, only if updates are needed
+    const updatedNodes = nodes.map(node => {
+      // Only update AssignVariable nodes with expressions
+      if (node.type !== 'AssignVariable' || !node.data.expression) return node;
+
+      const { expression } = node.data;
+      let needsUpdate = false;
+      let updatedExpression = { ...expression };
+      
+      // Check if the leftSide variable exists using the ID if available
+      if (expression.leftSideVarId) {
+        // We have a variable ID, check if it still exists
+        const varName = variableMap.get(expression.leftSideVarId);
+        if (varName) {
+          // Variable still exists, update name if needed
+          if (varName !== expression.leftSide) {
+            needsUpdate = true;
+            updatedExpression.leftSide = varName;
+          }
+        } else {
+          // Variable no longer exists
+          needsUpdate = true;
+          updatedExpression = null; // Reset to "No assignment defined"
+        }
+      } else if (expression.leftSide) {
+        // No ID stored, try to find by name (legacy support)
+        const matchingVar = variables.find(v => v.name === expression.leftSide);
+        
+        if (!matchingVar) {
+          // The variable no longer exists
+          needsUpdate = true;
+          updatedExpression = null; // Reset to "No assignment defined"
+        }
+      }
+      
+      // If the expression is null now, no need to process elements
+      if (!updatedExpression) {
+        if (needsUpdate) {
+          needsGlobalUpdate = true;
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              expression: null
+            },
+          };
+        }
+        return node;
+      }
+      
+      // Handle variables in the elements array
+      if (updatedExpression.elements && updatedExpression.elements.length > 0) {
+        let elementsNeedUpdate = false;
+        const updatedElements = updatedExpression.elements
+          .map((element: any) => {
+            // Only process variable elements
+            if (element.type !== 'variable') return element;
+            
+            // If we have a variableId, use it to check if the variable still exists
+            if (element.variableId) {
+              const currentName = variableMap.get(element.variableId);
+              if (!currentName) {
+                // Variable no longer exists
+                elementsNeedUpdate = true;
+                // Return null to mark for removal
+                return null;
+              } else if (currentName !== element.value) {
+                // Variable name has changed
+                elementsNeedUpdate = true;
+                return {
+                  ...element,
+                  value: currentName // Update to new name
+                };
+              }
+            } else {
+              // Legacy support: check by name
+              const matchingVar = variables.find(v => v.name === element.value);
+              if (!matchingVar) {
+                // Variable no longer exists
+                elementsNeedUpdate = true;
+                // Return null to mark for removal
+                return null;
+              }
+            }
+            return element;
+          })
+          .filter((element: any) => element !== null) as typeof updatedExpression.elements; // Remove nulls (deleted variables)
+        
+        if (elementsNeedUpdate) {
+          needsUpdate = true;
+          updatedExpression.elements = updatedElements;
+        }
+      }
+      
+      // Only create a new node if we need to update it
+      if (!needsUpdate) return node;
+      
+      // Flag that we need to update nodes
+      needsGlobalUpdate = true;
+      
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          expression: updatedExpression
+        },
+      };
+    });
+    
+    // Only call setNodes if we actually made changes
+    if (needsGlobalUpdate) {
+      setNodes(updatedNodes);
+    }
+  }, [variables, setNodes]); // Remove nodes from dependencies
+
   return (
     <div 
       className="reactflow-wrapper" 
@@ -412,6 +565,7 @@ const FlowContent: React.FC = () => {
         onPaneClick={onPaneClick}
         onPaneMouseLeave={onMouseLeave}
         onConnect={onConnect}
+        onNodesDelete={onNodesDelete}
         connectionLineType={ConnectionLineType.SmoothStep}
         fitView
         proOptions={{ hideAttribution: true }}

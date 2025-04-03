@@ -2,6 +2,7 @@ import { Node, Edge } from '@xyflow/react';
 import Start from './Nodes/Start';
 import End from './Nodes/End';
 import DeclareVariable from './Nodes/DeclareVariable';
+import AssignVariable from './Nodes/AssignVariable';
 import Flowline from './Edges/Flowline';
 // Define the node type to match initialNodes
 export interface FlowNode extends Node {
@@ -14,6 +15,7 @@ export const nodeTypes = {
   Start,
   End,
   DeclareVariable,
+  AssignVariable,
 }
 
 export const edgeTypes = {

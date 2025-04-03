@@ -17,6 +17,7 @@ interface VariablesContextType {
   getNodeVariables: (nodeId: string) => Variable[];
   getAllVariables: () => Variable[];
   updateNodeVariables: (nodeId: string, variables: Omit<Variable, 'nodeId'>[]) => void;
+  deleteNodeVariables: (nodeId: string) => void;
 }
 
 // Create the context
@@ -28,6 +29,7 @@ export const VariablesContext = createContext<VariablesContextType>({
   getNodeVariables: () => [],
   getAllVariables: () => [],
   updateNodeVariables: () => {},
+  deleteNodeVariables: () => {},
 });
 
 // Custom hook for using the context
@@ -82,6 +84,11 @@ export const VariablesProvider: React.FC<VariablesProviderProps> = ({ children }
     });
   };
 
+  // Delete all variables associated with a specific node
+  const deleteNodeVariables = (nodeId: string) => {
+    setVariables(prev => prev.filter(variable => variable.nodeId !== nodeId));
+  };
+
   return (
     <VariablesContext.Provider
       value={{
@@ -92,6 +99,7 @@ export const VariablesProvider: React.FC<VariablesProviderProps> = ({ children }
         getNodeVariables,
         getAllVariables,
         updateNodeVariables,
+        deleteNodeVariables,
       }}
     >
       {children}
