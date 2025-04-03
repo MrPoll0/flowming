@@ -11,7 +11,9 @@ import {
   Panel,
   addEdge,
   Edge,
-  ConnectionLineType
+  ConnectionLineType,
+  Connection,
+  IsValidConnection
 } from '@xyflow/react';
 import { SelectedNodeContext } from '../../context/SelectedNodeContext';
 import { FlowInteractionContext } from '../../context/FlowInteractionContext';
@@ -538,6 +540,15 @@ const FlowContent: React.FC = () => {
     }
   }, [variables, setNodes]); // Remove nodes from dependencies
 
+  // Prevent self-connections (a node connecting to itself)
+  const isValidConnection: IsValidConnection = useCallback(
+    (connection: Connection | Edge) => {
+      // If source and target are the same node, it's an invalid connection
+      return connection.source !== connection.target;
+    },
+    []
+  );
+
   return (
     <div 
       className="reactflow-wrapper" 
@@ -567,6 +578,7 @@ const FlowContent: React.FC = () => {
         onConnect={onConnect}
         onNodesDelete={onNodesDelete}
         connectionLineType={ConnectionLineType.SmoothStep}
+        isValidConnection={isValidConnection}
         fitView
         proOptions={{ hideAttribution: true }}
         deleteKeyCode={["Backspace", "Delete"]}
