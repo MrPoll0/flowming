@@ -609,6 +609,22 @@ const FlowContent: React.FC = () => {
 
           // User manual: SHIFT + click (drag) to select zone for multi-select; CTRL + click to select multiple nodes/edges
           // TODO: node type 'group' for functions
+
+          // check this (overview of all the features): https://reactflow.dev/examples/overview
+
+          // TODO FlowExecution: Component for it, startingNode, .next, Start(), BFS/DFS, check all edges in current node..., pass variables to next node as props... (?) [what do we care about as (previous) data in the current node?] 
+          //                      lock Flow (just like the little button does) to prevent modifying the diagram while executing
+          //                      update edge that is being used to go to next node to animated and/or colored
+          //                      generally, are nodes allowed to have a single outgoing edge or multiple? e.g. DeclareVariable with a single or multiple outgoing edges? e.g. Condition does have 2 outgoing edges
+          //                        only one outgoing edge for normal blocks (except conditional/decision block)
+          //                        multiple incoming edges allowed (edges coming from multiple conditionals (or merging from both paths from the same conditional), loops, code reuse, etc)
+
+
+          // TODO: copy and paste + cut nodes
+
+
+          // TODO: use animated SVG for execution edges, with timing of executionSpeed (like the ball going from source to target)
+
           type: 'Flowline',
         }}
       >
