@@ -1,5 +1,6 @@
 import { Handle, Position } from '@xyflow/react';
 import { memo } from 'react';
+import { getNodeStyles } from '../../../utils/nodeStyles';
 
 // Define expression element types
 export type ExpressionElementType = 'variable' | 'operator' | 'literal';
@@ -16,6 +17,7 @@ interface AssignVariableNodeData {
   label?: string;
   isHovered?: boolean;
   isSelected?: boolean;
+  isHighlighted?: boolean;
   expression?: {
     leftSide: string;
     leftSideVarId?: string;
@@ -24,32 +26,18 @@ interface AssignVariableNodeData {
 }
 
 const AssignVariable = memo(function AssignVariableComponent({ data, id: __nodeId }: { data: AssignVariableNodeData; id: string }) {
-  const { isHovered, isSelected, expression } = data;
+  const { isHovered, isSelected, isHighlighted, expression } = data;
   
   // Render the expression as a string for display
   const expressionString = expression?.elements?.map(e => e.value).join(' ') || '';
   
   return (
-    <div className="assign-variable-node" style={{ 
-      borderRadius: '0px', 
-      padding: '10px 20px',
-      border: isSelected 
-        ? '1px solid #1a73e8' 
-        : isHovered 
-          ? '1px solid #4d9cff' 
-          : '1px solid #000',
-      boxShadow: isSelected 
-        ? '0 0 8px rgba(26, 115, 232, 0.6)' 
-        : isHovered 
-          ? '0 0 5px rgba(77, 156, 255, 0.5)' 
-          : 'none',
-      backgroundColor: '#fff',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'stretch',
-      justifyContent: 'center',
-      minWidth: '250px',
-    }}>
+    <div className="assign-variable-node" style={getNodeStyles({
+      isHovered,
+      isSelected,
+      isHighlighted,
+      minWidth: '250px'
+    })}>
       <div style={{ fontWeight: 'bold', textAlign: 'center', marginBottom: '10px' }}>Assign variable</div>
       
       {expression ? (

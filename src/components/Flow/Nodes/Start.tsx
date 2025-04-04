@@ -1,38 +1,30 @@
 import { Handle, Position } from '@xyflow/react';
 import { memo } from 'react';
+import { getNodeStyles } from '../../../utils/nodeStyles';
 
 interface StartNodeData {
   label?: string;
   isHovered?: boolean;
   isSelected?: boolean;
-  [key: string]: any;
+  isHighlighted?: boolean;
+  [key: string]: any; // TODO: remove this?
 }
 
 function Start({ data }: { data: StartNodeData }) {
-  const { isHovered, isSelected } = data;
+  const { isHovered, isSelected, isHighlighted } = data;
   
   return (
-    <div className="start-node" style={{ 
-      borderRadius: '50px', 
-      padding: '10px 20px',
-      border: isSelected 
-        ? '1px solid #1a73e8' 
-        : isHovered 
-          ? '1px solid #4d9cff' 
-          : '1px solid #000',
-      boxShadow: isSelected 
-        ? '0 0 8px rgba(26, 115, 232, 0.6)' 
-        : isHovered 
-          ? '0 0 5px rgba(77, 156, 255, 0.5)' 
-          : 'none',
-      backgroundColor: '#fff',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
+    <div className="start-node" style={getNodeStyles({
+      isHovered,
+      isSelected,
+      isHighlighted,
+      borderRadius: '50px',
       minWidth: '100px',
-      minHeight: '40px'
-    }}>
+      minHeight: '40px',
+      additionalStyles: {
+        alignItems: 'center'
+      }
+    })}>
       <div style={{ fontWeight: 'bold' }}>Start</div>
       <Handle 
         type="source" 

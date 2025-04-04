@@ -1,40 +1,28 @@
 import { Handle, Position } from '@xyflow/react';
 import { memo } from 'react';
 import { useVariables } from '../../../context/VariablesContext';
+import { getNodeStyles } from '../../../utils/nodeStyles';
 
 interface DeclareVariableNodeData {
   label?: string;
   isHovered?: boolean;
   isSelected?: boolean;
+  isHighlighted?: boolean;
 }
 
 const DeclareVariable = memo(function DeclareVariableComponent({ data, id: nodeId }: { data: DeclareVariableNodeData; id: string }) {
-  const { isHovered, isSelected } = data;
+  const { isHovered, isSelected, isHighlighted } = data;
   const { getNodeVariables } = useVariables();
   
   const nodeVariables = getNodeVariables(nodeId);
 
   return (
-    <div className="declare-variable-node" style={{ 
-      borderRadius: '0px', 
-      padding: '10px 20px',
-      border: isSelected 
-        ? '1px solid #1a73e8' 
-        : isHovered 
-          ? '1px solid #4d9cff' 
-          : '1px solid #000',
-      boxShadow: isSelected 
-        ? '0 0 8px rgba(26, 115, 232, 0.6)' 
-        : isHovered 
-          ? '0 0 5px rgba(77, 156, 255, 0.5)' 
-          : 'none',
-      backgroundColor: '#fff',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'stretch',
-      justifyContent: 'center',
-      minWidth: '250px',
-    }}>
+    <div className="declare-variable-node" style={getNodeStyles({
+      isHovered,
+      isSelected,
+      isHighlighted,
+      minWidth: '250px'
+    })}>
       <div style={{ fontWeight: 'bold', textAlign: 'center', marginBottom: '10px' }}>Declare variable</div>
       
       {nodeVariables.length > 0 ? (

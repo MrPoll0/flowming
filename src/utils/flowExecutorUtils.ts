@@ -55,36 +55,9 @@ export function findStartNode(nodes: Node[]): Node | undefined {
  * Toggles the highlight state of a node
  */
 export function toggleNodeHighlight(reactFlow: ReactFlowInstance, nodeId: string, highlight: boolean): void {
-  // Use setNodes directly to ensure the update is applied
-  /*reactFlow.setNodes(reactFlow.getNodes().map(node => ({
-    ...node,
-    highlighted: node.id === nodeId ? highlight : false
-  })));
-
-  // TODO: does this work?    ->   // TODO: refactor all nodes so that they use a common style for selected/hovered/highlighted
-        //       add highlighted style to the node when so
   reactFlow.updateNodeData(nodeId, {
-    highlighted: highlight
-  });*/
-  reactFlow.setNodes(nodes => 
-    nodes.map(node => {
-      if (node.id === nodeId) {
-        return {
-          ...node,
-          style: {
-            ...node.style,
-            border: highlight ? '2px solid #0066ff' : undefined,
-            boxShadow: highlight ? '0 0 10px rgba(0, 102, 255, 0.5)' : undefined
-          },
-          data: {
-            ...node.data,
-            highlighted: highlight
-          }
-        };
-      }
-      return node;
-    })
-  );
+    isHighlighted: highlight
+  });
 }
 
 /**
@@ -112,14 +85,9 @@ export function resetAllNodeHighlights(reactFlow: ReactFlowInstance): void {
     reactFlow.setNodes(nodes => 
         nodes.map(node => ({
         ...node,
-        style: {
-            ...node.style,
-            border: undefined,
-            boxShadow: undefined
-        },
         data: {
             ...node.data,
-            highlighted: false
+            isHighlighted: false
         }
         }))
     );

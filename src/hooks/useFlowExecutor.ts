@@ -96,7 +96,9 @@ export function useFlowExecutor(): IExecutor {
 
             console.log("Processing node:", currentNode.id);
 
+            // TODO: perhaps toggle highlight of previous node directly instead of resetting all highlights?
             resetAllAnimations(reactFlow);
+            
 
             processNode(currentNode);
 
