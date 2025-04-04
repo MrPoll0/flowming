@@ -11,23 +11,12 @@ export function animateNodeOutgoingEdges(
     const edges = reactFlow.getEdges();
     const connectedEdges = getConnectedEdges([node], edges);
     const outgoingEdges = connectedEdges.filter(edge => edge.source === node.id);
-  
-    const updatedEdges = edges.map(edge => {
-      if (outgoingEdges.some(oe => oe.id === edge.id)) {
-        return {
-          ...edge,
-          animated: animated,
-          style: { 
-            ...edge.style, 
-            stroke: animated ? '#0066ff' : '#555', 
-            strokeWidth: 1 
-          }
-        };
-      }
-      return edge;
-    });
-
-    reactFlow.setEdges(updatedEdges);
+    
+    for (const edge of outgoingEdges) {
+      reactFlow.updateEdge(edge.id, {
+        animated: animated,
+      });
+    }
 }
 
 /**
@@ -54,8 +43,8 @@ export function findStartNode(nodes: Node[]): Node | undefined {
 /**
  * Toggles the highlight state of a node
  */
-export function toggleNodeHighlight(reactFlow: ReactFlowInstance, nodeId: string, highlight: boolean): void {
-  reactFlow.updateNodeData(nodeId, {
+export function toggleNodeHighlight(reactFlow: ReactFlowInstance, node: Node, highlight: boolean): void {
+  reactFlow.updateNodeData(node.id, {
     isHighlighted: highlight
   });
 }
@@ -64,7 +53,6 @@ export function toggleNodeHighlight(reactFlow: ReactFlowInstance, nodeId: string
  * Reset all edge animations in the flow
  */
 export function resetAllEdgeAnimations(reactFlow: ReactFlowInstance): void {
-    console.log("reset all edges")
     reactFlow.setEdges(edges => 
         edges.map(edge => ({
         ...edge,
@@ -101,3 +89,10 @@ export function resetAllAnimations(reactFlow: ReactFlowInstance): void {
     resetAllNodeHighlights(reactFlow);
 }
 
+/**
+ * Toggles the animations of a node (outgoing edges and node highlight)
+ */
+export function toggleNodeAnimations(reactFlow: ReactFlowInstance, node: Node, animated: boolean): void {
+  toggleNodeHighlight(reactFlow, node, animated);
+  animateNodeOutgoingEdges(reactFlow, node, animated);
+}

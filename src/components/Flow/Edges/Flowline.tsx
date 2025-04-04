@@ -1,13 +1,22 @@
 import { BaseEdge, getSmoothStepPath, type EdgeProps, EdgeLabelRenderer, Edge } from '@xyflow/react';
 import { FC, memo, useState } from 'react';
 
+interface FlowlineData extends Record<string, unknown> {
+    label?: string;
+    isHovered?: boolean;
+    isSelected?: boolean;
+    isEditing?: boolean;
+}
+
 // Memoize the node component to prevent unnecessary re-renders
-const Flowline: FC<EdgeProps<Edge<{ label: string, isHovered: boolean, isSelected: boolean, isEditing?: boolean }>>> = (props) => {
+const Flowline: FC<EdgeProps<Edge<FlowlineData>>> = (props) => {
     const { data } = props;
     const isHovered = data?.isHovered;
     const isSelected = data?.isSelected;
     const isEditing = data?.isEditing;
     const [labelText, setLabelText] = useState(data?.label || '');
+
+    const isAnimated = props.animated;
     
     // Create a unique marker ID for this edge
     const markerId = `marker-${props.id}`;
@@ -37,10 +46,12 @@ const Flowline: FC<EdgeProps<Edge<{ label: string, isHovered: boolean, isSelecte
     };
 
     // Determine styling based on hover/selected state
-    const edgeColor = isSelected 
-        ? '#1a73e8' 
-        : isHovered 
-            ? '#4d9cff' 
+    const edgeColor = isAnimated 
+        ? '#0066ff' 
+        : isSelected 
+            ? '#1a73e8' 
+            : isHovered 
+                ? '#4d9cff' 
             : (props.style?.stroke || '#555');
 
     // Calculate the path

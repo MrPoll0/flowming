@@ -3,9 +3,8 @@ import { useState, useCallback, useRef } from "react";
 import { 
   toggleLockFlow,
   findStartNode,
-  animateNodeOutgoingEdges,
-  toggleNodeHighlight,
-  resetAllAnimations
+  resetAllAnimations,
+  toggleNodeAnimations
 } from "../utils/flowExecutorUtils";
 
 interface IExecutor {
@@ -57,6 +56,11 @@ export function useFlowExecutor(): IExecutor {
         if (!isRunningRef.current || isPausedRef.current) {
             return;
         }
+
+        if (currentNodeRef.current) {
+            // Reset previous node highlight and animated edges
+            toggleNodeAnimations(reactFlow, currentNodeRef.current!, false);
+        }
         
         // Keep track of the active node
         currentNodeRef.current = node;
@@ -65,12 +69,10 @@ export function useFlowExecutor(): IExecutor {
 
         // TODO: set only 1 outgoing edge for normal nodes (with exceptions)
 
-        // TODO: animated edges are not being reset correctly when next node (but yes after end)
-        //       + try animated with svg path animation with time as executionSpeed
+        // TODO: try animated with svg path animation with time as executionSpeed
 
         
-        toggleNodeHighlight(reactFlow, node.id, true);
-        animateNodeOutgoingEdges(reactFlow, node, true);
+        toggleNodeAnimations(reactFlow, node, true);
 
         if (node.type === "End") {
             return;
@@ -92,13 +94,7 @@ export function useFlowExecutor(): IExecutor {
         visited.add(startNode.id);
 
         const processCurrentNode = () => {
-            const currentNode = queue.shift()!;
-
-            console.log("Processing node:", currentNode.id);
-
-            // TODO: perhaps toggle highlight of previous node directly instead of resetting all highlights?
-            resetAllAnimations(reactFlow);
-            
+            const currentNode = queue.shift()!;          
 
             processNode(currentNode);
 
@@ -124,16 +120,7 @@ export function useFlowExecutor(): IExecutor {
             processCurrentNode();
 
             // Schedule next node processing with delay
-            if (queue.length > 0) {
-                setTimeout(processNextNode, executionSpeedRef.current);
-            } else {
-                // No more nodes to process, reset animations
-                setTimeout(() => {
-                    if (isRunningRef.current) {
-                        stop();
-                    }
-                }, executionSpeedRef.current);
-            }
+            setTimeout(processNextNode, executionSpeedRef.current);
         };
 
         // Process the initial node immediately
@@ -151,7 +138,7 @@ export function useFlowExecutor(): IExecutor {
         }
 
         // First, reset all animations from previous runs
-        resetAllAnimations(reactFlow);
+        resetAllAnimations(reactFlow); // TODO: this unconditionally updates all node data and edge data AND STYLING. be careful
 
         // Update both state and ref
         setIsRunningState(true);
@@ -161,16 +148,6 @@ export function useFlowExecutor(): IExecutor {
         isPausedRef.current = false;
         
         toggleLockFlow(reactFlow, true);
-
-        // Reset any existing animations
-        reactFlow.getEdges().forEach(edge => {
-            if (edge.animated) {
-                const sourceNode = reactFlow.getNode(edge.source);
-                if (sourceNode) {
-                    animateNodeOutgoingEdges(reactFlow, sourceNode, false);
-                }
-            }
-        });
 
         BFS(startNode);
     }, [reactFlow, BFS]);
@@ -215,7 +192,7 @@ export function useFlowExecutor(): IExecutor {
         
     }, []);
 
-    const stepTo = useCallback((nodeId: string) => {
+    const stepTo = useCallback(() => {
         
     }, []);
 
