@@ -1,5 +1,5 @@
-import { Node, getConnectedEdges, ReactFlowInstance } from "@xyflow/react";
-
+import { Node, getConnectedEdges, ReactFlowInstance, getOutgoers } from "@xyflow/react";
+import { RefObject } from "react";
 /**
  * Animates/deactivates outgoing edges from a node
  */
@@ -95,4 +95,62 @@ export function resetAllAnimations(reactFlow: ReactFlowInstance): void {
 export function toggleNodeAnimations(reactFlow: ReactFlowInstance, node: Node, animated: boolean): void {
   toggleNodeHighlight(reactFlow, node, animated);
   animateNodeOutgoingEdges(reactFlow, node, animated);
+}
+
+/**
+ * Traverses the flow graph using Breadth-First Search (BFS) algorithm
+ */
+export function BFS(
+  reactFlow: ReactFlowInstance,
+  startNode: Node,
+  processNodeCallback: (node: Node) => void,
+  isRunning: RefObject<boolean>,
+  isPaused: RefObject<boolean>,
+  executionSpeed: RefObject<number>,
+  stopExecutionCallback: () => void
+): void {
+  if (!isRunning.current || isPaused.current) {
+      return;
+  }
+
+  const queue: Node[] = [startNode];
+  const visited = new Set<string>();
+  visited.add(startNode.id);
+
+  const processCurrentNode = () => {
+      const currentNode = queue.shift()!;          
+
+      processNodeCallback(currentNode);
+
+      // Get outgoers and add to queue
+      const outgoingNodes = getOutgoers(currentNode, reactFlow.getNodes(), reactFlow.getEdges());
+      outgoingNodes.forEach(node => {
+          if (!visited.has(node.id)) {
+              visited.add(node.id);
+              queue.push(node);
+          }
+      });
+  }
+
+  const processNextNode = () => {
+      if (queue.length === 0) {
+          stopExecutionCallback();
+          return;
+      }
+
+      if (!isRunning.current || isPaused.current) {
+          return;
+      }
+
+      processCurrentNode();
+
+      // Schedule next node processing with delay
+      setTimeout(processNextNode, executionSpeed.current);
+  };
+
+  // Process the initial node immediately
+  processCurrentNode();
+
+  // Start processing nodes with a delay after the first one
+  setTimeout(processNextNode, executionSpeed.current);
 }

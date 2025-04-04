@@ -1,10 +1,11 @@
-import { useReactFlow, Node, getOutgoers } from "@xyflow/react";
+import { useReactFlow, Node } from "@xyflow/react";
 import { useState, useCallback, useRef } from "react";
 import { 
   toggleLockFlow,
   findStartNode,
   resetAllAnimations,
-  toggleNodeAnimations
+  toggleNodeAnimations,
+  BFS
 } from "../utils/flowExecutorUtils";
 
 interface IExecutor {
@@ -84,52 +85,6 @@ export function useFlowExecutor(): IExecutor {
         
     }, [reactFlow]);
 
-    const BFS = useCallback((startNode: Node) => {
-        if (!isRunningRef.current || isPausedRef.current) {
-            return;
-        }
-
-        const queue: Node[] = [startNode];
-        const visited = new Set<string>();
-        visited.add(startNode.id);
-
-        const processCurrentNode = () => {
-            const currentNode = queue.shift()!;          
-
-            processNode(currentNode);
-
-            // Get outgoers and add to queue
-            const outgoingNodes = getOutgoers(currentNode, reactFlow.getNodes(), reactFlow.getEdges());
-            outgoingNodes.forEach(node => {
-                if (!visited.has(node.id)) {
-                    visited.add(node.id);
-                    queue.push(node);
-                }
-            });
-        }
-
-        const processNextNode = () => {
-            if (queue.length === 0) {
-                stopExecution();
-            }
-
-            if (!isRunningRef.current || isPausedRef.current) {
-                return;
-            }
-
-            processCurrentNode();
-
-            // Schedule next node processing with delay
-            setTimeout(processNextNode, executionSpeedRef.current);
-        };
-
-        // Process the initial node immediately
-        processCurrentNode();
-
-        // Start processing nodes with a delay after the first one
-        setTimeout(processNextNode, executionSpeedRef.current);
-    }, [reactFlow, processNode]);
-
     const start = useCallback(() => {
         const startNode = findStartNode(reactFlow.getNodes());
         
@@ -149,8 +104,16 @@ export function useFlowExecutor(): IExecutor {
         
         toggleLockFlow(reactFlow, true);
 
-        BFS(startNode);
-    }, [reactFlow, BFS]);
+        BFS(
+            reactFlow, 
+            startNode, 
+            processNode, 
+            isRunningRef, 
+            isPausedRef, 
+            executionSpeedRef, 
+            stopExecution
+        );
+    }, [reactFlow, processNode, stopExecution]);
 
     const stop = useCallback(() => {
         if (!isRunningRef.current) {
