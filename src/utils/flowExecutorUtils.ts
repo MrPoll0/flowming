@@ -6,15 +6,20 @@ import { RefObject } from "react";
 export function animateNodeOutgoingEdges(
   reactFlow: ReactFlowInstance,
   node: Node,
-  animated: boolean
+  animated: boolean,
+  executionSpeed?: number
 ): void {
     const edges = reactFlow.getEdges();
     const connectedEdges = getConnectedEdges([node], edges);
     const outgoingEdges = connectedEdges.filter(edge => edge.source === node.id);
+
+    // TODO: instead of animating ALL outgoing edges, only animate the edge which has as target the next node to be processed in the queue
+        // although parallel execution is not allowed and nodes with multiple outgoing edges are only conditionals which only will have 1 outcome branch...
     
     for (const edge of outgoingEdges) {
-      reactFlow.updateEdge(edge.id, {
-        animated: animated,
+      reactFlow.updateEdgeData(edge.id, {
+        isAnimated: animated,
+        animationDuration: animated ? executionSpeed : undefined
       });
     }
 }
@@ -55,13 +60,17 @@ export function toggleNodeHighlight(reactFlow: ReactFlowInstance, node: Node, hi
 export function resetAllEdgeAnimations(reactFlow: ReactFlowInstance): void {
     reactFlow.setEdges(edges => 
         edges.map(edge => ({
-        ...edge,
-        animated: false,
-        style: {
-            ...edge.style,
-            stroke: '#555',
-            strokeWidth: 1
-        }
+            ...edge,
+            animated: false,
+            data: {
+                ...edge.data,
+                isAnimated: false
+            },
+            style: {
+                ...edge.style,
+                stroke: '#555',
+                strokeWidth: 1
+            }
         }))
     );
 }
@@ -92,9 +101,9 @@ export function resetAllAnimations(reactFlow: ReactFlowInstance): void {
 /**
  * Toggles the animations of a node (outgoing edges and node highlight)
  */
-export function toggleNodeAnimations(reactFlow: ReactFlowInstance, node: Node, animated: boolean): void {
+export function toggleNodeAnimations(reactFlow: ReactFlowInstance, node: Node, animated: boolean, executionSpeed?: number): void {
   toggleNodeHighlight(reactFlow, node, animated);
-  animateNodeOutgoingEdges(reactFlow, node, animated);
+  animateNodeOutgoingEdges(reactFlow, node, animated, executionSpeed);
 }
 
 /**
@@ -114,20 +123,29 @@ export function BFS(
   }
 
   const queue: Node[] = [startNode];
-  const visited = new Set<string>();
-  visited.add(startNode.id);
+  const inQueue = new Set<string>([startNode.id]);
+  const processed = new Set<string>();
 
   const processCurrentNode = () => {
-      const currentNode = queue.shift()!;          
+      const currentNode = queue.shift()!;   
+
+      inQueue.delete(currentNode.id);
+      processed.add(currentNode.id);
 
       processNodeCallback(currentNode);
 
       // Get outgoers and add to queue
       const outgoingNodes = getOutgoers(currentNode, reactFlow.getNodes(), reactFlow.getEdges());
       outgoingNodes.forEach(node => {
-          if (!visited.has(node.id)) {
-              visited.add(node.id);
+          if (!inQueue.has(node.id)) { // to prevent duplicates
               queue.push(node);
+              inQueue.add(node.id);
+              
+              // If this node was already processed in this execution,
+              // it means we've found a loop - we can handle loop-specific logic here if needed
+              if (processed.has(node.id)) {
+                  // console.log("Loop detected for node:", node.id);
+              }
           }
       });
   }

@@ -73,7 +73,7 @@ export function useFlowExecutor(): IExecutor {
         // TODO: try animated with svg path animation with time as executionSpeed
 
         
-        toggleNodeAnimations(reactFlow, node, true);
+        toggleNodeAnimations(reactFlow, node, true, executionSpeedRef.current);
 
         if (node.type === "End") {
             return;
@@ -131,6 +131,8 @@ export function useFlowExecutor(): IExecutor {
         // Update both state and ref
         setIsPausedState(true);
         isPausedRef.current = true;
+
+        // TODO: pause animations
     }, []);
 
     const resume = useCallback(() => {

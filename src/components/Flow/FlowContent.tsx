@@ -625,6 +625,25 @@ const FlowContent: React.FC = () => {
 
           // TODO: use animated SVG for execution edges, with timing of executionSpeed (like the ball going from source to target)
 
+
+          // TODO: can delete edges/nodes while executing
+
+
+
+
+          // TODO: bug - sometimes when dragging a node handle, it appears like you were dragging a block from toolbar and you kind of "drag" what you copied
+          //        it is fixed by reloading web page
+          /*        it happens when you drag a block node from the toolbar to the flow but it isnt added?
+
+          Direct drop event received data: 
+
+          FlowContent.tsx:301 Error creating node in direct drop: SyntaxError: Unexpected end of JSON input
+              at JSON.parse (<anonymous>)
+              at HTMLDivElement.handleDirectDrop (FlowContent.tsx:268:28)
+
+          */
+          
+
           type: 'Flowline',
         }}
       >
