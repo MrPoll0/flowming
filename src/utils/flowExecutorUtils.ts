@@ -106,8 +106,39 @@ export function toggleNodeAnimations(reactFlow: ReactFlowInstance, node: Node, a
   animateNodeOutgoingEdges(reactFlow, node, animated, executionSpeed);
 }
 
+/**
+ * Context for the flow execution (used to pass around the execution context to the processCurrentNode and processNextNode functions)
+ */
+export interface FlowExecutionContext {
+  reactFlow: ReactFlowInstance;
+  refs: {
+    isRunning: RefObject<boolean>;
+    isPaused: RefObject<boolean>;
+    executionSpeed: RefObject<number>;
+    pauseCounterRef: RefObject<number>;
+    remainingTimeRef: RefObject<number>;
+    lastResumingTimeRef: RefObject<number>;
+    executionCounterRef: RefObject<number>;
+  };
+  lists?: {
+    queue: Node[];
+    inQueue: Set<string>;
+    processed: Set<string>;
+  };
+  callbacks: {
+    processNodeCallback: (node: Node) => void;
+    stopExecutionCallback: () => void;
+  };
+}
 
-const processCurrentNode = (queue: Node[], inQueue: Set<string>, processed: Set<string>, processNodeCallback: (node: Node) => void, reactFlow: ReactFlowInstance, stopExecutionCallback: () => void, pauseCounterRef: RefObject<number>) => {
+/**
+ * Processes the current node in the flow
+ */
+const processCurrentNode = (executionContext: FlowExecutionContext) => {
+    const { reactFlow } = executionContext;
+    const { queue, inQueue, processed } = executionContext.lists!;
+    const { processNodeCallback } = executionContext.callbacks;
+    const { pauseCounterRef } = executionContext.refs;
     const currentNode = queue.shift()!;   
 
     inQueue.delete(currentNode.id);
@@ -134,9 +165,21 @@ const processCurrentNode = (queue: Node[], inQueue: Set<string>, processed: Set<
     });
 }
 
-const processNextNode = (queue: Node[], inQueue: Set<string>, processed: Set<string>, processNodeCallback: (node: Node) => void, reactFlow: ReactFlowInstance, stopExecutionCallback: () => void, isRunning: RefObject<boolean>, isPaused: RefObject<boolean>, executionSpeed: RefObject<number>, remainingTimeRef: RefObject<number>, lastResumingTimeRef: RefObject<number>, pauseCounterRef: RefObject<number>) => {
+/**
+ * Processes the next node in the flow by polling
+ */
+const processNextNode = (executionContext: FlowExecutionContext, executionCounter: number) => {
     // NOTE: This function is going to be called even after pausing because of the setTimeout in here
 
+    const { queue } = executionContext.lists!;
+    const { stopExecutionCallback } = executionContext.callbacks;
+    const { isRunning, isPaused, executionSpeed, pauseCounterRef, remainingTimeRef, lastResumingTimeRef, executionCounterRef } = executionContext.refs;
+
+    // ensure that the next node is processed only if in the same execution (i.e. not stopped and started again) to prevent immediate unexpected jumps
+    if (executionCounter !== executionCounterRef.current) {
+        return;
+    }
+    
     if (queue.length === 0) {
         stopExecutionCallback();
         return;
@@ -148,8 +191,7 @@ const processNextNode = (queue: Node[], inQueue: Set<string>, processed: Set<str
     
     if (isPaused.current) {
         // If paused, keep checking until unpaused or stopped
-        setTimeout(() => processNextNode(queue, inQueue, processed, processNodeCallback, reactFlow, stopExecutionCallback, isRunning, isPaused, executionSpeed, remainingTimeRef, lastResumingTimeRef, pauseCounterRef)
-            , 100);
+        setTimeout(() => processNextNode(executionContext, executionCounter), 100);
         return;
     }
 
@@ -173,32 +215,30 @@ const processNextNode = (queue: Node[], inQueue: Set<string>, processed: Set<str
                 lastResumingTimeRef.current = 0;
             }
 
-            processNextNode(queue, inQueue, processed, processNodeCallback, reactFlow, stopExecutionCallback, isRunning, isPaused, executionSpeed, remainingTimeRef, lastResumingTimeRef, pauseCounterRef)
+            processNextNode(executionContext, executionCounter);
         }, actualRemaningTime);
         return;
     }
 
-    processCurrentNode(queue, inQueue, processed, processNodeCallback, reactFlow, stopExecutionCallback, pauseCounterRef);
+    processCurrentNode(executionContext);
 
     // Schedule next node processing with delay
-    setTimeout(() => processNextNode(queue, inQueue, processed, processNodeCallback, reactFlow, stopExecutionCallback, isRunning, isPaused, executionSpeed, remainingTimeRef, lastResumingTimeRef, pauseCounterRef), executionSpeed.current);
+    setTimeout(() => processNextNode(executionContext, executionCounter), executionSpeed.current);
   };
 
 /**
  * Traverses the flow graph using Breadth-First Search (BFS) algorithm
  */
 export function BFS(
-  reactFlow: ReactFlowInstance,
-  startNode: Node,
-  processNodeCallback: (node: Node) => void,
-  isRunning: RefObject<boolean>,
-  isPaused: RefObject<boolean>,
-  executionSpeed: RefObject<number>,
-  stopExecutionCallback: () => void,
-  remainingTimeRef: RefObject<number>,
-  lastResumingTimeRef: RefObject<number>,
-  pauseCounterRef: RefObject<number>
+  executionContext: FlowExecutionContext,
+  startNode: Node
 ): void {
+  const { isRunning, isPaused, executionSpeed, executionCounterRef } = executionContext.refs;
+
+  // avoid future unexpected calls/jumps when stop and then start again before timeout finishes
+  // by capturing the current execution counter and comparing it with the current execution counter when the timeout callback is called
+  const currentExecutionCounter = executionCounterRef.current; 
+
   if (!isRunning.current || isPaused.current) {
       return;
   }
@@ -207,9 +247,15 @@ export function BFS(
   const inQueue = new Set<string>([startNode.id]);
   const processed = new Set<string>();
 
+  executionContext.lists = {
+    queue,
+    inQueue,
+    processed
+  };
+
   // Process the initial node immediately
-  processCurrentNode(queue, inQueue, processed, processNodeCallback, reactFlow, stopExecutionCallback, pauseCounterRef);
+  processCurrentNode(executionContext);
 
   // Start processing nodes with a delay after the first one
-  setTimeout(() => processNextNode(queue, inQueue, processed, processNodeCallback, reactFlow, stopExecutionCallback, isRunning, isPaused, executionSpeed, remainingTimeRef, lastResumingTimeRef, pauseCounterRef), executionSpeed.current);
+  setTimeout(() => processNextNode(executionContext, currentExecutionCounter), executionSpeed.current);
 }

@@ -5,7 +5,8 @@ import {
   findStartNode,
   resetAllAnimations,
   toggleNodeAnimations,
-  BFS
+  BFS,
+  FlowExecutionContext
 } from "../utils/flowExecutorUtils";
 
 interface IExecutor {
@@ -41,6 +42,7 @@ export function useFlowExecutor(): IExecutor {
     const remainingTimeRef = useRef(0); // track remaining time for the current edge to reach the next node
     const lastResumingTimeRef = useRef(0); // track last time the execution was resumed
     const pauseCounterRef = useRef(0); // track the number of pauses in the same edge
+    const executionCounterRef = useRef(0); // track the number of execution to avoid unexpected future jumps if restarting (stop and start again before timeout finishes)
 
     const stopExecution = useCallback(() => {
         setIsRunningState(false);
@@ -106,17 +108,28 @@ export function useFlowExecutor(): IExecutor {
         
         toggleLockFlow(reactFlow, true);
 
+        executionCounterRef.current++;
+
+        const executionContext: FlowExecutionContext = {
+            reactFlow,
+            refs: {
+                isRunning: isRunningRef,
+                isPaused: isPausedRef,
+                executionSpeed: executionSpeedRef,
+                pauseCounterRef,
+                remainingTimeRef,
+                lastResumingTimeRef,
+                executionCounterRef
+            },
+            callbacks: {
+                processNodeCallback: processNode,
+                stopExecutionCallback: stopExecution
+            }
+        }
+        
         BFS(
-            reactFlow, 
-            startNode, 
-            processNode, 
-            isRunningRef, 
-            isPausedRef, 
-            executionSpeedRef, 
-            stopExecution,
-            remainingTimeRef,
-            lastResumingTimeRef,
-            pauseCounterRef
+            executionContext,
+            startNode
         );
     }, [reactFlow, processNode, stopExecution]);
 
