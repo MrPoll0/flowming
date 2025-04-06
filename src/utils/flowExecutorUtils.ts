@@ -115,10 +115,9 @@ export interface FlowExecutionContext {
     isRunning: RefObject<boolean>;
     isPaused: RefObject<boolean>;
     executionSpeed: RefObject<number>;
-    pauseCounterRef: RefObject<number>;
-    remainingTimeRef: RefObject<number>;
-    lastResumingTimeRef: RefObject<number>;
     executionCounterRef: RefObject<number>;
+    goNextRef: RefObject<boolean>;
+    animationCompletedRef: RefObject<boolean>;
   };
   lists?: {
     queue: Node[];
@@ -138,15 +137,12 @@ const processCurrentNode = (executionContext: FlowExecutionContext) => {
     const { reactFlow } = executionContext;
     const { queue, inQueue, processed } = executionContext.lists!;
     const { processNodeCallback } = executionContext.callbacks;
-    const { pauseCounterRef } = executionContext.refs;
     const currentNode = queue.shift()!;   
 
     inQueue.delete(currentNode.id);
     processed.add(currentNode.id);
-    
-    // Reset pause counter (it is a counter for pauses in the same edge, so it should be reset every time a new node is processed)
-    pauseCounterRef.current = 0;
 
+    // console.log("processing current node...");
     processNodeCallback(currentNode);
 
     // Get outgoers and add to queue
@@ -170,10 +166,11 @@ const processCurrentNode = (executionContext: FlowExecutionContext) => {
  */
 const processNextNode = (executionContext: FlowExecutionContext, executionCounter: number) => {
     // NOTE: This function is going to be called even after pausing because of the setTimeout in here
+    // console.log("processNextNode");
 
     const { queue } = executionContext.lists!;
     const { stopExecutionCallback } = executionContext.callbacks;
-    const { isRunning, isPaused, executionSpeed, pauseCounterRef, remainingTimeRef, lastResumingTimeRef, executionCounterRef } = executionContext.refs;
+    const { isRunning, isPaused, executionSpeed, executionCounterRef, goNextRef, animationCompletedRef } = executionContext.refs;
 
     // ensure that the next node is processed only if in the same execution (i.e. not stopped and started again) to prevent immediate unexpected jumps
     if (executionCounter !== executionCounterRef.current) {
@@ -188,37 +185,26 @@ const processNextNode = (executionContext: FlowExecutionContext, executionCounte
     if (!isRunning.current) {
         return;
     }
-    
-    if (isPaused.current) {
+
+    // check if the animation has completed and if so, set goNext to true (prevents getting stuck if pausing right after animation ends but processNextNode still not timeout callback)
+    if (animationCompletedRef.current && !isPaused.current) {
+        // console.log("animationCompletedRef, setting goNext to true...");
+        goNextRef.current = true;
+        animationCompletedRef.current = false;
+    }
+
+    if (!goNextRef.current) {
+        //console.log("trying again...");
         // If paused, keep checking until unpaused or stopped
         setTimeout(() => processNextNode(executionContext, executionCounter), 100);
         return;
     }
 
-    // (TODO) Potential problems: timers overlapping (should be fixed by lastResumingTimeRef?) -> retry timer, actualRemaningTime timer (shouldnt be a problem cause !isPaused to modify refs), nextNode timer (will always be called even after pausing cause it comes from the previous call)
-    //                     exactly currentTime 0 or exceeding executionTime when pausing
-    // (this should be fixed now)
+    console.log("goes through", goNextRef.current, animationCompletedRef.current, isPaused.current)
 
     // cannot cancel the next node timeout since that will stop the execution -> it is the only one keeping BFS from running
     //                                                                       (TODO: refactor to WHILE [isRunning] instead of polling?)
 
-    if (!isPaused.current && remainingTimeRef.current > 0) {
-        // handle case where the execution was paused and then resumed by substracting the actual time difference between resuming and now
-        let actualRemaningTime = remainingTimeRef.current - (Date.now() - lastResumingTimeRef.current);
-
-        let currentPauseCount = pauseCounterRef.current;
-        setTimeout(() => {
-            // pause counter ensures that the timeout is not called if the execution was paused and resumed AFTER the timeout was set and BEFORE the timeout finishes
-            // so that the next node is not processed earlier than expected
-            if (!isPaused.current && currentPauseCount === pauseCounterRef.current) {
-                remainingTimeRef.current = 0;
-                lastResumingTimeRef.current = 0;
-            }
-
-            processNextNode(executionContext, executionCounter);
-        }, actualRemaningTime);
-        return;
-    }
 
     processCurrentNode(executionContext);
 

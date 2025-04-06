@@ -39,10 +39,23 @@ export function useFlowExecutor(): IExecutor {
     // Execution speed (TODO: make this configurable)
     const executionSpeedRef = useRef(2000);
 
-    const remainingTimeRef = useRef(0); // track remaining time for the current edge to reach the next node
-    const lastResumingTimeRef = useRef(0); // track last time the execution was resumed
-    const pauseCounterRef = useRef(0); // track the number of pauses in the same edge
     const executionCounterRef = useRef(0); // track the number of execution to avoid unexpected future jumps if restarting (stop and start again before timeout finishes)
+    const goNextRef = useRef(true); // track if the next node should be processed
+    const animationCompletedRef = useRef(false); // track if the current animation has completed
+
+    // Create a stable reference to the animation end handler (otherwise multiple callbacks will happen)
+    const onAnimationEndRef = useRef<EventListener>((event) => {
+        console.log("onAnimationEnd");
+        
+        // Unpause ref when the animation ends to continue execution
+        animationCompletedRef.current = true;
+        goNextRef.current = true;
+        
+        // Remove this listener now that the animation is complete
+        if (event.target) {
+            (event.target as SVGAnimateMotionElement).removeEventListener('endEvent', onAnimationEndRef.current);
+        }
+    });
 
     const stopExecution = useCallback(() => {
         setIsRunningState(false);
@@ -53,10 +66,15 @@ export function useFlowExecutor(): IExecutor {
 
         resetAllAnimations(reactFlow);
 
+        // Clean up any animation end listeners
+        const animateMotionElements = document.querySelectorAll('animateMotion');
+        animateMotionElements.forEach(el => {
+            const element = el as SVGAnimateMotionElement;
+            element.removeEventListener('endEvent', onAnimationEndRef.current);
+        });
+
         setCurrentNode(null);
         currentNodeRef.current = null;
-
-        pauseCounterRef.current = 0;
 
         toggleLockFlow(reactFlow, false);
     }, [reactFlow]);
@@ -78,6 +96,9 @@ export function useFlowExecutor(): IExecutor {
 
         // TODO: set only 1 outgoing edge for normal nodes (with exceptions)
 
+        // TODO: process node here
+
+        // console.log("processed", node.type)
 
         if (node.type === "Condition") {
             
@@ -103,8 +124,6 @@ export function useFlowExecutor(): IExecutor {
         
         setIsPausedState(false);
         isPausedRef.current = false;
-
-        pauseCounterRef.current = 0;
         
         toggleLockFlow(reactFlow, true);
 
@@ -116,10 +135,9 @@ export function useFlowExecutor(): IExecutor {
                 isRunning: isRunningRef,
                 isPaused: isPausedRef,
                 executionSpeed: executionSpeedRef,
-                pauseCounterRef,
-                remainingTimeRef,
-                lastResumingTimeRef,
-                executionCounterRef
+                executionCounterRef,
+                goNextRef,
+                animationCompletedRef
             },
             callbacks: {
                 processNodeCallback: processNode,
@@ -146,39 +164,43 @@ export function useFlowExecutor(): IExecutor {
             return;
         }
 
+        // Pause animations first to avoid race condition where animation end event is triggered after changing ref/state
+        const svgElements = document.querySelectorAll('svg[id^="edge-animation-"]');
+        svgElements.forEach(svg => {
+            const svgElement = svg as SVGSVGElement;
+
+            svgElement.pauseAnimations();
+        });
+
         // Update both state and ref
         setIsPausedState(true);
         isPausedRef.current = true;
 
-        pauseCounterRef.current++;
+        // console.log("paused")
+        goNextRef.current = false;
 
-        // Pause the SVG edge(s) animation
-        const svgElements = document.querySelectorAll('svg[id^="edge-animation-"]');
-        svgElements.forEach(svg => {
-            const svgElement = svg as SVGSVGElement;
+        // NOTE: this seems weird here and an event listener should be perhaps in start or like that
+        // but in start, we dont have the animateMotion element yet
+        // and this is only needed in the case goNextRef is false (by pausing), and it is true by default
+
+        // Find all <animateMotion> elements
+        const animateMotionElements = document.querySelectorAll('animateMotion');
+        // console.log("animateMotionElements length:", animateMotionElements.length)
+        
+        animateMotionElements.forEach(el => {
+            const element = el as SVGAnimateMotionElement;
+            // https://developer.mozilla.org/en-US/docs/Web/API/SVGAnimationElement
+            // NOTE: event beginEvent is not useful since this is not setting up events for the next edge animation
             
-            let currentTimeInMs = svgElement.getCurrentTime() * 1000;
-            let remainingTimeInMs = executionSpeedRef.current - currentTimeInMs;
-            
-            // if this is done at currentTime 0 or exceeding executionTime, perhaps catch intersection between old and new circle and new is not paused?
-            // => animations are handled in the same function in processNode, so this should not happen
+            element.removeEventListener('endEvent', onAnimationEndRef.current); // remove previous listener to prevent multiple calls
+            element.addEventListener('endEvent', onAnimationEndRef.current);
 
-            if (currentTimeInMs <= 100){
-                // this is a hack to prevent the animation from stopping while fading in (motion.svg animation), which prevents from seeing the circle in a fixed position with offset
-
-                setTimeout(() => {
-                    if(isPausedRef.current) { // prevent this from running if the execution was resumed
-                        svgElement.pauseAnimations();
-
-                        remainingTimeRef.current = Math.abs(remainingTimeInMs - (100 - currentTimeInMs)); // abs just in case
-                    }
-                }, 100 - currentTimeInMs);
-            } else {
-                svgElement.pauseAnimations();
-
-                remainingTimeRef.current = Math.abs(remainingTimeInMs); // abs just in case
-            }
+            // element.beginElement() .beginElementAt() .endElement() .endElementAt()
         });
+
+        // TODO: issue -> preemptively ending and processing next node when pausing/resuming multiple times in a row (pause/resume multiple times, then resume and it jumps)
+
+        // TODO: tests for execution logic + pausing and resuming
     }, []);
 
     const resume = useCallback(() => {
@@ -193,11 +215,12 @@ export function useFlowExecutor(): IExecutor {
             svgElement.unpauseAnimations();
         });
 
-        lastResumingTimeRef.current = Date.now();
-
         // Update both state and ref
         setIsPausedState(false);
         isPausedRef.current = false;
+        
+
+        goNextRef.current = false;
         
     }, [reactFlow, processNode, stopExecution]);
 
