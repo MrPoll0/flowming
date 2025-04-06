@@ -76,16 +76,31 @@ const Flowline: FC<EdgeProps<Edge<FlowlineData>>> = (props) => {
         ...props.style,
         stroke: edgeColor,
     };
-    
+
+    // issue -> set 4 blocks in a loop after start (start -> up left -> down left -> down right -> up right -> up left...)
+    //       the animation from the down right to the up right sometimes gets stuck at the beginning, time passes, then appears at the end and it continues normally
+    // adding one more to the one bugged then makes it bugged for that and not for the previous one
+    // ====> pausing and then resuming fixes it and it also continues from where it should be
+    // ====> only happens with nodes going up from the TOP handle (!!!!!!!!!)
+
     useEffect(() => {
         if (isAnimated) {
             // Reset animation whenever path changes or isAnimated becomes true
             setAnimationKey(Date.now());
-        }
-    }, [isAnimated, edgePath]); // edgePath in dependecy array to force re-render when path changes (i.e. different edge) to prevent animation from being stuck
 
-    // Create a unique path ID for this animation instance
-    const pathId = `path-${props.id}-${animationKey}`;
+            // Quick hotfix: for some reason, top handle animations sometimes get stuck at the beginning
+            // Pausing and resuming the animations fixes it, so just do that very quickly with a timeout (immediately does not work)
+            setTimeout(() => {
+                const svgElements = document.querySelectorAll('svg[id^="edge-animation-"]');
+                svgElements.forEach(svg => {
+                    const svgElement = svg as SVGSVGElement;
+                    svgElement.pauseAnimations();
+                    svgElement.unpauseAnimations();
+                });
+            }, 10);
+        }
+
+    }, [isAnimated, edgePath]); // edgePath in dependecy array to force re-render when path changes (i.e. different edge) to prevent animation from being stuck
 
     return (
         <>
@@ -130,7 +145,7 @@ const Flowline: FC<EdgeProps<Edge<FlowlineData>>> = (props) => {
             <AnimatePresence>
                 {isAnimated && (
                     <motion.svg
-                        key={animationKey}
+                        key={`svg-${animationKey}`}
                         style={{ 
                             position: 'absolute', 
                             top: 0, 
@@ -147,10 +162,11 @@ const Flowline: FC<EdgeProps<Edge<FlowlineData>>> = (props) => {
                         transition={{ duration: 0.1 }}
                     >
                         <defs>
-                            <path id={pathId} d={edgePath} />
+                            <path id={`path-${props.id}-${animationKey}`} d={edgePath} key={`path-${animationKey}`} />
                         </defs>
                         <circle r="6" fill="#0066ff">
                             <animateMotion
+                                key={`motion-${animationKey}`}
                                 dur={`${animationDuration/1000}s`}
                                 fill="freeze"
                                 begin="0s"
@@ -158,7 +174,7 @@ const Flowline: FC<EdgeProps<Edge<FlowlineData>>> = (props) => {
                                 calcMode="linear"
                                 restart="always"
                             >
-                                <mpath href={`#${pathId}`} />
+                                <mpath href={`#path-${props.id}-${animationKey}`} />
                             </animateMotion>
                         </circle>
                     </motion.svg>
