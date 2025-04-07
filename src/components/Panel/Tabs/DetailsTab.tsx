@@ -2,7 +2,7 @@ import { useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { SelectedNodeContext } from '../../../context/SelectedNodeContext';
 import { useVariables } from '../../../context/VariablesContext';
 import { useReactFlow } from '@xyflow/react';
-import { ExpressionElement, ExpressionElementType } from '../../Flow/Nodes/AssignVariable';
+import { ExpressionElement, ExpressionElementType } from '../../Flow/Nodes/NodeTypes';
 import {
   DndContext, 
   useSensors, 
