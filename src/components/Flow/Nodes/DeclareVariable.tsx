@@ -5,13 +5,15 @@ import { getNodeStyles } from '../../../utils/nodeStyles';
 
 interface DeclareVariableNodeData {
   label?: string;
+  width?: number;
+  height?: number;
   isHovered?: boolean;
   isSelected?: boolean;
   isHighlighted?: boolean;
 }
 
 const DeclareVariable = memo(function DeclareVariableComponent({ data, id: nodeId }: { data: DeclareVariableNodeData; id: string }) {
-  const { isHovered, isSelected, isHighlighted } = data;
+  const { isHovered, isSelected, isHighlighted, width, height } = data;
   const { getNodeVariables } = useVariables();
   
   const nodeVariables = getNodeVariables(nodeId);
@@ -21,7 +23,8 @@ const DeclareVariable = memo(function DeclareVariableComponent({ data, id: nodeI
       isHovered,
       isSelected,
       isHighlighted,
-      minWidth: '250px'
+      minWidth: width ? `${width}px` : '250px',
+      minHeight: height ? `${height}px` : '80px'
     })}>
       <div style={{ fontWeight: 'bold', textAlign: 'center', marginBottom: '10px' }}>Declare variable</div>
       

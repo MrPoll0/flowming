@@ -4,6 +4,8 @@ import { getNodeStyles } from '../../../utils/nodeStyles';
 
 interface StartNodeData {
   label?: string;
+  width?: number;
+  height?: number;
   isHovered?: boolean;
   isSelected?: boolean;
   isHighlighted?: boolean;
@@ -11,7 +13,7 @@ interface StartNodeData {
 }
 
 function Start({ data }: { data: StartNodeData }) {
-  const { isHovered, isSelected, isHighlighted } = data;
+  const { isHovered, isSelected, isHighlighted, width, height } = data;
   
   return (
     <div className="start-node" style={getNodeStyles({
@@ -19,8 +21,8 @@ function Start({ data }: { data: StartNodeData }) {
       isSelected,
       isHighlighted,
       borderRadius: '50px',
-      minWidth: '100px',
-      minHeight: '40px',
+      minWidth: width ? `${width}px` : '100px',
+      minHeight: height ? `${height}px` : '40px',
       additionalStyles: {
         alignItems: 'center'
       }

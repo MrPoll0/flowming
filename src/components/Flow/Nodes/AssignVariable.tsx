@@ -15,6 +15,8 @@ export interface ExpressionElement {
 
 interface AssignVariableNodeData {
   label?: string;
+  width?: number;
+  height?: number;
   isHovered?: boolean;
   isSelected?: boolean;
   isHighlighted?: boolean;
@@ -26,7 +28,7 @@ interface AssignVariableNodeData {
 }
 
 const AssignVariable = memo(function AssignVariableComponent({ data, id: __nodeId }: { data: AssignVariableNodeData; id: string }) {
-  const { isHovered, isSelected, isHighlighted, expression } = data;
+  const { isHovered, isSelected, isHighlighted, expression, width, height } = data;
   
   // Render the expression as a string for display
   const expressionString = expression?.elements?.map(e => e.value).join(' ') || '';
@@ -36,7 +38,8 @@ const AssignVariable = memo(function AssignVariableComponent({ data, id: __nodeI
       isHovered,
       isSelected,
       isHighlighted,
-      minWidth: '250px'
+      minWidth: width ? `${width}px` : '250px',
+      minHeight: height ? `${height}px` : '80px'
     })}>
       <div style={{ fontWeight: 'bold', textAlign: 'center', marginBottom: '10px' }}>Assign variable</div>
       
