@@ -1,18 +1,9 @@
 import { Handle, Position } from '@xyflow/react';
 import { memo } from 'react';
 import { getNodeStyles } from '../../../utils/nodeStyles';
+import { BaseNode } from './NodeTypes';
 
-interface EndNodeData {
-  label?: string;
-  width?: number;
-  height?: number;
-  isHovered?: boolean;
-  isSelected?: boolean;
-  isHighlighted?: boolean;
-  [key: string]: any; // TODO: remove this?
-}
-
-function End({ data }: { data: EndNodeData }) {
+function End({ data }: { data: BaseNode }) {
   const { isHovered, isSelected, isHighlighted, width, height } = data;
   
   return (

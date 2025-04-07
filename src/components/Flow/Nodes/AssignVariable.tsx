@@ -1,33 +1,9 @@
 import { Handle, Position } from '@xyflow/react';
 import { memo } from 'react';
 import { getNodeStyles } from '../../../utils/nodeStyles';
+import { BaseNode } from './NodeTypes';
 
-// Define expression element types
-export type ExpressionElementType = 'variable' | 'operator' | 'literal';
-
-// Define an expression element structure
-export interface ExpressionElement {
-  id: string;
-  type: ExpressionElementType;
-  value: string; // The display value
-  variableId?: string; // For variables, store the ID for resilience
-}
-
-interface AssignVariableNodeData {
-  label?: string;
-  width?: number;
-  height?: number;
-  isHovered?: boolean;
-  isSelected?: boolean;
-  isHighlighted?: boolean;
-  expression?: {
-    leftSide: string;
-    leftSideVarId?: string;
-    elements: ExpressionElement[]; // Store expression as structured elements
-  };
-}
-
-const AssignVariable = memo(function AssignVariableComponent({ data, id: __nodeId }: { data: AssignVariableNodeData; id: string }) {
+const AssignVariable = memo(function AssignVariableComponent({ data, id: __nodeId }: { data: BaseNode; id: string }) {
   const { isHovered, isSelected, isHighlighted, expression, width, height } = data;
   
   // Render the expression as a string for display

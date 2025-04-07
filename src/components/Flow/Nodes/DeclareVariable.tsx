@@ -2,17 +2,9 @@ import { Handle, Position } from '@xyflow/react';
 import { memo } from 'react';
 import { useVariables } from '../../../context/VariablesContext';
 import { getNodeStyles } from '../../../utils/nodeStyles';
+import { BaseNode } from './NodeTypes';
 
-interface DeclareVariableNodeData {
-  label?: string;
-  width?: number;
-  height?: number;
-  isHovered?: boolean;
-  isSelected?: boolean;
-  isHighlighted?: boolean;
-}
-
-const DeclareVariable = memo(function DeclareVariableComponent({ data, id: nodeId }: { data: DeclareVariableNodeData; id: string }) {
+const DeclareVariable = memo(function DeclareVariableComponent({ data, id: nodeId }: { data: BaseNode; id: string }) {
   const { isHovered, isSelected, isHighlighted, width, height } = data;
   const { getNodeVariables } = useVariables();
   
