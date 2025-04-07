@@ -276,19 +276,28 @@ const FlowContent: React.FC = () => {
         return;
       }
       
-      // Get the position where the node should be created
+      // Calculate position - screen to flow position
       const position = reactFlowInstance.screenToFlowPosition({
         x: event.clientX,
         y: event.clientY,
       });
       
-      console.log('Creating node at position in direct drop:', position);
+      const nodeWidth = block.defaultData?.width || 100;
+      const nodeHeight = block.defaultData?.height || 40;
       
-      // Create a new node
+      // Adjust position to center the node at the cursor
+      const centeredPosition = {
+        x: position.x - nodeWidth / 2,
+        y: position.y - nodeHeight / 2
+      };
+      
+      console.log('Creating node at centered position:', centeredPosition);
+      
+      // Create a new node with the centered position
       const newNode: FlowNode = {
         id: `${block.nodeType}-${Date.now()}`,
         type: block.nodeType === 'default' ? undefined : block.nodeType,
-        position,
+        position: centeredPosition,
         data: { 
           label: block.label,
           ...(block.defaultData || {})
@@ -302,7 +311,7 @@ const FlowContent: React.FC = () => {
     } catch (error) {
       console.error('Error creating node in direct drop:', error);
     }
-  }, [isDraggingOver, setIsDraggingOver, reactFlowInstance]);
+  }, [reactFlowInstance, nodes, setNodes, setIsDraggingOver]);
 
   const onConnect = (params: any) => {
     console.log('onConnect', params);
@@ -620,6 +629,10 @@ const FlowContent: React.FC = () => {
           // TODO: can delete edges/nodes while executing
           // (should this be fixed or not? if node stops existing, the execution stops)
 
+
+
+          // TODO: context menu right click to delect when selecting multiple nodes with SHIFT + drag 
+          // can only delete by SUPR
 
 
 
