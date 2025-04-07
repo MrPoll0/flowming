@@ -21,6 +21,7 @@ import { useVariables } from '../../context/VariablesContext';
 import { FlowNode, initialNodes, initialEdges, nodeTypes, edgeTypes } from './FlowTypes';
 import { NodeBlock } from '../Toolbar/ToolbarTypes';
 import ContextMenu from './ContextMenu';
+import { useDnD } from '../../context/DnDContext';
 
 const FlowContent: React.FC = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -37,6 +38,7 @@ const FlowContent: React.FC = () => {
   } = useContext(FlowInteractionContext);
   
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [DnDData, setDnDData] = useDnD();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const reactFlowInstance = useReactFlow();
 
@@ -216,6 +218,24 @@ const FlowContent: React.FC = () => {
   );
 
   const onDragOver = useCallback((event: React.DragEvent) => {
+    // Only allow if valid block data to prevent unexpectedly cancelling drag events (e.g. handle drag)
+    if (!DnDData) {
+      console.warn('No block data received in drag over');
+      return;
+    }
+
+    // Try to validate that this is a proper block drag from the toolbar
+    try {
+      const parsedData = JSON.parse(DnDData);
+      if (!parsedData.nodeType || !parsedData.label) {
+        console.warn('Invalid block data in drag over');
+        return;
+      }
+    } catch (e) {
+      console.warn('Failed to parse drag data:', e);
+      return;
+    }
+
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
     
@@ -225,7 +245,7 @@ const FlowContent: React.FC = () => {
         reactFlowRef.current.classList.add('drop-target');
       }
     }
-  }, [isDraggingOver, setIsDraggingOver]);
+  }, [isDraggingOver, setIsDraggingOver, DnDData]);
 
   const onDragLeave = useCallback((event: React.DragEvent) => {
     // Don't immediately remove the class - check if we're leaving to a child element
@@ -245,6 +265,24 @@ const FlowContent: React.FC = () => {
   }, [setIsDraggingOver]);
   
   const onDrop = useCallback((event: React.DragEvent) => {
+    // Only allow if valid block data to prevent unexpectedly cancelling drag events (e.g. handle drag)
+    if (!DnDData) {
+      console.warn('No block data received in drop');
+      return;
+    }
+
+    // Try to validate that this is a proper block drag from the toolbar
+    try {
+      const parsedData = JSON.parse(DnDData);
+      if (!parsedData.nodeType || !parsedData.label) {
+        console.warn('Invalid block data in drop');
+        return;
+      }
+    } catch (e) {
+      console.warn('Failed to parse drag data:', e);
+      return;
+    }
+
     event.preventDefault();
     
     setIsDraggingOver(false);
@@ -252,26 +290,15 @@ const FlowContent: React.FC = () => {
       reactFlowRef.current.classList.remove('drop-target');
     }
     
-    if (!event.dataTransfer || !reactFlowInstance || !reactFlowWrapper.current) {
+    if (!reactFlowInstance || !reactFlowWrapper.current) {
       console.error('Missing required elements for drop');
       return;
     }
     
-    // Try to get the data from multiple formats
-    let blockData = event.dataTransfer.getData('application/reactflow');
-    if (!blockData) {
-      blockData = event.dataTransfer.getData('text/plain');
-    }
-    
-    console.log('Direct drop event received data:', blockData);
-    
-    if (!blockData) {
-      console.error('No block data received in direct drop');
-      return;
-    }
-    
+    console.log('Direct drop event received data:', DnDData);
+  
     try {
-      const block = JSON.parse(blockData) as NodeBlock;
+      const block = JSON.parse(DnDData) as NodeBlock;
       console.log('Parsed block data in direct drop:', block);
       
       // Limit the number of Start nodes to 1 at a time
@@ -314,8 +341,11 @@ const FlowContent: React.FC = () => {
       setNodes((nds) => nds.concat(newNode));
     } catch (error) {
       console.error('Error creating node in direct drop:', error);
+    } finally {
+      // Clear the DnDData after dropping
+      setDnDData(null);
     }
-  }, [reactFlowInstance, nodes, setNodes, setIsDraggingOver]);
+  }, [reactFlowInstance, nodes, setNodes, setIsDraggingOver, DnDData]);
 
   const onConnect = (params: any) => {
     console.log('onConnect', params);
@@ -557,7 +587,7 @@ const FlowContent: React.FC = () => {
     <div 
       className="reactflow-wrapper" 
       ref={reactFlowWrapper} 
-      style={{ width: '100%', height: '100%' }}
+      style={{ width: '100%', height: '100%', userSelect: 'none' }} // userSelect needed to prevent intereferences with dragging (TODO) careful with this if need to select some text/drag in the flow (?)
       onMouseLeave={onMouseLeave}
       onContextMenu={handleContextMenu}
     >

@@ -48,7 +48,6 @@ const DeclareVariable = memo(function DeclareVariableComponent({ data, id: nodeI
 
       {/* TODO: problem -> cycle/bidirectional edges (doesnt make sense) */}
       {/* could be "fixed" with floating edges */}
-      {/* TODO: check outgoing edges limits */}
 
       {/* Top handle - both source and target */}
       <Handle 
