@@ -40,6 +40,8 @@ const FlowContent: React.FC = () => {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const reactFlowInstance = useReactFlow();
 
+  const reactFlowRef = useRef<HTMLDivElement>(null);
+
   // Add state to track edge being edited
   const [editingEdge, setEditingEdge] = useState<string | null>(null);
 
@@ -213,105 +215,94 @@ const FlowContent: React.FC = () => {
     [setNodes, setEdges, nodes, deleteNodeVariables]
   );
 
-  // Add direct event listeners to the ReactFlow pane
-  useEffect(() => {
-    const paneEl = reactFlowWrapper.current?.querySelector('.react-flow__pane');
-    if (!paneEl) return;
-
-    const handleDirectDragOver = (e: Event) => {
-      const dragEvent = e as DragEvent;
-      dragEvent.preventDefault();
-      dragEvent.stopPropagation();
-      
-      if (dragEvent.dataTransfer) {
-        dragEvent.dataTransfer.dropEffect = 'move';
+  const onDragOver = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    
+    if (!isDraggingOver) {
+      setIsDraggingOver(true);
+      if (reactFlowRef.current) {
+        reactFlowRef.current.classList.add('drop-target');
       }
-      
-      if (!isDraggingOver) {
-        setIsDraggingOver(true);
-        paneEl.classList.add('drop-target');
-      }
-    };
+    }
+  }, [isDraggingOver, setIsDraggingOver]);
 
-    const handleDirectDragLeave = () => {
+  const onDragLeave = useCallback((event: React.DragEvent) => {
+    // Don't immediately remove the class - check if we're leaving to a child element
+    const dragLeaveEvent = event.nativeEvent as DragEvent;
+    const toElement = dragLeaveEvent.relatedTarget as HTMLElement | null;
+    
+    // Only remove the class if we're actually leaving the ReactFlow container
+    // and not just entering a child element (e.g. a node)
+    if (reactFlowRef.current && toElement && !reactFlowRef.current.contains(toElement)) {
       setIsDraggingOver(false);
-      paneEl.classList.remove('drop-target');
-    };
-
-    const handleDirectDrop = (e: Event) => {
-      const dragEvent = e as DragEvent;
-      dragEvent.preventDefault();
-      dragEvent.stopPropagation();
+      reactFlowRef.current.classList.remove('drop-target');
+    }
+  }, [setIsDraggingOver]);
+  
+  const onDrop = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    
+    setIsDraggingOver(false);
+    if (reactFlowRef.current) {
+      reactFlowRef.current.classList.remove('drop-target');
+    }
+    
+    if (!event.dataTransfer || !reactFlowInstance || !reactFlowWrapper.current) {
+      console.error('Missing required elements for drop');
+      return;
+    }
+    
+    // Try to get the data from multiple formats
+    let blockData = event.dataTransfer.getData('application/reactflow');
+    if (!blockData) {
+      blockData = event.dataTransfer.getData('text/plain');
+    }
+    
+    console.log('Direct drop event received data:', blockData);
+    
+    if (!blockData) {
+      console.error('No block data received in direct drop');
+      return;
+    }
+    
+    try {
+      const block = JSON.parse(blockData) as NodeBlock;
+      console.log('Parsed block data in direct drop:', block);
       
-      setIsDraggingOver(false);
-      paneEl.classList.remove('drop-target');
-      
-      if (!dragEvent.dataTransfer || !reactFlowInstance || !reactFlowWrapper.current) {
-        console.error('Missing required elements for drop');
+      // Limit the number of Start nodes to 1 at a time
+      if (block.nodeType === 'Start' && nodes.some(node => node.type === 'Start')) {
+        console.warn('Only one Start node is allowed');
         return;
       }
       
-      // Try to get the data from multiple formats
-      let blockData = dragEvent.dataTransfer.getData('application/reactflow');
-      if (!blockData) {
-        blockData = dragEvent.dataTransfer.getData('text/plain');
-      }
+      // Get the position where the node should be created
+      const position = reactFlowInstance.screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
       
-      console.log('Direct drop event received data:', blockData);
+      console.log('Creating node at position in direct drop:', position);
       
-      if (!blockData) {
-        console.error('No block data received in direct drop');
-        return;
-      }
+      // Create a new node
+      const newNode: FlowNode = {
+        id: `${block.nodeType}-${Date.now()}`,
+        type: block.nodeType === 'default' ? undefined : block.nodeType,
+        position,
+        data: { 
+          label: block.label,
+          ...(block.defaultData || {})
+        },
+      };
       
-      try {
-        const block = JSON.parse(blockData) as NodeBlock;
-        console.log('Parsed block data in direct drop:', block);
-        
-        // Limit the number of Start nodes to 1 at a time
-        if (block.nodeType === 'Start' && nodes.some(node => node.type === 'Start')) {
-          console.warn('Only one Start node is allowed');
-          return;
-        }
-        
-        // Get the position where the node should be created
-        const position = reactFlowInstance.screenToFlowPosition({
-          x: dragEvent.clientX,
-          y: dragEvent.clientY,
-        });
-        
-        console.log('Creating node at position in direct drop:', position);
-        
-        // Create a new node
-        const newNode: FlowNode = {
-          id: `${block.nodeType}-${Date.now()}`,
-          type: block.nodeType === 'default' ? undefined : block.nodeType,
-          position,
-          data: { 
-            label: block.label,
-            ...(block.defaultData || {})
-          },
-        };
-        
-        console.log('New node created in direct drop:', newNode);
-        
-        // Add the new node to the flow
-        setNodes((nds) => [...nds, newNode]);
-      } catch (error) {
-        console.error('Error creating node in direct drop:', error);
-      }
-    };
-
-    paneEl.addEventListener('dragover', handleDirectDragOver);
-    paneEl.addEventListener('dragleave', handleDirectDragLeave);
-    paneEl.addEventListener('drop', handleDirectDrop);
-
-    return () => {
-      paneEl.removeEventListener('dragover', handleDirectDragOver);
-      paneEl.removeEventListener('dragleave', handleDirectDragLeave);
-      paneEl.removeEventListener('drop', handleDirectDrop);
-    };
-  }, [reactFlowInstance, isDraggingOver, setNodes, nodes]);
+      console.log('New node created in direct drop:', newNode);
+      
+      // Add the new node to the flow
+      setNodes((nds) => nds.concat(newNode));
+    } catch (error) {
+      console.error('Error creating node in direct drop:', error);
+    }
+  }, [isDraggingOver, setIsDraggingOver, reactFlowInstance]);
 
   const onConnect = (params: any) => {
     console.log('onConnect', params);
@@ -558,6 +549,10 @@ const FlowContent: React.FC = () => {
       onContextMenu={handleContextMenu}
     >
       <ReactFlow
+        ref={reactFlowRef}
+        onDrop={onDrop}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
         nodes={nodes}
         nodeTypes={nodeTypes}
         edges={edges}
@@ -628,6 +623,7 @@ const FlowContent: React.FC = () => {
 
 
 
+          // (should be fixed now by using ReactFlow drag & drop events)
           // TODO: bug - sometimes when dragging a node handle, it appears like you were dragging a block from toolbar and you kind of "drag" what you copied
           //        it is fixed by reloading web page
           /*        it happens when you drag a block node from the toolbar to the flow but it isnt added?

@@ -6,9 +6,11 @@ const ToolbarBlock: React.FC<{
     block: Block;
   }> = ({ block }) => {
     
-    const handleDragStart = (event: React.DragEvent) => {  
+    const handleDragStart = (event: React.DragEvent, block: Block) => {  
       // Set drag data - use a simple format that's easy to debug
       const dragData = JSON.stringify(block);
+
+      // TODO: use Context to pass data instead of dataTransfer? possible source of problems (see ReactFlow example)
       event.dataTransfer.setData('text/plain', dragData);
       event.dataTransfer.setData('application/reactflow', dragData);
       event.dataTransfer.effectAllowed = 'move';
@@ -23,7 +25,7 @@ const ToolbarBlock: React.FC<{
         <div
           className={`toolbar-block toolbar-block-${block.type} draggable`}
           draggable={ true }
-          onDragStart={handleDragStart}
+          onDragStart={ (event) => handleDragStart(event, block) }
           title={block.description || block.label}
         >
           {block.icon && <span className="toolbar-block-icon">{block.icon}</span>}
