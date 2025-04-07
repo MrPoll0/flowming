@@ -234,9 +234,13 @@ const FlowContent: React.FC = () => {
     
     // Only remove the class if we're actually leaving the ReactFlow container
     // and not just entering a child element (e.g. a node)
-    if (reactFlowRef.current && toElement && !reactFlowRef.current.contains(toElement)) {
-      setIsDraggingOver(false);
-      reactFlowRef.current.classList.remove('drop-target');
+    if (reactFlowRef.current) {
+      // If there's no target element (e.g. quickly dragging and dropping in the border of the canvas) 
+      // OR the target element is outside our component
+      if (!toElement || !reactFlowRef.current.contains(toElement)) {
+        setIsDraggingOver(false);
+        reactFlowRef.current.classList.remove('drop-target');
+      }
     }
   }, [setIsDraggingOver]);
   
