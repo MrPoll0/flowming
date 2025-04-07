@@ -322,8 +322,8 @@ const FlowContent: React.FC = () => {
       // Create a copy of current edges
       let newEdges = [...eds];
       
-      // If source is a Start node, remove any existing edge from this node (max 1 ongoing edge)
-      if (sourceNode?.type === 'Start') {
+      // For every node except Conditional, limit the number of outgoing edges to 1
+      if (sourceNode?.type != 'Conditional') {
         newEdges = newEdges.filter(edge => edge.source !== params.source);
       }
       
@@ -622,11 +622,8 @@ const FlowContent: React.FC = () => {
 
           // TODO: copy and paste + cut nodes
 
-
-          // TODO: use animated SVG for execution edges, with timing of executionSpeed (like the ball going from source to target)
-
-
           // TODO: can delete edges/nodes while executing
+          // (should this be fixed or not? if node stops existing, the execution stops)
 
 
 

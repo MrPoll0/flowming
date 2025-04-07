@@ -75,9 +75,7 @@ export function useFlowExecutor(): IExecutor {
         currentNodeRef.current = node;
         setCurrentNode(node);
 
-
-        // TODO: set only 1 outgoing edge for normal nodes (with exceptions)
-
+        // TODO: process node here (call specifically the node's component method; common interface for all nodes?)
 
         if (node.type === "Condition") {
             
@@ -151,6 +149,8 @@ export function useFlowExecutor(): IExecutor {
         isPausedRef.current = true;
 
         pauseCounterRef.current++;
+
+        // TODO: tests for execution logic + pausing and resuming
 
         // Pause the SVG edge(s) animation
         const svgElements = document.querySelectorAll('svg[id^="edge-animation-"]');
