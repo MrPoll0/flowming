@@ -227,7 +227,6 @@ const DetailsTab = () => {
       // Create updated node data based on whether a variable is selected
       if (leftSideVariable) {
         updatedData = {
-          ...selectedNode.data,
           expression: {
             leftSide,
             leftSideVarId: leftSideVariable, // Store the variable ID
@@ -237,17 +236,12 @@ const DetailsTab = () => {
       } else {
         // Clear the expression when no variable is selected
         updatedData = {
-          ...selectedNode.data,
           expression: null
         };
       }
 
       // Update React Flow nodes state
-      reactFlowInstance.setNodes(prevNodes => prevNodes.map(node => 
-        node.id === selectedNode.id 
-          ? { ...node, data: updatedData }
-          : node
-      ));
+      reactFlowInstance.updateNodeData(selectedNode.id, updatedData);
     }
   }, [reactFlowInstance, selectedNode, leftSideVariable, expressionElements, getAllVariables]);
   
