@@ -107,9 +107,9 @@ export function toggleNodeAnimations(reactFlow: ReactFlowInstance, node: Node, a
 }
 
 /**
- * Context for the flow execution (used to pass around the execution context to the processCurrentNode and processNextNode functions)
+ * Interface for the flow execution (used to pass around the execution context to the processCurrentNode and processNextNode functions)
  */
-export interface FlowExecutionContext {
+export interface FlowExecutionInterface {
   reactFlow: ReactFlowInstance;
   refs: {
     isRunning: RefObject<boolean>;
@@ -134,7 +134,7 @@ export interface FlowExecutionContext {
 /**
  * Processes the current node in the flow
  */
-const processCurrentNode = (executionContext: FlowExecutionContext) => {
+const processCurrentNode = (executionContext: FlowExecutionInterface) => {
     const { reactFlow } = executionContext;
     const { queue, inQueue, processed } = executionContext.lists!;
     const { processNodeCallback } = executionContext.callbacks;
@@ -168,7 +168,7 @@ const processCurrentNode = (executionContext: FlowExecutionContext) => {
 /**
  * Processes the next node in the flow by polling
  */
-const processNextNode = (executionContext: FlowExecutionContext, executionCounter: number) => {
+const processNextNode = (executionContext: FlowExecutionInterface, executionCounter: number) => {
     // NOTE: This function is going to be called even after pausing because of the setTimeout in here
 
     const { queue } = executionContext.lists!;
@@ -230,7 +230,7 @@ const processNextNode = (executionContext: FlowExecutionContext, executionCounte
  * Traverses the flow graph using Breadth-First Search (BFS) algorithm
  */
 export function BFS(
-  executionContext: FlowExecutionContext,
+  executionContext: FlowExecutionInterface,
   startNode: Node
 ): void {
   const { isRunning, isPaused, executionSpeed, executionCounterRef } = executionContext.refs;

@@ -22,6 +22,7 @@ import { FlowNode, initialNodes, initialEdges, nodeTypes, edgeTypes } from './Fl
 import { NodeBlock } from '../Toolbar/ToolbarTypes';
 import ContextMenu from './ContextMenu';
 import { useDnD } from '../../context/DnDContext';
+import { useFlowExecutorContext } from '../../context/FlowExecutorContext';
 
 const FlowContent: React.FC = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -46,6 +47,8 @@ const FlowContent: React.FC = () => {
 
   // Add state to track edge being edited
   const [editingEdge, setEditingEdge] = useState<string | null>(null);
+
+  const { isRunning } = useFlowExecutorContext();
 
   // Apply visual styles based on hover and selection states
   useEffect(() => {
@@ -199,6 +202,11 @@ const FlowContent: React.FC = () => {
   // Handle element deletion
   const onDelete = useCallback(
     (element: { id: string; type: 'node' | 'edge' }) => {
+      if (isRunning) {
+        console.warn('Cannot delete elements while the flow is running'); // TOOD: handle this?
+        return;
+      }
+
       if (element.type === 'node') {
         // Find the node to check its type
         const nodeToDelete = nodes.find(node => node.id === element.id);

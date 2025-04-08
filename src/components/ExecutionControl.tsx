@@ -1,7 +1,7 @@
-import { useFlowExecutor } from "../hooks/useFlowExecutor";
+import { useFlowExecutorContext } from "../context/FlowExecutorContext";
 
 export default function ExecutionControl() {
-    const {start, stop, pause, resume, reset, stepBackward, stepForward, isRunning, isPaused, currentNode} = useFlowExecutor();
+    const {start, stop, pause, resume, reset, stepBackward, stepForward, isRunning, isPaused, currentNode} = useFlowExecutorContext();
 
     return (
         <div className="bottom-content">

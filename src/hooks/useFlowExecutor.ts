@@ -6,13 +6,14 @@ import {
   resetAllAnimations,
   toggleNodeAnimations,
   BFS,
-  FlowExecutionContext
+  FlowExecutionInterface
 } from "../utils/flowExecutorUtils";
 
-interface IExecutor {
+export interface IExecutor {
     isRunning: boolean;
     isPaused: boolean;
     currentNode: Node | null;
+    getIsRunning(): boolean;
     start(): void;
     stop(): void;
     pause(): void;
@@ -108,7 +109,7 @@ export function useFlowExecutor(): IExecutor {
 
         executionCounterRef.current++;
 
-        const executionContext: FlowExecutionContext = {
+        const executionContext: FlowExecutionInterface = {
             reactFlow,
             refs: {
                 isRunning: isRunningRef,
@@ -221,6 +222,7 @@ export function useFlowExecutor(): IExecutor {
         isRunning: isRunningState,
         isPaused: isPausedState,
         currentNode,
+        getIsRunning: () => isRunningState,
         start,
         stop,
         pause,
