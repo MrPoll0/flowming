@@ -25,7 +25,8 @@ const AssignVariable = memo(function AssignVariableComponent({ data, id: __nodeI
           backgroundColor: '#f5f5f5',
           borderRadius: '4px',
           fontSize: '14px',
-          fontFamily: 'monospace'
+          fontFamily: 'monospace',
+          marginBottom: '4px'
         }}>
           <code>{expression.leftSide} = {expressionString}</code>
         </div>
@@ -33,9 +34,10 @@ const AssignVariable = memo(function AssignVariableComponent({ data, id: __nodeI
         <div style={{ 
           textAlign: 'center', 
           color: '#888', 
-          padding: '10px 0',
+          padding: '5px 10px',
           fontStyle: 'italic',
-          fontSize: '14px'
+          fontSize: '14px',
+          marginBottom: '4px'
         }}>
           No assignment defined
         </div>
