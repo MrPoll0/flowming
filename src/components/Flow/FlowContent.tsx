@@ -135,6 +135,17 @@ const FlowContent: React.FC = () => {
     setHoveredElement(null);
   };
 
+  const onSelectionContextMenu = (event: React.MouseEvent, nodes: Node[]) => {
+    event.preventDefault();
+
+    // Calculate cursor position relative to the ReactFlow wrapper
+    const reactFlowBounds = reactFlowWrapper.current?.getBoundingClientRect();
+    const x = event.clientX - (reactFlowBounds?.left || 0);
+    const y = event.clientY - (reactFlowBounds?.top || 0);
+
+    showContextMenu(x, y, nodes.map(node => ({ id: node.id, type: 'node' })));
+  };
+
   // Handle node/edge right-click (context menu)
   const onNodeContextMenu = (event: React.MouseEvent, node: Node) => {
     // Prevent the default context menu
@@ -144,12 +155,12 @@ const FlowContent: React.FC = () => {
     setSelectedNode(node as FlowNode);
     setSelectedElement({ id: node.id, type: 'node' });
     
-    // Calculate position relative to the ReactFlow wrapper
+    // Calculate cursor position relative to the ReactFlow wrapper
     const reactFlowBounds = reactFlowWrapper.current?.getBoundingClientRect();
     const x = event.clientX - (reactFlowBounds?.left || 0);
     const y = event.clientY - (reactFlowBounds?.top || 0);
     
-    showContextMenu(x, y, { id: node.id, type: 'node' });
+    showContextMenu(x, y, [{ id: node.id, type: 'node' }]);
   };
 
   const onEdgeContextMenu = (event: React.MouseEvent, edge: Edge) => {
@@ -159,12 +170,12 @@ const FlowContent: React.FC = () => {
     // Select the edge (same as in onEdgeClick)
     setSelectedElement({ id: edge.id, type: 'edge' });
     
-    // Calculate position relative to the ReactFlow wrapper
+    // Calculate cursor position relative to the ReactFlow wrapper
     const reactFlowBounds = reactFlowWrapper.current?.getBoundingClientRect();
     const x = event.clientX - (reactFlowBounds?.left || 0);
     const y = event.clientY - (reactFlowBounds?.top || 0);
     
-    showContextMenu(x, y, { id: edge.id, type: 'edge' });
+    showContextMenu(x, y, [{ id: edge.id, type: 'edge' }]);
   };
 
   // Clear selection when clicking on the canvas
@@ -617,6 +628,7 @@ const FlowContent: React.FC = () => {
         onNodeMouseLeave={onNodeMouseLeave}
         onEdgeMouseEnter={onEdgeMouseEnter}
         onEdgeMouseLeave={onEdgeMouseLeave}
+        onSelectionContextMenu={onSelectionContextMenu}
         onNodeContextMenu={onNodeContextMenu}
         onEdgeContextMenu={onEdgeContextMenu}
         onPaneClick={onPaneClick}
