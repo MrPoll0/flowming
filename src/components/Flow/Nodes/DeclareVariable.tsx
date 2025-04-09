@@ -1,14 +1,72 @@
-import { Handle, Position } from '@xyflow/react';
-import { memo } from 'react';
+import { Handle, Position, useReactFlow, ReactFlowInstance } from '@xyflow/react';
+import { memo, useEffect } from 'react';
 import { useVariables } from '../../../context/VariablesContext';
 import { getNodeStyles } from '../../../utils/nodeStyles';
-import { BaseNode } from './NodeTypes';
+import { BaseNode, NodeProcessor } from './NodeTypes';
+
+class DeclareVariableProcessor implements NodeProcessor {
+  constructor(private reactFlow: ReactFlowInstance, private nodeId: string, private variables: any) {}
+  
+  process(): void {
+    // Get variables associated with this node
+    const nodeVariables = this.variables.getNodeVariables(this.nodeId);
+    
+    // Process the variable declarations (e.g., initialize variables in a runtime)
+    console.log(`Processing DeclareVariable node ${this.nodeId} with variables:`, nodeVariables);
+
+    // TODO: does the left side (variable name + type) have a common interface? if not, create it
+    // => we need to make sure the next node to be processed knows all the variables that came from here
+    // and we also need to keep the ones that came before and all the pipe data
+    // to pass the data, we could update the node.data and add it something (or use a context, another one...)
+    // we CANNOT know which of the outGoers nodes is going to be processed next
+    // so we could simply update all the outgoing node's data (min: 1, max: 2 if conditional)
+    // it shouldnt interefere with anything because if we update the wrong one, it will be overwritten 
+    // if its processed in the future
+    // keep variables and expressions separated so that we can do an execution check if variable exists (e.g. throw error if it doesnt)
+    // add them to data as lists and append every time (? any performance issues with this?)
+    // => actually, we could just keep the defined variables, and their current values (assign variable parses its expression and applies the value according to 
+    // its known variables and values)
+
+    // KEEP AN EYE FOR THE FUTURE: debugging, collaboration, etc
+    // => e.g. for debugging "history" of variables we could keep a history in each node.data or similar
+
+    // with conditional, how to tell the execution which node to pick? (it will get the first in the queue and we cannot modify the queue... yet...? [if it was in the context...?])
+    // or perhaps return (if anything) like true or false (only useful for conditional nodes) to now which way to go?
+    // since that return will be picked up in flowExecutorUtils.ts:processCurrentNode which does have access to the queue (and it can modify it, obviously)
+    
+    // For each variable, you could do actual initialization logic here
+    nodeVariables.forEach((variable: { name: string; type: string }) => {
+      console.log(`Initializing variable ${variable.name} of type ${variable.type}`);
+      // Actual logic to register this variable with your runtime
+    });
+  }
+}
 
 const DeclareVariable = memo(function DeclareVariableComponent({ data, id: nodeId }: { data: BaseNode; id: string }) {
   const { isHovered, isSelected, isHighlighted, width, height } = data;
   const { getNodeVariables } = useVariables();
+  const reactFlow = useReactFlow();
   
   const nodeVariables = getNodeVariables(nodeId);
+  
+  // Create the processor when the component mounts and update it when dependencies change
+  useEffect(() => {
+    const processor = new DeclareVariableProcessor(reactFlow, nodeId, {
+      getNodeVariables
+    });
+    
+    // Set the processor to the node data to make it available for the flow executor to use 
+    reactFlow.updateNodeData(nodeId, {
+      processor: processor
+    });
+    
+    // Clean up on unmount
+    return () => {
+      reactFlow.updateNodeData(nodeId, {
+        processor: null
+      });
+    };
+  }, [nodeId, reactFlow]); // NOTE: do not add getNodeVariables to the dependency array
 
   return (
     <div className="declare-variable-node" style={getNodeStyles({
@@ -48,6 +106,9 @@ const DeclareVariable = memo(function DeclareVariableComponent({ data, id: nodeI
 
       {/* TODO: problem -> cycle/bidirectional edges (doesnt make sense) */}
       {/* could be "fixed" with floating edges */}
+      {/* is this actually a problem? perhaps just validate that its not same handles
+            but if they are different handles its just a loop between two nodes, which should be allowed
+      */}
 
       {/* Top handle - both source and target */}
       <Handle 

@@ -8,6 +8,7 @@ import {
   BFS,
   FlowExecutionInterface
 } from "../utils/flowExecutorUtils";
+import { NodeProcessor } from "../components/Flow/Nodes/NodeTypes";
 
 export interface IExecutor {
     isRunning: boolean;
@@ -76,10 +77,19 @@ export function useFlowExecutor(): IExecutor {
         currentNodeRef.current = node;
         setCurrentNode(node);
 
-        // TODO: process node here (call specifically the node's component method; common interface for all nodes?)
-
+        // Process the node using its processor if available
+        if (node.data && node.data.processor) {
+            try {
+                const processor = node.data.processor as NodeProcessor;
+                processor.process();
+            } catch (error) {
+                console.error(`Error processing node ${node.id}:`, error);
+                // TODO: handle the error (e.g., stop execution)
+            }
+        }
+        
         if (node.type === "Condition") {
-            
+            // Special handling for condition nodes
         }
         
         toggleNodeAnimations(reactFlow, node, true, executionSpeedRef.current);

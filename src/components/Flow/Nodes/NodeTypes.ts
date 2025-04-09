@@ -7,6 +7,10 @@ export interface ExpressionElement {
   variableId?: string; // For variables, store the ID for resilience
 }
 
+export interface NodeProcessor {
+    process: () => void;
+}
+
 export interface BaseNode {
     label?: string;
     width?: number;
@@ -14,6 +18,7 @@ export interface BaseNode {
     isHovered?: boolean;
     isSelected?: boolean;
     isHighlighted?: boolean;
+    processor?: NodeProcessor;
     expression?: {
         leftSide: string;
         leftSideVarId?: string;
