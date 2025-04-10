@@ -2,7 +2,7 @@ import { useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { SelectedNodeContext } from '../../../context/SelectedNodeContext';
 import { useVariables } from '../../../context/VariablesContext';
 import { useReactFlow } from '@xyflow/react';
-import { ExpressionElement, ExpressionElementType } from '../../Flow/Nodes/NodeTypes';
+import { Expression, ExpressionElement, Variable } from '../../../models';
 import {
   DndContext, 
   useSensors, 
@@ -20,23 +20,13 @@ import {
   arrayMove
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { restrictToHorizontalAxis } from '@dnd-kit/modifiers';
+import { restrictToHorizontalAxis } from '@dnd-kit/modifiers';  
+import { variableTypes } from '../../../models';
 
-// Interface for variable row in the editor
-interface VariableRow {
-  id: string;
-  type: string;
-  name: string;
-}
 
-// Available variable types
-const variableTypes = [
-  'string',
-  'integer',
-  'float',
-  'boolean',
-  'array'
-];
+// TODO: disable DetailsTab modification for DeclareVariable/AssignVariable nodes
+
+
 
 // Available operators for expression building
 const operators = [
@@ -176,13 +166,14 @@ const ExpressionDropArea = ({ id, children }: { id: string, children: React.Reac
 const DetailsTab = () => {
   const { selectedNode } = useContext(SelectedNodeContext);
   const { getNodeVariables, updateNodeVariables, getAllVariables } = useVariables();
-  const [variables, setVariables] = useState<VariableRow[]>([]);
+  const [variables, setVariables] = useState<Variable[]>([]);
   const [leftSideVariable, setLeftSideVariable] = useState<string>('');
   const [_rightSideExpression, setRightSideExpression] = useState<string>('');
-  const [expressionElements, setExpressionElements] = useState<ExpressionElement[]>([]);
   const isInitialLoadRef = useRef(true);
   const updateTimeoutRef = useRef<number | null>(null);
   const previousNodeIdRef = useRef<string | null>(null);
+
+  const [expression, setExpression] = useState<Expression | null>(null);
   
   const reactFlowInstance = useReactFlow();
   
@@ -197,6 +188,47 @@ const DetailsTab = () => {
       },
     })
   );
+
+
+  // NOTE: multiple useEffects
+  // 1. UI changes -> state
+  // 2. state changes -> node data
+
+  // Initialize expression when variable is selected
+  useEffect(() => {
+    if (selectedNode?.type === 'AssignVariable' && leftSideVariable) {
+      const varInstance = getAllVariables().find(v => v.id === leftSideVariable);
+
+      if (!varInstance) {
+        if (expression !== null) setExpression(null);
+        return;
+      }
+
+      // Only update if the left side has changed
+      if (!expression || expression.leftSide.id !== varInstance.id) {
+        setExpression(new Expression(varInstance, expression?.rightSide || []));
+      }
+    } else if (!leftSideVariable) {
+      if (expression !== null) setExpression(null);
+    }
+  }, [leftSideVariable, selectedNode]);
+
+  // Update the node data when expression changes
+  useEffect(() => {
+    if (selectedNode?.type === 'AssignVariable' && !isInitialLoadRef.current) {
+      let updatedData;
+      if (expression) {
+        updatedData = {
+          expression: expression.toObject()
+        };
+      } else {
+        updatedData = { expression: null };
+      }
+      
+      // Update the node data
+      reactFlowInstance.updateNodeData(selectedNode.id, updatedData);
+    }
+  }, [expression, reactFlowInstance, selectedNode]);
   
   // Cleanup function for the debounce timeout
   const clearUpdateTimeout = () => {
@@ -207,51 +239,13 @@ const DetailsTab = () => {
   };
   
   // Debounced function to update node variables
-  const debouncedUpdateNodeVariables = useCallback((nodeId: string, vars: VariableRow[]) => {
+  const debouncedUpdateNodeVariables = useCallback((nodeId: string, vars: Variable[]) => {
     clearUpdateTimeout();
     
     updateTimeoutRef.current = window.setTimeout(() => {
       updateNodeVariables(nodeId, vars);
     }, 100);
   }, [updateNodeVariables]);
-  
-  // Update the node data for AssignVariable nodes
-  const updateAssignVariableNodeData = useCallback(() => {
-    if (selectedNode && selectedNode.type === 'AssignVariable') {
-      // Find the actual variable name if we have an ID
-      const allVariables = getAllVariables();
-      const selectedVariable = allVariables.find(v => v.id === leftSideVariable);
-      const leftSide = selectedVariable ? selectedVariable.name : '';
-      
-      let updatedData;
-      // Create updated node data based on whether a variable is selected
-      if (leftSideVariable) {
-        updatedData = {
-          expression: {
-            leftSide,
-            leftSideVarId: leftSideVariable, // Store the variable ID
-            elements: expressionElements // Use the elements array directly
-          }
-        };
-      } else {
-        // Clear the expression when no variable is selected
-        updatedData = {
-          expression: null
-        };
-      }
-
-      // Update React Flow nodes state
-      reactFlowInstance.updateNodeData(selectedNode.id, updatedData);
-    }
-  }, [reactFlowInstance, selectedNode, leftSideVariable, expressionElements, getAllVariables]);
-  
-  // Update node data when expression changes
-  useEffect(() => {
-    // We want to update both when a variable is selected or deselected
-    if (!isInitialLoadRef.current && selectedNode && selectedNode.type === 'AssignVariable') {
-      updateAssignVariableNodeData();
-    }
-  }, [leftSideVariable, expressionElements, selectedNode, updateAssignVariableNodeData]);
   
   // Load variables when the selected node changes
   useEffect(() => {
@@ -262,7 +256,7 @@ const DetailsTab = () => {
     if (selectedNode && selectedNode.type !== 'AssignVariable') {
       setLeftSideVariable('');
       setRightSideExpression('');
-      setExpressionElements([]);
+      setExpression(null);
     }
     
     // Only load if we have a DeclareVariable node selected
@@ -273,10 +267,11 @@ const DetailsTab = () => {
         const nodeVars = getNodeVariables(selectedNode.id);
         
         if (nodeVars.length > 0) {
-          setVariables(nodeVars.map(v => ({ id: v.id, type: v.type, name: v.name })));
+          setVariables(nodeVars);
         } else {
           // Initialize with one empty variable if none exist
-          setVariables([{ id: crypto.randomUUID(), type: 'string', name: '' }]);
+          const newVar = new Variable(crypto.randomUUID(), 'string', '', selectedNode.id);
+          setVariables([newVar]);
         }
       }
     } else if (selectedNode && selectedNode.type === 'AssignVariable') {
@@ -289,67 +284,63 @@ const DetailsTab = () => {
           const allVariables = getAllVariables();
           
           // Check for leftSideVarId first (more reliable) and fall back to name matching
-          if (selectedNode.data.expression.leftSideVarId) {
+          if (selectedNode.data.expression.leftSide?.id) {
+            const varId = selectedNode.data.expression.leftSide.id;
+            // Check if the variable with this ID still exists
+            if (allVariables.some(v => v.id === varId)) {
+              setLeftSideVariable(varId);
+              
+              // Try to recreate the expression
+              const leftVar = allVariables.find(v => v.id === varId);
+              if (leftVar) {
+                try {
+                  // Create expression elements from the stored data
+                  const rightSideElements = selectedNode.data.expression.rightSide?.map((elem: any) => 
+                    ExpressionElement.fromObject(elem)
+                  ) || [];
+                  
+                  setExpression(new Expression(leftVar, rightSideElements));
+                } catch (error) {
+                  console.error('Error creating expression:', error);
+                  // Fall back to empty expression
+                  setExpression(new Expression(leftVar, []));
+                }
+              }
+            }
+          } else if (selectedNode.data.expression.leftSideVarId) {
             const varId = selectedNode.data.expression.leftSideVarId;
             // Check if the variable with this ID still exists
             if (allVariables.some(v => v.id === varId)) {
               setLeftSideVariable(varId);
-            }
-          } else if (selectedNode.data.expression.leftSide) {
-            // Find the variable ID by name (legacy support)
-            const variable = allVariables.find(v => v.name === selectedNode.data.expression.leftSide);
-            
-            if (variable) {
-              setLeftSideVariable(variable.id);
-            }
-          }
-          
-          // Use the structured elements directly if available, or parse legacy rightSide
-          if (selectedNode.data.expression.elements) {
-            setExpressionElements(selectedNode.data.expression.elements);
-            // Also set the string representation for compatibility
-            setRightSideExpression(selectedNode.data.expression.elements.map((e: ExpressionElement) => e.value).join(' '));
-          } else if (selectedNode.data.expression.rightSide) {
-            // Legacy support: parse the string into elements
-            const rightSide = selectedNode.data.expression.rightSide;
-            setRightSideExpression(rightSide);
-            
-            // Convert right side expression to elements (simple parsing)
-            const parts = rightSide.split(' ');
-            const elements: ExpressionElement[] = parts.map((part: string) => {
-              // Determine element type
-              let type: ExpressionElementType = 'literal';
-              let variableId: string | undefined = undefined;
               
-              if (operators.includes(part)) {
-                type = 'operator';
-              } else {
-                // Check if it's a variable
-                const matchingVar = allVariables.find(v => v.name === part);
-                if (matchingVar) {
-                  type = 'variable';
-                  variableId = matchingVar.id;
+              // Try to recreate the expression
+              const leftVar = allVariables.find(v => v.id === varId);
+              if (leftVar) {
+                try {
+                  // Create expression elements from stored elements
+                  const elements = selectedNode.data.expression.elements?.map((elem: any) => {
+                    // Create proper ExpressionElement instances
+                    return new ExpressionElement(
+                      elem.id || crypto.randomUUID(),
+                      elem.type,
+                      elem.value,
+                      elem.variableId
+                    );
+                  }) || [];
+                  
+                  setExpression(new Expression(leftVar, elements));
+                } catch (error) {
+                  console.error('Error creating expression from legacy format:', error);
+                  setExpression(new Expression(leftVar, []));
                 }
               }
-              
-              return {
-                id: crypto.randomUUID(),
-                type,
-                value: part,
-                variableId
-              };
-            });
-            
-            setExpressionElements(elements);
-          } else {
-            setExpressionElements([]);
-            setRightSideExpression('');
+            }
           }
         } else {
           // Reset form state for a new or empty assignment
           setLeftSideVariable('');
           setRightSideExpression('');
-          setExpressionElements([]);
+          setExpression(null);
         }
       }
     } else {
@@ -363,13 +354,12 @@ const DetailsTab = () => {
     return () => {
       clearUpdateTimeout();
     };
-  }, [selectedNode, getNodeVariables, getAllVariables]);
+  }, [selectedNode]);
   
   // Save variables when they change
   useEffect(() => {
     // Skip the initial load
     if (isInitialLoadRef.current) {
-      isInitialLoadRef.current = false;
       return;
     }
     
@@ -384,19 +374,26 @@ const DetailsTab = () => {
     return () => {
       clearUpdateTimeout();
     };
-  }, [variables, selectedNode, debouncedUpdateNodeVariables]);
+  }, [variables, selectedNode]);
   
   // Variable management functions
   const addVariable = () => {
     if (selectedNode && selectedNode.type === 'DeclareVariable') {
-      setVariables(prev => [...prev, { id: crypto.randomUUID(), type: 'string', name: '' }]);
+      const newVar = new Variable(
+        crypto.randomUUID(), 
+        'string', 
+        '', 
+        selectedNode.id
+      );
+
+      setVariables(prev => [...prev, newVar]);
     }
   };
   
   const updateVariable = (id: string, field: 'type' | 'name', value: string) => {
     if (selectedNode && selectedNode.type === 'DeclareVariable') {
       setVariables(prev => 
-        prev.map(v => v.id === id ? { ...v, [field]: value } : v)
+        prev.map(v => v.id === id ? v.update({ [field]: value }) : v)
       );
     }
   };
@@ -405,18 +402,30 @@ const DetailsTab = () => {
     if (selectedNode && selectedNode.type === 'DeclareVariable') {
       setVariables(prev => prev.filter(v => v.id !== id));
     }
+
+    // TODO: this might need proper cleanup in the future
   };
   
   // Expression building functions
   const addExpressionElement = (element: ExpressionElement) => {
-    if (selectedNode && selectedNode.type === 'AssignVariable') {
-      setExpressionElements(prev => [...prev, { ...element, id: crypto.randomUUID() }]);
+    if (selectedNode?.type === 'AssignVariable' && expression) {
+      setExpression(prev => {
+        if (!prev) return null;
+        const newExpr = prev.clone();
+        newExpr.addElement(element);
+        return newExpr;
+      });
     }
   };
   
   const removeExpressionElement = (id: string) => {
-    if (selectedNode && selectedNode.type === 'AssignVariable') {
-      setExpressionElements(prev => prev.filter(e => e.id !== id));
+    if (selectedNode?.type === 'AssignVariable' && expression) {
+      setExpression(prev => {
+        if (!prev) return null;
+        const newExpr = prev.clone();
+        newExpr.removeElement(id);
+        return newExpr;
+      });
     }
   };
   
@@ -429,7 +438,7 @@ const DetailsTab = () => {
     let foundItem: ExpressionElement | null = null;
     
     // Check if it's an existing expression element being reordered
-    const isExistingElement = expressionElements.find(item => item.id === active.id);
+    const isExistingElement = expression?.rightSide.find(item => item.id === active.id);
     setIsReordering(!!isExistingElement); // Set state based on whether it's reordering
 
     if (isExistingElement) {
@@ -438,21 +447,21 @@ const DetailsTab = () => {
       const varId = active.id.replace('var-', '');
       const variable = getAllVariables().find(v => v.id === varId);
       if (variable) {
-        foundItem = { 
-          id: active.id, 
-          type: 'variable' as ExpressionElementType, 
-          value: variable.name,
-          variableId: variable.id 
-        };
+        foundItem = new ExpressionElement(
+          active.id, 
+          'variable', 
+          variable.name,
+          variable.id
+        );
       }
     } else if (active.id.startsWith('op-')) { // Check in operators (palette)
       const op = active.id.replace('op-', '');
-      foundItem = { id: active.id, type: 'operator' as ExpressionElementType, value: op };
+      foundItem = new ExpressionElement(active.id, 'operator', op);
     } else if (active.id.startsWith('lit-')) { // Check in literals (palette)
       const parts = active.id.split('-'); // e.g., "lit-boolean-true"
       if (parts.length >= 3) {
-          const value = parts.slice(2).join('-'); // e.g., "true"
-          foundItem = { id: active.id, type: 'literal' as ExpressionElementType, value };
+        const value = parts.slice(2).join('-'); // e.g., "true"
+        foundItem = new ExpressionElement(active.id, 'literal', value);
       }
     }
     
@@ -466,8 +475,8 @@ const DetailsTab = () => {
     setActiveItem(null);
     setIsReordering(false); // Reset reordering state
 
-    // Exit if dropped outside a valid droppable area
-    if (!over) {
+    // Exit if dropped outside a valid droppable area or if no expression
+    if (!over || !expression) {
       return;
     }
 
@@ -475,24 +484,24 @@ const DetailsTab = () => {
     const overId = over.id;
 
     // Find the index of the active element if it exists in the expression list
-    const activeElementIndex = expressionElements.findIndex(e => e.id === activeId);
+    const activeElementIndex = expression.rightSide.findIndex(e => e.id === activeId);
 
     // Check if the target ('over') is the drop area itself
     const overIsDropArea = overId === 'expression-drop-area';
     // Find the index of the element being dropped onto, if applicable
-    const overElementIndex = expressionElements.findIndex(e => e.id === overId);
+    const overElementIndex = expression.rightSide.findIndex(e => e.id === overId);
 
 
     // Case 1: Reordering existing expression elements
     if (activeElementIndex > -1 && activeId !== overId) {
       // Check if the drop target is another existing element
       if (overElementIndex > -1) {
-         // Use arrayMove to update the order in the state
-         setExpressionElements(items => arrayMove(items, activeElementIndex, overElementIndex));
-      } else {
-         // Handle cases where an existing item is dropped onto the container background,
-         // not another item. SortableContext might handle visual positioning,
-         // but state update might be needed if dropped at beginning/end.
+        setExpression(prev => {
+          if (!prev) return null;
+          const newExpr = prev.clone();
+          newExpr.rightSide = arrayMove(newExpr.rightSide, activeElementIndex, overElementIndex);
+          return newExpr;
+        });
       }
     }
     // Case 2: Adding a new element from the palette
@@ -500,84 +509,63 @@ const DetailsTab = () => {
       // This is a new element being added to the expression
       if (!activeItem) return; // Safety check
 
-      // Get updated item with new UUID
-      let newItem: ExpressionElement; 
+      // Create a new element with a fresh UUID
+      let newElement: ExpressionElement; 
       
-      // Check if it's a variable and ensure the variableId is preserved
+      // Create proper ExpressionElement based on the type
       if (activeItem.type === 'variable') {
-        // For variables, extract the real variable ID from the palette ID
-        let variableId = activeItem.variableId;
-        if (!variableId) {
-          // Try to extract from the ID if not present
-          const varId = activeId.startsWith('var-') ? activeId.replace('var-', '') : null;
-          if (varId) {
-            const variable = getAllVariables().find(v => v.id === varId);
-            if (variable) {
-              variableId = variable.id;
-            }
-          }
-        }
-        
-        newItem = {
-          id: crypto.randomUUID(),
-          type: 'variable',
-          value: activeItem.value,
-          variableId // Store the variable ID for resilience
-        };
+        newElement = new ExpressionElement(
+          crypto.randomUUID(),
+          'variable',
+          activeItem.value,
+          activeItem.variableId
+        );
       } else {
-        // For non-variables, just create a new item with a fresh ID
-        newItem = {
-          id: crypto.randomUUID(),
-          type: activeItem.type,
-          value: activeItem.value
-        };
+        newElement = new ExpressionElement(
+          crypto.randomUUID(),
+          activeItem.type,
+          activeItem.value
+        );
       }
       
-      setExpressionElements(prev => [...prev, newItem]);
+      // Add the element to the expression
+      setExpression(prev => {
+        if (!prev) return null;
+        const newExpr = prev.clone();
+        newExpr.addElement(newElement);
+        return newExpr;
+      });
     }
     // Case 3: Adding an element at a specific position in the expression
     else if (activeElementIndex === -1 && overElementIndex > -1) {
       // This is a new element being inserted at a specific position
       if (!activeItem) return; // Safety check
 
-      // Get updated item with new UUID
-      let newItem: ExpressionElement;
+      // Create a new element with a fresh UUID
+      let newElement: ExpressionElement;
       
-      // Check if it's a variable and ensure the variableId is preserved
+      // Create proper ExpressionElement based on the type
       if (activeItem.type === 'variable') {
-        // For variables, extract the real variable ID from the palette ID
-        let variableId = activeItem.variableId;
-        if (!variableId) {
-          // Try to extract from the ID if not present
-          const varId = activeId.startsWith('var-') ? activeId.replace('var-', '') : null;
-          if (varId) {
-            const variable = getAllVariables().find(v => v.id === varId);
-            if (variable) {
-              variableId = variable.id;
-            }
-          }
-        }
-        
-        newItem = {
-          id: crypto.randomUUID(),
-          type: 'variable',
-          value: activeItem.value,
-          variableId // Store the variable ID for resilience
-        };
+        newElement = new ExpressionElement(
+          crypto.randomUUID(),
+          'variable',
+          activeItem.value,
+          activeItem.variableId
+        );
       } else {
-        // For non-variables, just create a new item with a fresh ID
-        newItem = {
-          id: crypto.randomUUID(),
-          type: activeItem.type,
-          value: activeItem.value
-        };
+        newElement = new ExpressionElement(
+          crypto.randomUUID(),
+          activeItem.type,
+          activeItem.value
+        );
       }
       
       // Insert at the specified position
-      setExpressionElements(prev => {
-        const updated = [...prev];
-        updated.splice(overElementIndex, 0, newItem);
-        return updated;
+      setExpression(prev => {
+        if (!prev) return null;
+        const newExpr = prev.clone();
+        newExpr.insertElementAt(newElement, overElementIndex);
+        return newExpr;
       });
     }
   };
@@ -704,11 +692,6 @@ const DetailsTab = () => {
               onChange={(e) => {
                 const newValue = e.target.value;
                 setLeftSideVariable(newValue);
-                // Clear expression elements when deselecting the variable
-                if (!newValue) {
-                  setExpressionElements([]);
-                  setRightSideExpression('');
-                }
               }}
               style={{
                 width: '100%',
@@ -730,18 +713,18 @@ const DetailsTab = () => {
           <div style={{ marginBottom: '15px' }}>
             <h5 style={{ marginTop: 0, marginBottom: '5px' }}>Expression</h5>
             <div style={expressionBoxStyle}>
-              {leftSideVariable ? (
+              {leftSideVariable && expression ? (
                 <>
                   <span style={{ fontWeight: 'bold', marginBottom: '10px', display: 'block' }}>
-                    {allVariables.find(v => v.id === leftSideVariable)?.name || '(select variable)'} = 
+                    {expression.leftSide.toString()} = 
                   </span>
                   
                   <ExpressionDropArea id="expression-drop-area">
                     <SortableContext 
-                      items={expressionElements.map(item => item.id)}
+                      items={expression.rightSide.map(item => item.id)}
                       strategy={horizontalListSortingStrategy}
                     >
-                      {expressionElements.map((element, index) => (
+                      {expression.rightSide.map((element, index) => (
                         <DraggableExpressionElement 
                           key={element.id}
                           element={element}
@@ -814,11 +797,12 @@ const DetailsTab = () => {
                       const input = document.getElementById('string-literal-input') as HTMLInputElement;
                       if (input && input.value) {
                         const value = input.value;
-                        addExpressionElement({ 
-                          id: '', 
-                          type: 'literal', 
-                          value: `"${value}"` 
-                        });
+                        const element = new ExpressionElement(
+                          crypto.randomUUID(),
+                          'literal',
+                          `"${value}"`
+                        );
+                        addExpressionElement(element);
                         input.value = '';
                       }
                     }}
@@ -849,11 +833,12 @@ const DetailsTab = () => {
                       const input = document.getElementById('integer-literal-input') as HTMLInputElement;
                       if (input && input.value) {
                         const value = parseInt(input.value).toString(); // Ensure it's an integer
-                        addExpressionElement({ 
-                          id: '', 
-                          type: 'literal', 
+                        const element = new ExpressionElement(
+                          crypto.randomUUID(),
+                          'literal',
                           value
-                        });
+                        );
+                        addExpressionElement(element);
                         input.value = '';
                       }
                     }}
@@ -884,11 +869,12 @@ const DetailsTab = () => {
                       const input = document.getElementById('float-literal-input') as HTMLInputElement;
                       if (input && input.value) {
                         const value = parseFloat(input.value).toString();
-                        addExpressionElement({ 
-                          id: '', 
-                          type: 'literal', 
+                        const element = new ExpressionElement(
+                          crypto.randomUUID(),
+                          'literal',
                           value
-                        });
+                        );
+                        addExpressionElement(element);
                         input.value = '';
                       }
                     }}

@@ -1,12 +1,5 @@
 import React, { createContext, useState, ReactNode, useContext } from 'react';
-
-// Define the variable structure
-export interface Variable {
-  id: string;
-  type: string;
-  name: string;
-  nodeId: string; // ID of the node that declared this variable
-}
+import { Variable } from '../models';
 
 // Define the context type
 interface VariablesContextType {
@@ -16,7 +9,7 @@ interface VariablesContextType {
   deleteVariable: (id: string) => void;
   getNodeVariables: (nodeId: string) => Variable[];
   getAllVariables: () => Variable[];
-  updateNodeVariables: (nodeId: string, variables: Omit<Variable, 'nodeId'>[]) => void;
+  updateNodeVariables: (nodeId: string, variables: Variable[]) => void;
   deleteNodeVariables: (nodeId: string) => void;
 }
 
@@ -50,7 +43,7 @@ export const VariablesProvider: React.FC<VariablesProviderProps> = ({ children }
   const updateVariable = (id: string, updates: Partial<Variable>) => {
     setVariables(prev => 
       prev.map(variable => 
-        variable.id === id ? { ...variable, ...updates } : variable
+        variable.id === id ? variable.update(updates) : variable
       )
     );
   };
@@ -67,21 +60,11 @@ export const VariablesProvider: React.FC<VariablesProviderProps> = ({ children }
     return variables;
   };
 
-  const updateNodeVariables = (nodeId: string, nodeVariables: Omit<Variable, 'nodeId'>[]) => {
-    // Use functional update pattern to avoid dependency on current variables
-    setVariables(prevVariables => {
-      // Remove all variables for this node
-      const filteredVariables = prevVariables.filter(v => v.nodeId !== nodeId);
-      
-      // Add the new variables with the nodeId
-      const newVariables = nodeVariables.map(v => ({
-        ...v,
-        nodeId
-      }));
-      
-      // Create a completely new array for proper re-rendering
-      return [...filteredVariables, ...newVariables];
-    });
+  const updateNodeVariables = (nodeId: string, nodeVariables: Variable[]): void => {
+    setVariables(prevVariables => [
+      ...prevVariables.filter(v => v.nodeId !== nodeId),
+      ...nodeVariables.map(v => new Variable(v.id, v.type, v.name, nodeId))
+    ]);
   };
 
   // Delete all variables associated with a specific node

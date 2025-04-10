@@ -19,10 +19,5 @@ export interface BaseNode {
     isSelected?: boolean;
     isHighlighted?: boolean;
     processor?: NodeProcessor;
-    expression?: {
-        leftSide: string;
-        leftSideVarId?: string;
-        elements: ExpressionElement[]; // Store expression as structured elements
-    };
     [key: string]: any; // TODO: remove this?
 }

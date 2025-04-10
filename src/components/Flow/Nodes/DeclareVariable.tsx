@@ -5,7 +5,8 @@ import { getNodeStyles } from '../../../utils/nodeStyles';
 import { BaseNode, NodeProcessor } from './NodeTypes';
 
 class DeclareVariableProcessor implements NodeProcessor {
-  constructor(private reactFlow: ReactFlowInstance, private nodeId: string, private variables: any) {}
+  // @ts-ignore - _reactFlow is intentionally saved for future use (TODO)
+  constructor(private reactFlow: ReactFlowInstance, private nodeId: string, private variables: any) {} // TODO: proper typing for variables methods
   
   process(): void {
     // Get variables associated with this node
@@ -14,8 +15,7 @@ class DeclareVariableProcessor implements NodeProcessor {
     // Process the variable declarations (e.g., initialize variables in a runtime)
     console.log(`Processing DeclareVariable node ${this.nodeId} with variables:`, nodeVariables);
 
-    // TODO: does the left side (variable name + type) have a common interface? if not, create it
-    // => we need to make sure the next node to be processed knows all the variables that came from here
+    // TODO: we need to make sure the next node to be processed knows all the variables that came from here
     // and we also need to keep the ones that came before and all the pipe data
     // to pass the data, we could update the node.data and add it something (or use a context, another one...)
     // we CANNOT know which of the outGoers nodes is going to be processed next
@@ -66,7 +66,7 @@ const DeclareVariable = memo(function DeclareVariableComponent({ data, id: nodeI
         processor: null
       });
     };
-  }, [nodeId, reactFlow]); // NOTE: do not add getNodeVariables to the dependency array
+  }, [nodeId, reactFlow, getNodeVariables]); // NOTE: getNodeVariables is needed for the processor to get the variables
 
   return (
     <div className="declare-variable-node" style={getNodeStyles({
