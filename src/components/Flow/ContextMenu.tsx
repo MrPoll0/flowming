@@ -9,7 +9,7 @@ interface ContextMenuProps {
 const ContextMenu: React.FC<ContextMenuProps> = ({ onDelete }) => {
   const { contextMenuPosition, hideContextMenu } = useContext(FlowInteractionContext);
   const { setSelectedNode } = useContext(SelectedNodeContext)
-  const { x, y, visible, element } = contextMenuPosition;
+  const { x, y, visible, elements } = contextMenuPosition;
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Hide the context menu if clicked outside
@@ -30,11 +30,14 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ onDelete }) => {
     };
   }, [visible, hideContextMenu]);
 
-  if (!visible || !element) return null;
+  if (!visible || !elements) return null;
 
   const handleDelete = () => {
-    if (element) {
-      onDelete(element);
+    if (elements) {
+      // Delete all elements
+      for (const element of elements) {
+        onDelete(element);
+      }
       setSelectedNode(null)
       hideContextMenu();
     }

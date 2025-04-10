@@ -8,6 +8,10 @@ const startNodeBlock: NodeBlock = {
   icon: '◻️',
   nodeType: 'Start',
   description: 'Start node',
+  defaultData: {
+    width: 100,
+    height: 40,
+  }
 };
 
 const endNodeBlock: NodeBlock = {
@@ -17,6 +21,10 @@ const endNodeBlock: NodeBlock = {
   icon: '◼️',
   nodeType: 'End',
   description: 'End node',
+  defaultData: {
+    width: 100,
+    height: 40,
+  }
 };
 
 const declareVariableNodeBlock: NodeBlock = {
@@ -26,6 +34,10 @@ const declareVariableNodeBlock: NodeBlock = {
   icon: '📝',
   nodeType: 'DeclareVariable',
   description: 'Declare a new variable',
+  defaultData: {
+    width: 250,
+    height: 80,
+  }
 };
 
 const assignVariableNodeBlock: NodeBlock = {
@@ -35,6 +47,10 @@ const assignVariableNodeBlock: NodeBlock = {
   icon: '✏️',
   nodeType: 'AssignVariable',
   description: 'Assign a value to a variable',
+  defaultData: {
+    width: 250,
+    height: 80,
+  }
 };
 
 // Export all blocks

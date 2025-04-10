@@ -14,67 +14,69 @@ import { FlowInteractionProvider } from './context/FlowInteractionContext';
 import { VariablesProvider } from './context/VariablesContext';
 import Toolbar from './components/Toolbar/Toolbar';
 import { ReactFlowProvider } from '@xyflow/react';
-
-// Bottom panel component
-const BottomPanel: React.FC = () => (
-  <div className="bottom-content">Bottom Bar</div>
-);
+import ExecutionControl from './components/ExecutionControl';
+import { DnDProvider } from './context/DnDContext';
+import { FlowExecutorProvider } from './context/FlowExecutorContext';
 
 export default function App() {
   return (
     <div id="app">
       <ReactFlowProvider>
-        <SelectedNodeProvider>
-          <FlowInteractionProvider>
-            <VariablesProvider>
-              <div className="layout">
-                <div className="top-bar">
-                  Top Bar
-                </div>
-                <div className="main-content">
-                  <Mosaic<string>
-                    renderTile={(id, path) => (
-                      <MosaicWindow<string>
-                        path={path}
-                        title=""
-                        draggable={false}
-                        toolbarControls={[]}
-                      >
-                        {id === 'left' && <Toolbar />}
-                        {id === 'middle' && <FlowContent />}
-                        {id === 'bottom' && <BottomPanel />}
-                        {id === 'right-top' && <Panel type="top" />}
-                        {id === 'right-bottom' && <Panel type="bottom" />}
-                      </MosaicWindow>
-                    )}
-                    resize={{ minimumPaneSizePercentage: 5 }}
-                    initialValue={{
-                      direction: 'row',
-                      first: {
-                        direction: 'row',
-                        first: 'left',
-                        second: {
-                          direction: 'column',
-                          first: 'middle',
-                          second: 'bottom',
-                          splitPercentage: 90,
-                        },
-                        splitPercentage: 10,
-                      },
-                      second: {
-                        direction: 'column',
-                        first: 'right-top',
-                        second: 'right-bottom',
-                        splitPercentage: 50,
-                      },
-                      splitPercentage: 65,
-                    }}
-                  />
-                </div>
-              </div>
-            </VariablesProvider>
-          </FlowInteractionProvider>
-        </SelectedNodeProvider>
+        <FlowExecutorProvider>
+          <DnDProvider>
+            <SelectedNodeProvider>
+              <FlowInteractionProvider>
+                <VariablesProvider>
+                  <div className="layout">
+                    <div className="top-bar">
+                      Top Bar
+                    </div>
+                    <div className="main-content">
+                      <Mosaic<string>
+                        renderTile={(id, path) => (
+                          <MosaicWindow<string>
+                            path={path}
+                            title=""
+                            draggable={false}
+                            toolbarControls={[]}
+                          >
+                            {id === 'left' && <Toolbar />}
+                            {id === 'middle' && <FlowContent />}
+                            {id === 'bottom' && <ExecutionControl />}
+                            {id === 'right-top' && <Panel type="top" />}
+                            {id === 'right-bottom' && <Panel type="bottom" />}
+                          </MosaicWindow>
+                        )}
+                        resize={{ minimumPaneSizePercentage: 5 }}
+                        initialValue={{
+                          direction: 'row',
+                          first: {
+                            direction: 'row',
+                            first: 'left',
+                            second: {
+                              direction: 'column',
+                              first: 'middle',
+                              second: 'bottom',
+                              splitPercentage: 90,
+                            },
+                            splitPercentage: 10,
+                          },
+                          second: {
+                            direction: 'column',
+                            first: 'right-top',
+                            second: 'right-bottom',
+                            splitPercentage: 50,
+                          },
+                          splitPercentage: 65,
+                        }}
+                      />
+                    </div>
+                  </div>
+                </VariablesProvider>
+              </FlowInteractionProvider>
+            </SelectedNodeProvider>
+          </DnDProvider>
+        </FlowExecutorProvider>
       </ReactFlowProvider>
     </div>
   );

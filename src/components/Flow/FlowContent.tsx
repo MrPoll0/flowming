@@ -21,6 +21,10 @@ import { useVariables } from '../../context/VariablesContext';
 import { FlowNode, initialNodes, initialEdges, nodeTypes, edgeTypes } from './FlowTypes';
 import { NodeBlock } from '../Toolbar/ToolbarTypes';
 import ContextMenu from './ContextMenu';
+import { useDnD } from '../../context/DnDContext';
+import { useFlowExecutorContext } from '../../context/FlowExecutorContext';
+import { Expression } from '../../models';
+
 
 const FlowContent: React.FC = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -37,11 +41,18 @@ const FlowContent: React.FC = () => {
   } = useContext(FlowInteractionContext);
   
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [DnDData, setDnDData] = useDnD();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const reactFlowInstance = useReactFlow();
 
+  const reactFlowRef = useRef<HTMLDivElement>(null);
+
   // Add state to track edge being edited
   const [editingEdge, setEditingEdge] = useState<string | null>(null);
+
+  const { isRunning } = useFlowExecutorContext();
+
+  // TODO: possible problems when modifying node data from multiple places at the same time?
 
   // Apply visual styles based on hover and selection states
   useEffect(() => {
@@ -95,7 +106,11 @@ const FlowContent: React.FC = () => {
     // Prevent event propagation to avoid triggering onPaneClick
     event.stopPropagation();
     
-    console.log('Node clicked:', node);
+    // Don't change selection when flow is running (TODO: this is done to avoid a maximum depth setState when right-clicking AssignVariable with 2 variables in right side)
+    if (isRunning) {
+      return;
+    }
+    
     setSelectedNode(node as FlowNode);
     setSelectedElement({ id: node.id, type: 'node' });
     hideContextMenu();
@@ -106,7 +121,11 @@ const FlowContent: React.FC = () => {
     // Prevent event propagation to avoid triggering onPaneClick
     event.stopPropagation();
     
-    console.log('Edge clicked:', edge);
+    // Don't change selection when flow is running (TODO: this is done to avoid a maximum depth setState when right-clicking AssignVariable with 2 variables in right side)
+    if (isRunning) {
+      return;
+    }
+    
     setSelectedElement({ id: edge.id, type: 'edge' });
     hideContextMenu();
   };
@@ -128,36 +147,65 @@ const FlowContent: React.FC = () => {
     setHoveredElement(null);
   };
 
+  const onSelectionContextMenu = (event: React.MouseEvent, nodes: Node[]) => {
+    event.preventDefault();
+
+    // Don't show context menu when flow is running (TODO: this is done to avoid a maximum depth setState when right-clicking AssignVariable with 2 variables in right side)
+    if (isRunning) {
+      console.warn('Cannot show context menu while the flow is running');
+      return;
+    }
+
+    // Calculate cursor position relative to the ReactFlow wrapper
+    const reactFlowBounds = reactFlowWrapper.current?.getBoundingClientRect();
+    const x = event.clientX - (reactFlowBounds?.left || 0);
+    const y = event.clientY - (reactFlowBounds?.top || 0);
+
+    showContextMenu(x, y, nodes.map(node => ({ id: node.id, type: 'node' })));
+  };
+
   // Handle node/edge right-click (context menu)
   const onNodeContextMenu = (event: React.MouseEvent, node: Node) => {
     // Prevent the default context menu
     event.preventDefault();
     
+    // Don't show context menu when flow is running (TODO: this is done to avoid a maximum depth setState when right-clicking AssignVariable with 2 variables in right side)
+    if (isRunning) {
+      console.warn('Cannot show context menu while the flow is running');
+      return;
+    }
+    
     // Select the node (same as in onNodeClick)
     setSelectedNode(node as FlowNode);
     setSelectedElement({ id: node.id, type: 'node' });
     
-    // Calculate position relative to the ReactFlow wrapper
+    // Calculate cursor position relative to the ReactFlow wrapper
     const reactFlowBounds = reactFlowWrapper.current?.getBoundingClientRect();
     const x = event.clientX - (reactFlowBounds?.left || 0);
     const y = event.clientY - (reactFlowBounds?.top || 0);
     
-    showContextMenu(x, y, { id: node.id, type: 'node' });
+    showContextMenu(x, y, [{ id: node.id, type: 'node' }]);
   };
 
   const onEdgeContextMenu = (event: React.MouseEvent, edge: Edge) => {
     // Prevent the default context menu
     event.preventDefault();
     
+    // Don't show context menu when flow is running (TODO: this is done to avoid a maximum depth setState when right-clicking AssignVariable with 2 variables in right side)
+    if (isRunning) {
+      console.warn('Cannot show context menu while the flow is running');
+      return;
+    }
+    
     // Select the edge (same as in onEdgeClick)
     setSelectedElement({ id: edge.id, type: 'edge' });
     
-    // Calculate position relative to the ReactFlow wrapper
+    // Calculate cursor position relative to the ReactFlow wrapper
     const reactFlowBounds = reactFlowWrapper.current?.getBoundingClientRect();
     const x = event.clientX - (reactFlowBounds?.left || 0);
     const y = event.clientY - (reactFlowBounds?.top || 0);
     
-    showContextMenu(x, y, { id: edge.id, type: 'edge' });
+    showContextMenu(x, y, [{ id: edge.id, type: 'edge' }]);
   };
 
   // Clear selection when clicking on the canvas
@@ -195,6 +243,11 @@ const FlowContent: React.FC = () => {
   // Handle element deletion
   const onDelete = useCallback(
     (element: { id: string; type: 'node' | 'edge' }) => {
+      if (isRunning) {
+        console.warn('Cannot delete elements while the flow is running'); // TOOD: handle this?
+        return;
+      }
+
       if (element.type === 'node') {
         // Find the node to check its type
         const nodeToDelete = nodes.find(node => node.id === element.id);
@@ -213,117 +266,138 @@ const FlowContent: React.FC = () => {
     [setNodes, setEdges, nodes, deleteNodeVariables]
   );
 
-  // Add direct event listeners to the ReactFlow pane
-  useEffect(() => {
-    const paneEl = reactFlowWrapper.current?.querySelector('.react-flow__pane');
-    if (!paneEl) return;
+  const onDragOver = useCallback((event: React.DragEvent) => {
+    // Only allow if valid block data to prevent unexpectedly cancelling drag events (e.g. handle drag)
+    if (!DnDData) {
+      console.warn('No block data received in drag over');
+      return;
+    }
 
-    const handleDirectDragOver = (e: Event) => {
-      const dragEvent = e as DragEvent;
-      dragEvent.preventDefault();
-      dragEvent.stopPropagation();
-      
-      if (dragEvent.dataTransfer) {
-        dragEvent.dataTransfer.dropEffect = 'move';
-      }
-      
-      if (!isDraggingOver) {
-        setIsDraggingOver(true);
-        paneEl.classList.add('drop-target');
-      }
-    };
-
-    const handleDirectDragLeave = () => {
-      setIsDraggingOver(false);
-      paneEl.classList.remove('drop-target');
-    };
-
-    const handleDirectDrop = (e: Event) => {
-      const dragEvent = e as DragEvent;
-      dragEvent.preventDefault();
-      dragEvent.stopPropagation();
-      
-      setIsDraggingOver(false);
-      paneEl.classList.remove('drop-target');
-      
-      if (!dragEvent.dataTransfer || !reactFlowInstance || !reactFlowWrapper.current) {
-        console.error('Missing required elements for drop');
+    // Try to validate that this is a proper block drag from the toolbar
+    try {
+      const parsedData = JSON.parse(DnDData);
+      if (!parsedData.nodeType || !parsedData.label) {
+        console.warn('Invalid block data in drag over');
         return;
       }
-      
-      // Try to get the data from multiple formats
-      let blockData = dragEvent.dataTransfer.getData('application/reactflow');
-      if (!blockData) {
-        blockData = dragEvent.dataTransfer.getData('text/plain');
-      }
-      
-      console.log('Direct drop event received data:', blockData);
-      
-      if (!blockData) {
-        console.error('No block data received in direct drop');
-        return;
-      }
-      
-      try {
-        const block = JSON.parse(blockData) as NodeBlock;
-        console.log('Parsed block data in direct drop:', block);
-        
-        // Limit the number of Start nodes to 1 at a time
-        if (block.nodeType === 'Start' && nodes.some(node => node.type === 'Start')) {
-          console.warn('Only one Start node is allowed');
-          return;
-        }
-        
-        // Get the position where the node should be created
-        const position = reactFlowInstance.screenToFlowPosition({
-          x: dragEvent.clientX,
-          y: dragEvent.clientY,
-        });
-        
-        console.log('Creating node at position in direct drop:', position);
-        
-        // Create a new node
-        const newNode: FlowNode = {
-          id: `${block.nodeType}-${Date.now()}`,
-          type: block.nodeType === 'default' ? undefined : block.nodeType,
-          position,
-          data: { 
-            label: block.label,
-            ...(block.defaultData || {})
-          },
-        };
-        
-        console.log('New node created in direct drop:', newNode);
-        
-        // Add the new node to the flow
-        setNodes((nds) => [...nds, newNode]);
-      } catch (error) {
-        console.error('Error creating node in direct drop:', error);
-      }
-    };
+    } catch (e) {
+      console.warn('Failed to parse drag data:', e);
+      return;
+    }
 
-    paneEl.addEventListener('dragover', handleDirectDragOver);
-    paneEl.addEventListener('dragleave', handleDirectDragLeave);
-    paneEl.addEventListener('drop', handleDirectDrop);
-
-    return () => {
-      paneEl.removeEventListener('dragover', handleDirectDragOver);
-      paneEl.removeEventListener('dragleave', handleDirectDragLeave);
-      paneEl.removeEventListener('drop', handleDirectDrop);
-    };
-  }, [reactFlowInstance, isDraggingOver, setNodes, nodes]);
-
-  const onConnect = (params: any) => {
-    console.log('onConnect', params);
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
     
+    if (!isDraggingOver) {
+      setIsDraggingOver(true);
+      if (reactFlowRef.current) {
+        reactFlowRef.current.classList.add('drop-target');
+      }
+    }
+  }, [isDraggingOver, setIsDraggingOver, DnDData]);
+
+  const onDragLeave = useCallback((event: React.DragEvent) => {
+    // Don't immediately remove the class - check if we're leaving to a child element
+    const dragLeaveEvent = event.nativeEvent as DragEvent;
+    const toElement = dragLeaveEvent.relatedTarget as HTMLElement | null;
+    
+    // Only remove the class if we're actually leaving the ReactFlow container
+    // and not just entering a child element (e.g. a node)
+    if (reactFlowRef.current) {
+      // If there's no target element (e.g. quickly dragging and dropping in the border of the canvas) 
+      // OR the target element is outside our component
+      if (!toElement || !reactFlowRef.current.contains(toElement)) {
+        setIsDraggingOver(false);
+        reactFlowRef.current.classList.remove('drop-target');
+      }
+    }
+  }, [setIsDraggingOver]);
+  
+  const onDrop = useCallback((event: React.DragEvent) => {
+    // Only allow if valid block data to prevent unexpectedly cancelling drag events (e.g. handle drag)
+    if (!DnDData) {
+      console.warn('No block data received in drop');
+      return;
+    }
+
+    // Try to validate that this is a proper block drag from the toolbar
+    try {
+      const parsedData = JSON.parse(DnDData);
+      if (!parsedData.nodeType || !parsedData.label) {
+        console.warn('Invalid block data in drop');
+        return;
+      }
+    } catch (e) {
+      console.warn('Failed to parse drag data:', e);
+      return;
+    }
+
+    event.preventDefault();
+    
+    setIsDraggingOver(false);
+    if (reactFlowRef.current) {
+      reactFlowRef.current.classList.remove('drop-target');
+    }
+    
+    if (!reactFlowInstance || !reactFlowWrapper.current) {
+      console.error('Missing required elements for drop');
+      return;
+    }
+  
+    try {
+      const block = JSON.parse(DnDData) as NodeBlock;
+      
+      // Limit the number of Start nodes to 1 at a time
+      if (block.nodeType === 'Start' && nodes.some(node => node.type === 'Start')) {
+        console.warn('Only one Start node is allowed');
+        return;
+      }
+      
+      // Calculate position - screen to flow position
+      const position = reactFlowInstance.screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+      
+      const nodeWidth = block.defaultData?.width || 100;
+      const nodeHeight = block.defaultData?.height || 40;
+      
+      // Adjust position to center the node at the cursor
+      const centeredPosition = {
+        x: position.x - nodeWidth / 2,
+        y: position.y - nodeHeight / 2
+      };
+      
+      // Create a new node with the centered position
+      const newNode: FlowNode = {
+        id: `${block.nodeType}-${Date.now()}`,
+        type: block.nodeType === 'default' ? undefined : block.nodeType,
+        position: centeredPosition,
+        data: { 
+          label: block.label,
+          ...(block.defaultData || {})
+        },
+      };
+      
+      // Add the new node to the flow
+      setNodes((nds) => nds.concat(newNode));
+    } catch (error) {
+      console.error('Error creating node in direct drop:', error);
+    } finally {
+      // Clear the DnDData after dropping
+      setDnDData(null);
+    }
+  }, [reactFlowInstance, nodes, setNodes, setIsDraggingOver, DnDData]);
+
+  const onConnect = (params: any) => {    
     setEdges((eds: Edge[]) => {
       const sourceNode = nodes.find(node => node.id === params.source);
       
       // Create a copy of current edges
       let newEdges = [...eds];
       
-      // If source is a Start node, remove any existing edge from this node (max 1 ongoing edge)
-      if (sourceNode?.type === 'Start') {
+      // For every node except Conditional, limit the number of outgoing edges to 1
+      if (sourceNode?.type != 'Conditional') {
         newEdges = newEdges.filter(edge => edge.source !== params.source);
       }
       
@@ -332,17 +406,23 @@ const FlowContent: React.FC = () => {
     });
   };
 
-  // Add this new function to handle right-clicks on the wrapper
+  // Prevent default context menu
   const handleContextMenu = useCallback((event: React.MouseEvent) => {
     event.preventDefault();
   }, []);
 
-  // Add double-click handler for edges
+  // Handle edge double-click
   const onEdgeDoubleClick = useCallback((event: React.MouseEvent, edge: Edge) => {
     event.stopPropagation();
+    
+    // Don't allow editing when flow is running (TODO: this is done to avoid a maximum depth setState when right-clicking AssignVariable with 2 variables in right side)
+    if (isRunning) {
+      return;
+    }
+    
     setEditingEdge(edge.id);
     setSelectedElement({ id: edge.id, type: 'edge' });
-  }, [setSelectedElement]);
+  }, [setSelectedElement, isRunning]);
   
   // Handle edge label changes
   useEffect(() => {
@@ -376,7 +456,7 @@ const FlowContent: React.FC = () => {
     };
   }, [setEdges]);
   
-  // Add effect to update edge data for editing state
+  // Update edge data for editing state
   useEffect(() => {
     if (editingEdge) {
       setEdges((prevEdges) => 
@@ -413,132 +493,32 @@ const FlowContent: React.FC = () => {
     }
   }, [deleteNodeVariables, selectedElement, setSelectedNode, setSelectedElement]);
 
-  // Update AssignVariable nodes when variables change
+
+  // Update expressions in AssignVariable nodes with variable changes
   useEffect(() => {
-    // Find all AssignVariable nodes
     const assignVarNodes = nodes.filter(node => node.type === 'AssignVariable');
-    if (assignVarNodes.length === 0) return; // No AssignVariable nodes to update
+    if (assignVarNodes.length === 0) return;
 
-    // Create a map of variable ids to names for quick lookups
-    const variableMap = new Map(variables.map(v => [v.id, v.name]));
-    
-    // Track if we actually need to update any nodes
-    let needsGlobalUpdate = false;
-    
-    // Create new nodes array with updated values, only if updates are needed
-    const updatedNodes = nodes.map(node => {
-      // Only update AssignVariable nodes with expressions
-      if (node.type !== 'AssignVariable' || !node.data.expression) return node;
+    setNodes(prevNodes => 
+      prevNodes.map(node => {
+        if (node.type !== 'AssignVariable' || !node.data.expression) return node;
 
-      const { expression } = node.data;
-      let needsUpdate = false;
-      let updatedExpression = { ...expression };
-      
-      // Check if the leftSide variable exists using the ID if available
-      if (expression.leftSideVarId) {
-        // We have a variable ID, check if it still exists
-        const varName = variableMap.get(expression.leftSideVarId);
-        if (varName) {
-          // Variable still exists, update name if needed
-          if (varName !== expression.leftSide) {
-            needsUpdate = true;
-            updatedExpression.leftSide = varName;
-          }
-        } else {
-          // Variable no longer exists
-          needsUpdate = true;
-          updatedExpression = null; // Reset to "No assignment defined"
+        try {
+          // Create an Expression instance from the stored object
+          const expression = Expression.fromObject(node.data.expression);
+          
+          // Update variable references
+          expression.updateVariables(variables);
+          
+          // Return updated node with the latest expression data
+          return { ...node, data: { ...node.data, expression: expression.toObject() } };
+        } catch (error) {
+          // Error means that the variable was deleted, so we need to delete the expression;
+          return { ...node, data: { ...node.data, expression: null } };
         }
-      } else if (expression.leftSide) {
-        // No ID stored, try to find by name (legacy support)
-        const matchingVar = variables.find(v => v.name === expression.leftSide);
-        
-        if (!matchingVar) {
-          // The variable no longer exists
-          needsUpdate = true;
-          updatedExpression = null; // Reset to "No assignment defined"
-        }
-      }
-      
-      // If the expression is null now, no need to process elements
-      if (!updatedExpression) {
-        if (needsUpdate) {
-          needsGlobalUpdate = true;
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              expression: null
-            },
-          };
-        }
-        return node;
-      }
-      
-      // Handle variables in the elements array
-      if (updatedExpression.elements && updatedExpression.elements.length > 0) {
-        let elementsNeedUpdate = false;
-        const updatedElements = updatedExpression.elements
-          .map((element: any) => {
-            // Only process variable elements
-            if (element.type !== 'variable') return element;
-            
-            // If we have a variableId, use it to check if the variable still exists
-            if (element.variableId) {
-              const currentName = variableMap.get(element.variableId);
-              if (!currentName) {
-                // Variable no longer exists
-                elementsNeedUpdate = true;
-                // Return null to mark for removal
-                return null;
-              } else if (currentName !== element.value) {
-                // Variable name has changed
-                elementsNeedUpdate = true;
-                return {
-                  ...element,
-                  value: currentName // Update to new name
-                };
-              }
-            } else {
-              // Legacy support: check by name
-              const matchingVar = variables.find(v => v.name === element.value);
-              if (!matchingVar) {
-                // Variable no longer exists
-                elementsNeedUpdate = true;
-                // Return null to mark for removal
-                return null;
-              }
-            }
-            return element;
-          })
-          .filter((element: any) => element !== null) as typeof updatedExpression.elements; // Remove nulls (deleted variables)
-        
-        if (elementsNeedUpdate) {
-          needsUpdate = true;
-          updatedExpression.elements = updatedElements;
-        }
-      }
-      
-      // Only create a new node if we need to update it
-      if (!needsUpdate) return node;
-      
-      // Flag that we need to update nodes
-      needsGlobalUpdate = true;
-      
-      return {
-        ...node,
-        data: {
-          ...node.data,
-          expression: updatedExpression
-        },
-      };
-    });
-    
-    // Only call setNodes if we actually made changes
-    if (needsGlobalUpdate) {
-      setNodes(updatedNodes);
-    }
-  }, [variables, setNodes]); // Remove nodes from dependencies
+      })
+    );
+  }, [variables, setNodes]);
 
   // Prevent self-connections (a node connecting to itself)
   const isValidConnection: IsValidConnection = useCallback(
@@ -553,11 +533,15 @@ const FlowContent: React.FC = () => {
     <div 
       className="reactflow-wrapper" 
       ref={reactFlowWrapper} 
-      style={{ width: '100%', height: '100%' }}
+      style={{ width: '100%', height: '100%', userSelect: 'none' }} // userSelect needed to prevent intereferences with dragging (TODO) careful with this if need to select some text/drag in the flow (?)
       onMouseLeave={onMouseLeave}
       onContextMenu={handleContextMenu}
     >
       <ReactFlow
+        ref={reactFlowRef}
+        onDrop={onDrop}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
         nodes={nodes}
         nodeTypes={nodeTypes}
         edges={edges}
@@ -571,6 +555,7 @@ const FlowContent: React.FC = () => {
         onNodeMouseLeave={onNodeMouseLeave}
         onEdgeMouseEnter={onEdgeMouseEnter}
         onEdgeMouseLeave={onEdgeMouseLeave}
+        onSelectionContextMenu={onSelectionContextMenu}
         onNodeContextMenu={onNodeContextMenu}
         onEdgeContextMenu={onEdgeContextMenu}
         onPaneClick={onPaneClick}
@@ -609,6 +594,59 @@ const FlowContent: React.FC = () => {
 
           // User manual: SHIFT + click (drag) to select zone for multi-select; CTRL + click to select multiple nodes/edges
           // TODO: node type 'group' for functions
+
+          // check this (overview of all the features): https://reactflow.dev/examples/overview
+
+          // TODO FlowExecution: Component for it, startingNode, .next, Start(), BFS/DFS, check all edges in current node..., pass variables to next node as props... (?) [what do we care about as (previous) data in the current node?] 
+          //                      lock Flow (just like the little button does) to prevent modifying the diagram while executing
+          //                      update edge that is being used to go to next node to animated and/or colored
+          //                      generally, are nodes allowed to have a single outgoing edge or multiple? e.g. DeclareVariable with a single or multiple outgoing edges? e.g. Condition does have 2 outgoing edges
+          //                        only one outgoing edge for normal blocks (except conditional/decision block)
+          //                        multiple incoming edges allowed (edges coming from multiple conditionals (or merging from both paths from the same conditional), loops, code reuse, etc)
+
+
+          // TODO: copy and paste + cut nodes
+
+
+
+          // TODO: dropzone expression doesnt have drop styling if dragging over an element
+
+          // TODO: for some reason, when edge animation, the edge changes slightly
+          // (check /bug screenshots)
+          // actually, its not that it changes when the edge is animated, but Screenshot_1 the edge intially had a weird path, so the animation
+          // re-rendered it (?)
+
+
+
+          // TODO: check getNodesBounds() and getViewportForBounds() in the case of importing a flow (setup zoom, viewport, etc)
+          // https://reactflow.dev/api-reference/utils/get-nodes-bounds
+          // https://reactflow.dev/api-reference/utils/get-viewport-for-bounds
+
+
+
+          // TODO: check Node.measure?.width, .height and Node.width, .height
+          // (actually doesnt make sense because so far we only need width/height for CREATING it, and obviusly we cannot get it before it exists)
+          // thats why we need the defaultData width and height (and also for some configuration/personalization)
+
+
+          // TODO: checkout ReactFlowInstance.getNodeConnections that returns NodeConnection[] with edgeId and source/target and source/targetHandle
+
+
+
+          // (should be fixed now by using ReactFlow drag & drop events)
+          // TODO: bug - sometimes when dragging a node handle, it appears like you were dragging a block from toolbar and you kind of "drag" what you copied
+          //        it is fixed by reloading web page
+          /*        it happens when you drag a block node from the toolbar to the flow but it isnt added?
+
+          Direct drop event received data: 
+
+          FlowContent.tsx:301 Error creating node in direct drop: SyntaxError: Unexpected end of JSON input
+              at JSON.parse (<anonymous>)
+              at HTMLDivElement.handleDirectDrop (FlowContent.tsx:268:28)
+
+          */
+          
+
           type: 'Flowline',
         }}
       >

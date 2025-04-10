@@ -4,7 +4,7 @@ interface ContextMenuPosition {
   x: number;
   y: number;
   visible: boolean;
-  element: { id: string; type: 'node' | 'edge' } | null;
+  elements: { id: string; type: 'node' | 'edge' }[] | null;
 }
 
 interface FlowInteractionContextType {
@@ -13,7 +13,7 @@ interface FlowInteractionContextType {
   contextMenuPosition: ContextMenuPosition;
   setHoveredElement: (element: { id: string; type: 'node' | 'edge' } | null) => void;
   setSelectedElement: (element: { id: string; type: 'node' | 'edge' } | null) => void;
-  showContextMenu: (x: number, y: number, element: { id: string; type: 'node' | 'edge' } | null) => void;
+  showContextMenu: (x: number, y: number, elements: { id: string; type: 'node' | 'edge' }[] | null) => void;
   hideContextMenu: () => void;
   resetInteractions: () => void;
 }
@@ -21,7 +21,7 @@ interface FlowInteractionContextType {
 export const FlowInteractionContext = createContext<FlowInteractionContextType>({
   hoveredElement: null,
   selectedElement: null,
-  contextMenuPosition: { x: 0, y: 0, visible: false, element: null },
+  contextMenuPosition: { x: 0, y: 0, visible: false, elements: null },
   setHoveredElement: () => {},
   setSelectedElement: () => {},
   showContextMenu: () => {},
@@ -40,7 +40,7 @@ export const FlowInteractionProvider: React.FC<FlowInteractionProviderProps> = (
     x: 0,
     y: 0,
     visible: false,
-    element: null,
+    elements: null,
   });
 
   const resetInteractions = () => {
@@ -49,12 +49,12 @@ export const FlowInteractionProvider: React.FC<FlowInteractionProviderProps> = (
     hideContextMenu();
   };
 
-  const showContextMenu = (x: number, y: number, element: { id: string; type: 'node' | 'edge' } | null) => {
+  const showContextMenu = (x: number, y: number, elements: { id: string; type: 'node' | 'edge' }[] | null) => {
     setContextMenuPosition({
       x,
       y,
       visible: true,
-      element,
+      elements,
     });
   };
 
@@ -62,7 +62,7 @@ export const FlowInteractionProvider: React.FC<FlowInteractionProviderProps> = (
     setContextMenuPosition(prev => ({
       ...prev,
       visible: false,
-      element: null,
+      elements: null,
     }));
   };
 

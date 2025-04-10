@@ -84,8 +84,8 @@ body {
   height: 100%;
 }
 
-.react-flow__pane.drop-target {
-  background-color: rgba(230, 244, 255, 0.5);
+.drop-target {
+  background-color: rgba(230, 244, 255, 0.5) !important;
   transition: background-color 0.2s;
 }
 

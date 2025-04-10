@@ -1,55 +1,60 @@
-import { Handle, Position } from '@xyflow/react';
-import { memo } from 'react';
+import { Handle, Position, useReactFlow, ReactFlowInstance } from '@xyflow/react';
+import { memo, useEffect } from 'react';
+import { getNodeStyles } from '../../../utils/nodeStyles';
+import { BaseNode, NodeProcessor } from './NodeTypes';
+import { Expression, ExpressionElement } from '../../../models';
 
-// Define expression element types
-export type ExpressionElementType = 'variable' | 'operator' | 'literal';
-
-// Define an expression element structure
-export interface ExpressionElement {
-  id: string;
-  type: ExpressionElementType;
-  value: string; // The display value
-  variableId?: string; // For variables, store the ID for resilience
+interface AssignVariableNode extends BaseNode {
+  expression?: Expression;
 }
 
-interface AssignVariableNodeData {
-  label?: string;
-  isHovered?: boolean;
-  isSelected?: boolean;
-  expression?: {
-    leftSide: string;
-    leftSideVarId?: string;
-    elements: ExpressionElement[]; // Store expression as structured elements
-  };
-}
-
-const AssignVariable = memo(function AssignVariableComponent({ data, id: __nodeId }: { data: AssignVariableNodeData; id: string }) {
-  const { isHovered, isSelected, expression } = data;
+class AssignVariableProcessor implements NodeProcessor {
+  // @ts-ignore - _reactFlow is intentionally saved for future use (TODO)
+  constructor(private reactFlow: ReactFlowInstance, private nodeId: string, private expression: Expression | null) {}
   
-  // Render the expression as a string for display
-  const expressionString = expression?.elements?.map(e => e.value).join(' ') || '';
+  process(): void {
+    // Process the variable declarations (e.g., initialize variables in a runtime)
+    console.log(`Processing AssignVariable node ${this.nodeId} with expression:`, this.expression?.toString());
+
+    // For each variable, you could do actual initialization logic here
+    this.expression?.rightSide.forEach((el: ExpressionElement) => {
+      console.log(`Expression element:`, el.toString());
+      // Actual logic to register this variable with your runtime
+    });
+  }
+}
+
+const AssignVariable = memo(function AssignVariableComponent({ data, id: nodeId }: { data: AssignVariableNode; id: string }) {
+  const { isHovered, isSelected, isHighlighted, expression, width, height } = data;
+
+  const reactFlow = useReactFlow();
+  
+  // Create the processor when the component mounts and update it when dependencies change
+  useEffect(() => {
+    const processor = new AssignVariableProcessor(reactFlow, nodeId, expression ? Expression.fromObject(expression) : null);
+
+    // Set the processor to the node data to make it available for the flow executor to use 
+    reactFlow.updateNodeData(nodeId, {
+      processor: processor
+    });
+
+    // Clean up on unmount
+    return () => {
+      reactFlow.updateNodeData(nodeId, {
+        processor: null
+      });
+    };
+  }, [nodeId, reactFlow, expression]); // NOTE: assigning getNodeVariables here will cause the node to not be dynamically updated when variables change
+
   
   return (
-    <div className="assign-variable-node" style={{ 
-      borderRadius: '0px', 
-      padding: '10px 20px',
-      border: isSelected 
-        ? '1px solid #1a73e8' 
-        : isHovered 
-          ? '1px solid #4d9cff' 
-          : '1px solid #000',
-      boxShadow: isSelected 
-        ? '0 0 8px rgba(26, 115, 232, 0.6)' 
-        : isHovered 
-          ? '0 0 5px rgba(77, 156, 255, 0.5)' 
-          : 'none',
-      backgroundColor: '#fff',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'stretch',
-      justifyContent: 'center',
-      minWidth: '250px',
-    }}>
+    <div className="assign-variable-node" style={getNodeStyles({
+      isHovered,
+      isSelected,
+      isHighlighted,
+      minWidth: width ? `${width}px` : '250px',
+      minHeight: height ? `${height}px` : '80px'
+    })}>
       <div style={{ fontWeight: 'bold', textAlign: 'center', marginBottom: '10px' }}>Assign variable</div>
       
       {expression ? (
@@ -58,17 +63,19 @@ const AssignVariable = memo(function AssignVariableComponent({ data, id: __nodeI
           backgroundColor: '#f5f5f5',
           borderRadius: '4px',
           fontSize: '14px',
-          fontFamily: 'monospace'
+          fontFamily: 'monospace',
+          marginBottom: '4px'
         }}>
-          <code>{expression.leftSide} = {expressionString}</code>
+          <code>{expression instanceof Expression ? expression.toString() : Expression.fromObject(expression).toString()}</code>
         </div>
       ) : (
         <div style={{ 
           textAlign: 'center', 
           color: '#888', 
-          padding: '10px 0',
+          padding: '5px 10px',
           fontStyle: 'italic',
-          fontSize: '14px'
+          fontSize: '14px',
+          marginBottom: '4px'
         }}>
           No assignment defined
         </div>
