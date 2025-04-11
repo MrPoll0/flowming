@@ -22,10 +22,10 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { restrictToHorizontalAxis } from '@dnd-kit/modifiers';  
 import { variableTypes } from '../../../models';
+import { useFlowExecutorContext } from '../../../context/FlowExecutorContext';
 
 
-// TODO: disable DetailsTab modification for DeclareVariable/AssignVariable nodes
-
+// TODO: if cannot select element while running, then also hide its editor in DetailsTab for consistency (i prefer being able to select elements while running and see their values but not modify them)
 
 
 // Available operators for expression building
@@ -38,10 +38,11 @@ interface DraggableExpressionElementProps {
   element: ExpressionElement;
   index: number; // Keep this even if unused now, it might be needed later
   removeExpressionElement: (id: string) => void;
+  disabled: boolean;
 }
 
 // Draggable expression element component
-const DraggableExpressionElement = ({ element, removeExpressionElement }: DraggableExpressionElementProps) => {
+const DraggableExpressionElement = ({ element, removeExpressionElement, disabled }: DraggableExpressionElementProps) => {
   const {
     attributes,
     listeners,
@@ -49,7 +50,7 @@ const DraggableExpressionElement = ({ element, removeExpressionElement }: Dragga
     transform,
     transition,
     isDragging
-  } = useSortable({ id: element.id });
+  } = useSortable({ id: element.id, disabled });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -60,7 +61,7 @@ const DraggableExpressionElement = ({ element, removeExpressionElement }: Dragga
     padding: '4px 8px',
     margin: '4px',
     borderRadius: '4px',
-    cursor: 'grab',
+    cursor: disabled ? 'not-allowed' : 'grab',
     display: 'inline-block',
     fontSize: '14px',
     opacity: isDragging ? 0 : 1,
@@ -80,7 +81,7 @@ const DraggableExpressionElement = ({ element, removeExpressionElement }: Dragga
           marginLeft: '5px',
           background: 'none',
           border: 'none',
-          cursor: 'pointer',
+          cursor: disabled ? 'not-allowed' : 'pointer',
           fontSize: '12px',
           padding: '0',
           display: 'inline-block',
@@ -99,12 +100,14 @@ interface DraggablePaletteItemProps {
   type: string; // Keep this even if unused now
   value: string;
   backgroundColor: string;
+  disabled: boolean;
 }
 
 // Draggable palette item component (non-sortable)
-const DraggablePaletteItem = ({ id, value, backgroundColor }: DraggablePaletteItemProps) => {
+const DraggablePaletteItem = ({ id, value, backgroundColor, disabled }: DraggablePaletteItemProps) => {
   const { attributes, listeners, setNodeRef } = useDraggable({
     id: id,
+    disabled
   });
 
   const style = {
@@ -112,9 +115,10 @@ const DraggablePaletteItem = ({ id, value, backgroundColor }: DraggablePaletteIt
     padding: '4px 8px',
     margin: '4px',
     borderRadius: '4px',
-    cursor: 'grab',
+    cursor: disabled ? 'not-allowed' : 'grab',
     display: 'inline-block',
     fontSize: '14px',
+    opacity: disabled ? 0.5 : 1,
   };
 
   return (
@@ -130,7 +134,7 @@ const DraggablePaletteItem = ({ id, value, backgroundColor }: DraggablePaletteIt
 };
 
 // Droppable area component
-const ExpressionDropArea = ({ id, children }: { id: string, children: React.ReactNode }) => {
+const ExpressionDropArea = ({ id, children, disabled }: { id: string, children: React.ReactNode, disabled: boolean }) => {
   const { setNodeRef, isOver } = useDroppable({
     id: id
   });
@@ -146,7 +150,8 @@ const ExpressionDropArea = ({ id, children }: { id: string, children: React.Reac
         display: 'flex',
         flexWrap: 'wrap',
         alignItems: 'center',
-        backgroundColor: isOver ? 'rgba(77, 156, 255, 0.1)' : 'transparent'
+        backgroundColor: isOver ? 'rgba(77, 156, 255, 0.1)' : 'transparent',
+        opacity: disabled ? 0.5 : 1
       }}
     >
       { /* 
@@ -188,6 +193,8 @@ const DetailsTab = () => {
       },
     })
   );
+
+  const { isRunning } = useFlowExecutorContext();
 
 
   // NOTE: multiple useEffects
@@ -391,7 +398,7 @@ const DetailsTab = () => {
   };
   
   const updateVariable = (id: string, field: 'type' | 'name', value: string) => {
-    if (selectedNode && selectedNode.type === 'DeclareVariable') {
+    if (selectedNode && selectedNode.type === 'DeclareVariable' && !isRunning) {
       setVariables(prev => 
         prev.map(v => v.id === id ? v.update({ [field]: value }) : v)
       );
@@ -399,7 +406,7 @@ const DetailsTab = () => {
   };
   
   const deleteVariable = (id: string) => {
-    if (selectedNode && selectedNode.type === 'DeclareVariable') {
+    if (selectedNode && selectedNode.type === 'DeclareVariable' && !isRunning) {
       setVariables(prev => prev.filter(v => v.id !== id));
     }
 
@@ -408,7 +415,7 @@ const DetailsTab = () => {
   
   // Expression building functions
   const addExpressionElement = (element: ExpressionElement) => {
-    if (selectedNode?.type === 'AssignVariable' && expression) {
+    if (selectedNode?.type === 'AssignVariable' && expression && !isRunning) {
       setExpression(prev => {
         if (!prev) return null;
         const newExpr = prev.clone();
@@ -419,7 +426,7 @@ const DetailsTab = () => {
   };
   
   const removeExpressionElement = (id: string) => {
-    if (selectedNode?.type === 'AssignVariable' && expression) {
+    if (selectedNode?.type === 'AssignVariable' && expression && !isRunning) {
       setExpression(prev => {
         if (!prev) return null;
         const newExpr = prev.clone();
@@ -592,8 +599,11 @@ const DetailsTab = () => {
                 padding: '8px',
                 borderRadius: '4px',
                 marginRight: '8px',
-                border: '1px solid #ccc'
+                border: '1px solid #ccc',
+                backgroundColor: isRunning ? '#f0f0f0' : 'white',
+                cursor: isRunning ? 'not-allowed' : 'pointer'
               }}
+              disabled={isRunning}
             >
               {variableTypes.map(type => (
                 <option key={type} value={type}>{type}</option>
@@ -607,8 +617,11 @@ const DetailsTab = () => {
                 flex: '1',
                 padding: '8px',
                 borderRadius: '4px',
-                border: '1px solid #ccc'
+                border: '1px solid #ccc',
+                backgroundColor: isRunning ? '#f0f0f0' : 'white',
+                cursor: isRunning ? 'not-allowed' : 'pointer'
               }}
+              disabled={isRunning}
             />
             {variables.length > 1 && (
               <button 
@@ -617,9 +630,10 @@ const DetailsTab = () => {
                   marginLeft: '8px',
                   background: 'none',
                   border: 'none',
-                  cursor: 'pointer',
+                  cursor: isRunning ? 'not-allowed' : 'pointer',
                   fontSize: '18px'
                 }}
+                disabled={isRunning}
               >
                 ×
               </button>
@@ -635,18 +649,21 @@ const DetailsTab = () => {
             borderRadius: '4px',
             padding: '8px 12px',
             marginTop: '10px',
-            cursor: 'pointer',
+            cursor: isRunning ? 'not-allowed' : 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             width: '100%'
           }}
+          disabled={isRunning}
         >
           + Add variable
         </button>
       </div>
     );
   };
+
+  // TODO: refactor editors to other files (?)
   
   // Render assignment editor for AssignVariable nodes
   const renderAssignmentEditor = () => {
@@ -697,8 +714,11 @@ const DetailsTab = () => {
                 width: '100%',
                 padding: '8px',
                 borderRadius: '4px',
-                border: '1px solid #ccc'
+                border: '1px solid #ccc',
+                backgroundColor: isRunning ? '#f0f0f0' : 'white',
+                cursor: isRunning ? 'not-allowed' : 'pointer'
               }}
+              disabled={isRunning}
             >
               <option value="">-- Select Variable --</option>
               {allVariables.map(variable => (
@@ -719,7 +739,7 @@ const DetailsTab = () => {
                     {expression.leftSide.toString()} = 
                   </span>
                   
-                  <ExpressionDropArea id="expression-drop-area">
+                  <ExpressionDropArea id="expression-drop-area" disabled={isRunning}>
                     <SortableContext 
                       items={expression.rightSide.map(item => item.id)}
                       strategy={horizontalListSortingStrategy}
@@ -730,6 +750,7 @@ const DetailsTab = () => {
                           element={element}
                           index={index}
                           removeExpressionElement={removeExpressionElement}
+                          disabled={isRunning}
                         />
                       ))}
                     </SortableContext>
@@ -755,6 +776,7 @@ const DetailsTab = () => {
                       type="variable"
                       value={variable.name}
                       backgroundColor="#d1e7ff"
+                      disabled={isRunning}
                     />
                   ))}
                   {allVariables.length === 0 && (
@@ -774,6 +796,7 @@ const DetailsTab = () => {
                       type="operator"
                       value={op}
                       backgroundColor="#ffd1d1"
+                      disabled={isRunning}
                     />
                   ))}
                 </div>
@@ -791,6 +814,7 @@ const DetailsTab = () => {
                     placeholder="String value" 
                     id="string-literal-input"
                     style={{ width: '70%', padding: '4px', marginRight: '5px' }}
+                    disabled={isRunning}
                   />
                   <button
                     onClick={() => {
@@ -811,8 +835,10 @@ const DetailsTab = () => {
                       backgroundColor: '#d1ffd1',
                       border: '1px solid #ccc',
                       borderRadius: '4px',
-                      cursor: 'pointer'
+                      cursor: isRunning ? 'not-allowed' : 'pointer',
+                      opacity: isRunning ? 0.5 : 1
                     }}
+                    disabled={isRunning}
                   >
                     Add String
                   </button>
@@ -827,6 +853,7 @@ const DetailsTab = () => {
                     placeholder="Integer value" 
                     id="integer-literal-input"
                     style={{ width: '70%', padding: '4px', marginRight: '5px' }}
+                    disabled={isRunning}
                   />
                   <button
                     onClick={() => {
@@ -847,8 +874,10 @@ const DetailsTab = () => {
                       backgroundColor: '#d1ffd1',
                       border: '1px solid #ccc',
                       borderRadius: '4px',
-                      cursor: 'pointer'
+                      cursor: isRunning ? 'not-allowed' : 'pointer',
+                      opacity: isRunning ? 0.5 : 1
                     }}
+                    disabled={isRunning}
                   >
                     Add Integer
                   </button>
@@ -863,6 +892,7 @@ const DetailsTab = () => {
                     placeholder="Float value"
                     id="float-literal-input"
                     style={{ width: '70%', padding: '4px', marginRight: '5px' }}
+                    disabled={isRunning}
                   />
                   <button
                     onClick={() => {
@@ -883,8 +913,10 @@ const DetailsTab = () => {
                       backgroundColor: '#d1ffd1',
                       border: '1px solid #ccc',
                       borderRadius: '4px',
-                      cursor: 'pointer'
+                      cursor: isRunning ? 'not-allowed' : 'pointer',
+                      opacity: isRunning ? 0.5 : 1
                     }}
+                    disabled={isRunning}
                   >
                     Add Float
                   </button>
@@ -899,12 +931,14 @@ const DetailsTab = () => {
                       type="literal"
                       value="true"
                       backgroundColor="#d1ffd1"
+                      disabled={isRunning}
                     />
                     <DraggablePaletteItem
                       id="lit-boolean-false"
                       type="literal"
                       value="false"
                       backgroundColor="#d1ffd1"
+                      disabled={isRunning}
                     />
                   </div>
                 </div>
