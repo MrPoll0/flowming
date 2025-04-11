@@ -23,6 +23,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { restrictToHorizontalAxis } from '@dnd-kit/modifiers';  
 import { variableTypes } from '../../../models';
 import { useFlowExecutorContext } from '../../../context/FlowExecutorContext';
+import { operators as expressionOperators } from '../../../models/Expression';
 
 
 // TODO: if cannot select element while running, then also hide its editor in DetailsTab for consistency (i prefer being able to select elements while running and see their values but not modify them)
@@ -30,7 +31,7 @@ import { useFlowExecutorContext } from '../../../context/FlowExecutorContext';
 
 // Available operators for expression building
 const operators = [
-  '+', '-', '*', '/', '%', '!', '==', '!=', '>', '<', '>=', '<=', '&&', '||', '(', ')'
+  ...expressionOperators
 ];
 
 // Define props interfaces for components

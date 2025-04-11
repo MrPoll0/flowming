@@ -58,7 +58,7 @@ export class ExpressionElement implements IExpressionElement {
   /**
    * Creates an object representation of the expression element
    */
-  toObject(): {id: string, type: ExpressionElementType, value: string, variableId?: string} {
+  toObject(): IExpressionElement {
     return {id: this.id, type: this.type, value: this.value, variableId: this.variableId};
   }
 

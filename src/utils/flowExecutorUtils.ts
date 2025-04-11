@@ -1,5 +1,8 @@
-import { Node, getConnectedEdges, ReactFlowInstance, getOutgoers } from "@xyflow/react";
+import { Node, getConnectedEdges, ReactFlowInstance } from "@xyflow/react";
 import { RefObject } from "react";
+import { IValuedVariable, ValuedVariable } from "../models/ValuedVariable";
+import { VariableType } from "../models/Variable";
+
 /**
  * Animates/deactivates outgoing edges from a node
  */
@@ -121,12 +124,12 @@ export interface FlowExecutionInterface {
     executionCounterRef: RefObject<number>;
   };
   lists?: {
-    queue: Node[];
+    queue: string[];
     inQueue: Set<string>;
     processed: Set<string>;
   };
   callbacks: {
-    processNodeCallback: (node: Node) => void;
+    processNodeCallback: (node: Node) => { targetNodeId: string | null, valuedVariables: ValuedVariable<VariableType>[] };
     stopExecutionCallback: () => void;
   };
 }
@@ -135,34 +138,73 @@ export interface FlowExecutionInterface {
  * Processes the current node in the flow
  */
 const processCurrentNode = (executionContext: FlowExecutionInterface) => {
-    const { reactFlow } = executionContext;
-    const { queue, inQueue, processed } = executionContext.lists!;
-    const { processNodeCallback } = executionContext.callbacks;
-    const { pauseCounterRef } = executionContext.refs;
-    const currentNode = queue.shift()!;   
+  const { reactFlow } = executionContext;
+  const { queue, inQueue, processed } = executionContext.lists!;
+  const { processNodeCallback } = executionContext.callbacks;
+  const { pauseCounterRef } = executionContext.refs;
+  const currentNodeId = queue.shift()!;
+  const currentNode = reactFlow.getNode(currentNodeId);
 
-    inQueue.delete(currentNode.id);
-    processed.add(currentNode.id);
-    
-    // Reset pause counter (it is a counter for pauses in the same edge, so it should be reset every time a new node is processed)
-    pauseCounterRef.current = 0;
+  if (!currentNode) {
+    console.error(`Current node ${currentNodeId} not found`);
+    return;
+  }
 
-    processNodeCallback(currentNode);
+  inQueue.delete(currentNodeId);
+  processed.add(currentNodeId);
+  
+  // Reset pause counter (it is a counter for pauses in the same edge, so it should be reset every time a new node is processed)
+  pauseCounterRef.current = 0;
 
-    // Get outgoers and add to queue
-    const outgoingNodes = getOutgoers(currentNode, reactFlow.getNodes(), reactFlow.getEdges());
-    outgoingNodes.forEach(node => {
-        if (!inQueue.has(node.id)) { // to prevent duplicates
-            queue.push(node);
-            inQueue.add(node.id);
-            
-            // If this node was already processed in this execution,
-            // it means we've found a loop - we can handle loop-specific logic here if needed
-            if (processed.has(node.id)) {
-                // console.log("Loop detected for node:", node.id);
-            }
-        }
-    });
+  const { targetNodeId, valuedVariables } = processNodeCallback(currentNode);
+
+  if (!targetNodeId) {
+    console.log(`Target node not found for node ${currentNode.id}`);
+    return;
+  }
+
+  const targetNode = reactFlow.getNode(targetNodeId);
+  if(!targetNode) {
+    console.error(`Target node ${targetNodeId} not found`);
+    return;
+  }
+
+  // Convert the valued variables to objects to be stored in the node data
+  let currentValuedVariables: IValuedVariable<VariableType>[] = [];
+  valuedVariables.forEach((valuedVariable: ValuedVariable<VariableType>) => {
+    currentValuedVariables.push(valuedVariable.toObject());
+  });
+
+  // If no valud variables returned by the processor, use the ones stored in the node data to keep them flowing
+  if (currentValuedVariables.length == 0 && currentNode.data.currentValuedVariables) {
+    currentValuedVariables = currentNode.data.currentValuedVariables as IValuedVariable<VariableType>[];
+  }
+
+  // Update the target node with the new valued variables
+  reactFlow.updateNodeData(targetNode.id, {
+    currentValuedVariables: currentValuedVariables
+  });
+
+  queue.push(targetNode.id);
+  inQueue.add(targetNode.id);
+
+  if (processed.has(targetNode.id)) {
+    // console.log("Loop detected for node:", targetNode.id);
+  }
+
+
+  /* Get outgoers and add to queue
+  const outgoingNodes = getOutgoers(currentNode, reactFlow.getNodes(), reactFlow.getEdges());
+  outgoingNodes.forEach(node => {
+    if (!inQueue.has(node.id)) { // to prevent duplicates
+      queue.push(node);
+      inQueue.add(node.id);
+      
+      if (processed.has(node.id)) {
+          // console.log("Loop detected for node:", node.id);
+      }
+    }
+  });*/
 }
 
 /**
@@ -243,7 +285,7 @@ export function BFS(
       return;
   }
 
-  const queue: Node[] = [startNode];
+  const queue: string[] = [startNode.id];
   const inQueue = new Set<string>([startNode.id]);
   const processed = new Set<string>();
 

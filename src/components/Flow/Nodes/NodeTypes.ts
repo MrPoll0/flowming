@@ -1,3 +1,6 @@
+import { ValuedVariable } from '../../../models/ValuedVariable';
+import { VariableType } from '../../../models/Variable';
+
 export type ExpressionElementType = 'variable' | 'operator' | 'literal';
 
 export interface ExpressionElement {
@@ -8,7 +11,7 @@ export interface ExpressionElement {
 }
 
 export interface NodeProcessor {
-    process: () => void;
+    process: () => void; // TODO: change this (?)
 }
 
 export interface BaseNode {
@@ -18,6 +21,7 @@ export interface BaseNode {
     isHovered?: boolean;
     isSelected?: boolean;
     isHighlighted?: boolean;
+    currentValuedVariables?: ValuedVariable<VariableType>[];
     processor?: NodeProcessor;
     [key: string]: any; // TODO: remove this?
 }

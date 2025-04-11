@@ -9,6 +9,8 @@ import {
   FlowExecutionInterface
 } from "../utils/flowExecutorUtils";
 import { NodeProcessor } from "../components/Flow/Nodes/NodeTypes";
+import { ValuedVariable } from "../models/ValuedVariable";
+import { VariableType } from "../models/Variable";
 
 export interface IExecutor {
     isRunning: boolean;
@@ -63,10 +65,14 @@ export function useFlowExecutor(): IExecutor {
         toggleLockFlow(reactFlow, false);
     }, [reactFlow]);
 
-    const processNode = useCallback((node: Node) => {
+    const processNode = useCallback((node: Node): { targetNodeId: string | null, valuedVariables: ValuedVariable<VariableType>[] } => {
         if (!isRunningRef.current || isPausedRef.current) {
-            return;
+            return { targetNodeId: null, valuedVariables: [] };
         }
+
+        // TODO: be careful with the currentNodeRef.current and others since this node is captured in time
+        // and node changes are not reflected immediately here
+        // however, the current node data being processed shouldnt change, so that should be fine
 
         if (currentNodeRef.current) {
             // Reset previous node highlight and animated edges
@@ -78,22 +84,42 @@ export function useFlowExecutor(): IExecutor {
         setCurrentNode(node);
 
         // Process the node using its processor if available
+        let valuedVariables: ValuedVariable<VariableType>[] = [];
         if (node.data && node.data.processor) {
             try {
                 const processor = node.data.processor as NodeProcessor;
-                processor.process();
+                const result = processor.process();
+
+                // TODO: should process() always return ValuedVariable[] or let it also return void or other?
+                // Set valuedVariables to the result if it is an array (ValuedVariable[])
+                if (Array.isArray(result)) {
+                    valuedVariables = result;
+                }
             } catch (error) {
                 console.error(`Error processing node ${node.id}:`, error);
                 // TODO: handle the error (e.g., stop execution)
             }
         }
         
+        let targetNodeId: string | null = null;
         if (node.type === "Condition") {
             // Special handling for condition nodes
+
+            // TODO: processor.process() returns true or false depending on the result
+            // then this gets the node target (getNodeConnections?) that corresponds to the result (Yes/No) and return that node id
+            // so that processCurrentNode can pick it up
+        } else {
+            const connections = reactFlow.getNodeConnections({ nodeId: node.id }); // TODO: why is this marked as deprecated?
+            const outgoingConnections = connections.filter(connection => connection.source === node.id);
+            if (outgoingConnections.length !== 1) {
+                console.error(`Node ${node.id} has ${outgoingConnections.length} outgoing connections instead of 1`);
+            }
+            targetNodeId = outgoingConnections[0].target;
         }
         
         toggleNodeAnimations(reactFlow, node, true, executionSpeedRef.current);
         
+        return { targetNodeId, valuedVariables };
     }, [reactFlow]);
 
     const start = useCallback(() => {

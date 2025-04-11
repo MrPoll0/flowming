@@ -3,17 +3,20 @@ import { memo, useEffect } from 'react';
 import { useVariables } from '../../../context/VariablesContext';
 import { getNodeStyles } from '../../../utils/nodeStyles';
 import { BaseNode, NodeProcessor } from './NodeTypes';
+import { Variable } from '../../../models/Variable';
+import { IValuedVariable, ValuedVariable } from '../../../models/ValuedVariable';
+import { VariableType } from '../../../models/Variable';
 
 class DeclareVariableProcessor implements NodeProcessor {
   // @ts-ignore - _reactFlow is intentionally saved for future use (TODO)
-  constructor(private reactFlow: ReactFlowInstance, private nodeId: string, private variables: any) {} // TODO: proper typing for variables methods
+  constructor(private reactFlow: ReactFlowInstance, private nodeId: string, private currentValuedVariables: ValuedVariable<VariableType>[], private variables: any) {} // TODO: proper typing for variables methods
   
-  process(): void {
+  process(): ValuedVariable<VariableType>[] {
     // Get variables associated with this node
     const nodeVariables = this.variables.getNodeVariables(this.nodeId);
     
     // Process the variable declarations (e.g., initialize variables in a runtime)
-    console.log(`Processing DeclareVariable node ${this.nodeId} with variables:`, nodeVariables);
+    // console.log(`Processing DeclareVariable node ${this.nodeId} with variables:`, nodeVariables);
 
     // TODO: we need to make sure the next node to be processed knows all the variables that came from here
     // and we also need to keep the ones that came before and all the pipe data
@@ -33,17 +36,54 @@ class DeclareVariableProcessor implements NodeProcessor {
     // with conditional, how to tell the execution which node to pick? (it will get the first in the queue and we cannot modify the queue... yet...? [if it was in the context...?])
     // or perhaps return (if anything) like true or false (only useful for conditional nodes) to now which way to go?
     // since that return will be picked up in flowExecutorUtils.ts:processCurrentNode which does have access to the queue (and it can modify it, obviously)
+
+
+
+
+    // NOTE: inconsistencies between Variable and ValuedVariable (in type, id, etc) could be a problem
+    // but since Variable cannot be modified during execution and ValuedVariable only exists during it, that wont be an issue
     
-    // For each variable, you could do actual initialization logic here
-    nodeVariables.forEach((variable: { name: string; type: string }) => {
-      console.log(`Initializing variable ${variable.name} of type ${variable.type}`);
-      // Actual logic to register this variable with your runtime
+    let currentValuedVariables: ValuedVariable<VariableType>[] = [];
+    const uniqueVariableIds = new Set<string>(); // Set to track unique variable IDs
+
+    // Get the current valued variables from the current node, which are stored as objects in node.data
+    this.currentValuedVariables.forEach((valuedVariable: IValuedVariable<VariableType>) => {
+      currentValuedVariables.push(ValuedVariable.fromObject(valuedVariable));
+      uniqueVariableIds.add(valuedVariable.id);
     });
+
+    console.log("Current valued variables:")
+    currentValuedVariables.forEach((valuedVariable: ValuedVariable<VariableType>) => {
+      console.log(valuedVariable.toString());
+    });
+
+    // Update the current valued variables with the new ones. If the variable already exists, skip it (with the same id it cannot be any different)
+    nodeVariables.forEach((variable: Variable) => {
+      const newValuedVariable = ValuedVariable.fromVariable(variable, null);
+      const existingIndex = currentValuedVariables.findIndex(v => v.id === newValuedVariable.id); // Check for existing variable
+
+      if (existingIndex !== -1) {
+        // Skip the existing variable and log a warning
+        console.warn(`Variable with ID ${newValuedVariable.id} already exists. Skipping.`);
+        // TODO: throw error, declaring variable already declared
+      } else {
+        // Add new variable
+        currentValuedVariables.push(newValuedVariable);
+        uniqueVariableIds.add(newValuedVariable.id);
+      }
+    });
+
+    console.log("Updated valued variables:")
+    currentValuedVariables.forEach((valuedVariable: ValuedVariable<VariableType>) => {
+      console.log(valuedVariable.toString());
+    });
+
+    return currentValuedVariables;
   }
 }
 
 const DeclareVariable = memo(function DeclareVariableComponent({ data, id: nodeId }: { data: BaseNode; id: string }) {
-  const { isHovered, isSelected, isHighlighted, width, height } = data;
+  const { isHovered, isSelected, isHighlighted, currentValuedVariables, width, height } = data;
   const { getNodeVariables } = useVariables();
   const reactFlow = useReactFlow();
   
@@ -51,7 +91,7 @@ const DeclareVariable = memo(function DeclareVariableComponent({ data, id: nodeI
   
   // Create the processor when the component mounts and update it when dependencies change
   useEffect(() => {
-    const processor = new DeclareVariableProcessor(reactFlow, nodeId, {
+    const processor = new DeclareVariableProcessor(reactFlow, nodeId, currentValuedVariables || [], {
       getNodeVariables
     });
     
@@ -66,7 +106,7 @@ const DeclareVariable = memo(function DeclareVariableComponent({ data, id: nodeI
         processor: null
       });
     };
-  }, [nodeId, reactFlow, getNodeVariables]); // NOTE: getNodeVariables is needed for the processor to get the variables
+  }, [nodeId, reactFlow, currentValuedVariables, getNodeVariables]); // NOTE: getNodeVariables is needed for the processor to get the variables
 
   return (
     <div className="declare-variable-node" style={getNodeStyles({
