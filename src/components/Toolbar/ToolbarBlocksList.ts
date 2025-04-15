@@ -53,12 +53,28 @@ const assignVariableNodeBlock: NodeBlock = {
   }
 };
 
+const conditionalNodeBlock: NodeBlock = {
+  id: 'conditional-node',
+  type: 'node',
+  label: 'Conditional',
+  icon: '🔍',
+  nodeType: 'Conditional',
+  description: 'Conditional node',
+  defaultData: {
+    width: 70,
+    height: 70,
+  }
+};
+
+
+
 // Export all blocks
 export const toolbarBlocksList: Block[] = [
   startNodeBlock,
   endNodeBlock,
   declareVariableNodeBlock,
-  assignVariableNodeBlock
+  assignVariableNodeBlock,
+  conditionalNodeBlock
 ];
 
 export default toolbarBlocksList;
