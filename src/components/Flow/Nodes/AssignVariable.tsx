@@ -2,7 +2,7 @@ import { Handle, Position, useReactFlow, ReactFlowInstance } from '@xyflow/react
 import { memo, useEffect } from 'react';
 import { getNodeStyles } from '../../../utils/nodeStyles';
 import { BaseNode, NodeProcessor } from './NodeTypes';
-import { Expression } from '../../../models';
+import { Expression, Variable } from '../../../models';
 import { IValuedVariable, ValuedVariable } from '../../../models/ValuedVariable';
 import { VariableType } from '../../../models/Variable';
 
@@ -36,7 +36,7 @@ class AssignVariableProcessor implements NodeProcessor {
     // TODO: perfomance optimization needed?
 
     // Ensure that the expression leftSide variables is in the current valued variables
-    if (!currentValuedVariables.some(v => v.id === this.expression?.leftSide.id)) {
+    if (this.expression?.leftSide instanceof Variable && !currentValuedVariables.some(v => v.id === (this.expression?.leftSide as Variable).id)) {
       console.error(`Variable ${this.expression?.leftSide.id} not found in current valued variables`);
       return [];
     }

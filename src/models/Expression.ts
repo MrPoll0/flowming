@@ -3,18 +3,31 @@ import { ExpressionElement } from './ExpressionElement';
 import { ValuedVariable } from './ValuedVariable';
 
 export const operators = ['+', '-', '*', '/', '!', '%', '&&', '||', '==', '!=', '>', '<', '>=', '<=', '(', ')'];
+export type IOperator = typeof operators[number];
+
+export const equalities = ['==', '!=', '>', '<', '>=', '<='];
+export type IEquality = typeof equalities[number];
+
 
 export interface IExpression {
-  leftSide: Variable;
+  leftSide: Variable | ExpressionElement[];
   rightSide: ExpressionElement[];
+  equality?: IEquality;
 }
 
 export class Expression implements IExpression {
-  leftSide: Variable;
+  leftSide: Variable | ExpressionElement[];
   rightSide: ExpressionElement[];
+  equality?: IEquality;
 
-  constructor(leftSide: Variable, rightSide: ExpressionElement[] = []) {
-    if (!(leftSide instanceof Variable)) {
+  constructor(leftSide: Variable | ExpressionElement[], rightSide: ExpressionElement[] = [], equality?: IEquality) {
+    // If expression has equality, then leftSide can be multiple expression element and rightSide too, with an equality in the middle
+    // However, if there is no equality, then leftSide must be a Variable and rightSide must be an array of ExpressionElement, with an equal sign in the middle
+
+    if (equality && (!Array.isArray(leftSide) || leftSide.some(e => !(e instanceof ExpressionElement)))) {
+      throw new Error('leftSide must be an array of ExpressionElement instances');
+    }
+    if (!equality && !(leftSide instanceof Variable)) {
       throw new Error('leftSide must be a Variable instance');
     }
     if (!Array.isArray(rightSide)) {
@@ -23,9 +36,16 @@ export class Expression implements IExpression {
     if (rightSide.some(e => !(e instanceof ExpressionElement))) {
       throw new Error('rightSide must contain only ExpressionElement instances');
     }
+
+    if (equality && !equalities.includes(equality)) {
+      throw new Error(`Invalid equality: ${equality}`);
+    }
     
     this.leftSide = leftSide;
     this.rightSide = rightSide;
+    if (equality) {
+      this.equality = equality;
+    }
   }
 
   /**
@@ -36,6 +56,7 @@ export class Expression implements IExpression {
       // Return default value based on the left side variable type
       // TODO: refactor this to not have duplicated code (ValuedVariable)
       // TODO: return error instead?
+      if (!(this.leftSide instanceof Variable)) throw new Error('leftSide must be a Variable instance');
       switch (this.leftSide.type) {
         case 'string': return '' as ValueTypeMap[VariableType];
         case 'integer': return 0 as ValueTypeMap[VariableType];
@@ -60,7 +81,8 @@ export class Expression implements IExpression {
     // TODO: añadir operador NOT?
     // TODO: is currentValuedVariables being resetted correctly in new starts? (apparently, why?)
 
-
+    // TODO: now we can do the conditional node (expression parsing will be very similar)
+    // also expression editor will be very similar
 
 
 
@@ -73,7 +95,7 @@ export class Expression implements IExpression {
       
       if (element.isVariable()) {
         // Get variable value from the current valued variables
-        const variable = currentValuedVariables.find(v => v.id === element.variableId);
+        const variable = currentValuedVariables.find(v => v.id === element.variable?.id);
         if (!variable) {
           console.error(`Variable ${element.value} not found in current valued variables`);
           continue; // Skip this element (TODO: throw error, stop execution)
@@ -81,6 +103,7 @@ export class Expression implements IExpression {
         elementValue = variable.value;
       } else if (element.isLiteral()) {
         // Parse literal value based on the target variable type
+        if (!(this.leftSide instanceof Variable)) throw new Error('leftSide must be a Variable instance');
         switch (this.leftSide.type) {
           case 'string':
             elementValue = element.value;
@@ -116,7 +139,7 @@ export class Expression implements IExpression {
 
         switch (currentOperator) {
           case '+':
-            currentValue = this.leftSide.type === 'string' 
+            currentValue = this.leftSide instanceof Variable && this.leftSide.type === 'string' 
               ? String(currentValue) + String(elementValue)
               : currentValue + elementValue;
             break;
@@ -166,6 +189,7 @@ export class Expression implements IExpression {
     // (e.g. 1 + true)
 
     // Ensure the calculated value matches the expected type
+    if (!(this.leftSide instanceof Variable)) throw new Error('leftSide must be a Variable instance');
     switch (this.leftSide.type) {
       case 'string':
         return String(currentValue) as ValueTypeMap[VariableType];
@@ -185,8 +209,9 @@ export class Expression implements IExpression {
    * and the calculated value from the expression and the current values for variables
    */
   assignValue(currentValuedVariables: ValuedVariable<VariableType>[]): ValuedVariable<VariableType> {
-    const value = this.calculateValue(currentValuedVariables);
+    if (!(this.leftSide instanceof Variable)) throw new Error('leftSide must be a Variable instance');
 
+    const value = this.calculateValue(currentValuedVariables);
     return new ValuedVariable(this.leftSide.id, this.leftSide.type, this.leftSide.name, this.leftSide.nodeId, value);
   }
 
@@ -194,14 +219,15 @@ export class Expression implements IExpression {
    * Creates a string representation of the expression
    */
   toString(): string {
-    return `${this.leftSide.toString()} = ${this.rightSide.map(e => e.toString()).join(' ')}`;
+    return `${this.leftSide.toString()} ${this.equality ? this.equality : '='} ${this.rightSide.map(e => e.toString()).join(' ')}`;
   }
 
   /**
    * Clones the expression
    */
   clone(): Expression {
-    return new Expression(this.leftSide.clone(), this.rightSide.map(e => e.clone()));
+    let cloneLeftSide = this.leftSide instanceof Variable ? this.leftSide.clone() : this.leftSide.map(e => e.clone());
+    return new Expression(cloneLeftSide, this.rightSide.map(e => e.clone()), this.equality);
   }
 
   /**
@@ -249,19 +275,34 @@ export class Expression implements IExpression {
    */
   updateVariables(variables: Variable[]): void {
     // Update the leftSide variable if it exists in the variable list
-    const leftSideVariable = variables.find(v => v.id === this.leftSide.id);
-    if (!leftSideVariable) {
-        // If no left side variable is found, expression is invalid
-        // TODO: do not unmount expression when LHS variable deselected or not found (?)
-        throw new Error(`Variable with id ${this.leftSide.id} not found`);
+    if (this.leftSide instanceof Variable) {
+      const leftSideVariable = variables.find(v => v.id === (this.leftSide as Variable).id);
+      if (!leftSideVariable) {
+          // If no left side variable is found, expression is invalid
+          // TODO: do not unmount expression when LHS variable deselected or not found (?)
+          throw new Error(`Variable with id ${this.leftSide.id} not found`);
+      }
+      this.leftSide = leftSideVariable;
+    } else {
+      this.leftSide = this.leftSide.flatMap(e => {
+        if (e.type !== 'variable') return [e];
+        const variable = variables.find(v => v.id === e.variable?.id);
+        // If no variable is found, delete expression element (by flattening [])
+        if (!variable) return [];
+        
+        const expressionElement = new ExpressionElement(e.id, e.type, variable.name, variable);
+        return [expressionElement];
+      });
     }
-    this.leftSide = leftSideVariable;
 
     this.rightSide = this.rightSide.flatMap(e => {
       if (e.type !== 'variable') return [e];
-      const variable = variables.find(v => v.id === e.variableId);
+      const variable = variables.find(v => v.id === e.variable?.id);
       // If no variable is found, delete expression element (by flattening [])
-      return variable ? [new ExpressionElement(e.id, e.type, variable.name, variable.id)] : [];
+      if (!variable) return [];
+      
+      const expressionElement = new ExpressionElement(e.id, e.type, variable.name, variable);
+      return [expressionElement];
     });
   }
 
@@ -270,8 +311,9 @@ export class Expression implements IExpression {
    */
   toObject() {
     return {
-      leftSide: this.leftSide.toObject(),
-      rightSide: this.rightSide.map(e => e.toObject())
+      leftSide: this.leftSide instanceof Variable ? this.leftSide.toObject() : this.leftSide.map(e => e.toObject()),
+      rightSide: this.rightSide.map(e => e.toObject()),
+      equality: this.equality
     };
   }
 
@@ -279,9 +321,9 @@ export class Expression implements IExpression {
    * Creates an Expression from a plain object
    */
   static fromObject(obj: IExpression): Expression {
-    const leftSide = Variable.fromObject(obj.leftSide);
+    const leftSide = obj.equality ? (obj.leftSide as ExpressionElement[]).map(e => ExpressionElement.fromObject(e)) : Variable.fromObject(obj.leftSide as Variable);
     const rightSide = obj.rightSide.map(e => ExpressionElement.fromObject(e));
-    
-    return new Expression(leftSide, rightSide);
+    const equality = obj.equality;
+    return new Expression(leftSide, rightSide, equality);
   }
 } 

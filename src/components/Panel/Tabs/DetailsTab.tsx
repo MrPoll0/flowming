@@ -213,7 +213,7 @@ const DetailsTab = () => {
       }
 
       // Only update if the left side has changed
-      if (!expression || expression.leftSide.id !== varInstance.id) {
+      if (!expression || (expression.leftSide instanceof Variable && expression.leftSide.id !== varInstance.id)) {
         setExpression(new Expression(varInstance, expression?.rightSide || []));
       }
     } else if (!leftSideVariable) {
@@ -332,7 +332,7 @@ const DetailsTab = () => {
                       elem.id || crypto.randomUUID(),
                       elem.type,
                       elem.value,
-                      elem.variableId
+                      elem.variable
                     );
                   }) || [];
                   
@@ -459,7 +459,7 @@ const DetailsTab = () => {
           active.id, 
           'variable', 
           variable.name,
-          variable.id
+          variable
         );
       }
     } else if (active.id.startsWith('op-')) { // Check in operators (palette)
@@ -522,12 +522,25 @@ const DetailsTab = () => {
       
       // Create proper ExpressionElement based on the type
       if (activeItem.type === 'variable') {
-        newElement = new ExpressionElement(
-          crypto.randomUUID(),
-          'variable',
-          activeItem.value,
-          activeItem.variableId
-        );
+        // Access variable through type assertion
+        const element = activeItem as any;
+        const varId = element.variable.id;
+        
+        if (varId) {
+          const variable = getAllVariables().find(v => v.id === varId);
+          if (variable) {
+            newElement = new ExpressionElement(
+              crypto.randomUUID(),
+              'variable',
+              variable.name,
+              variable
+            );
+          } else {
+            throw new Error(`Variable ${varId} not found`); // TODO: handle this
+          }
+        } else {
+          throw new Error(`Variable ID ${varId} not found`); // TODO: handle this
+        }
       } else {
         newElement = new ExpressionElement(
           crypto.randomUUID(),
@@ -554,12 +567,25 @@ const DetailsTab = () => {
       
       // Create proper ExpressionElement based on the type
       if (activeItem.type === 'variable') {
-        newElement = new ExpressionElement(
-          crypto.randomUUID(),
-          'variable',
-          activeItem.value,
-          activeItem.variableId
-        );
+        // Access variable through type assertion
+        const element = activeItem as any;
+        const varId = element.variable.id;
+        
+        if (varId) {
+          const variable = getAllVariables().find(v => v.id === varId);
+          if (variable) {
+            newElement = new ExpressionElement(
+              crypto.randomUUID(),
+              'variable',
+              variable.name,
+              variable
+            );
+          } else {
+            throw new Error(`Variable ${varId} not found`); // TODO: handle this
+          }
+        } else {
+          throw new Error(`Variable ID ${varId} not found`); // TODO: handle this
+        }
       } else {
         newElement = new ExpressionElement(
           crypto.randomUUID(),
