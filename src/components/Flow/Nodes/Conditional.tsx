@@ -21,7 +21,7 @@ const Conditional = memo(function ConditionalComponent({ data, id: _nodeId }: { 
   const diamondStyle = {
     width: width,
     height: height,
-    transform: "translate(-50%, -50%) rotate(45deg)",
+    transform: "rotate(45deg)",
     background: "white",
     border: "1px solid #222",
     borderRadius: 2,
