@@ -5,6 +5,8 @@ import DeclareVariable from './Nodes/DeclareVariable';
 import AssignVariable from './Nodes/AssignVariable';
 import Conditional from './Nodes/Conditional';
 import Flowline from './Edges/Flowline';
+import Input from './Nodes/Input';
+import Output from './Nodes/Output';
 // Define the node type to match initialNodes
 export interface FlowNode extends Node {
   id: string;
@@ -17,7 +19,9 @@ export const nodeTypes = {
   End,
   DeclareVariable,
   AssignVariable,
-  Conditional
+  Conditional,
+  Input,
+  Output
 }
 
 export const edgeTypes = {

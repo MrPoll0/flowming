@@ -66,7 +66,31 @@ const conditionalNodeBlock: NodeBlock = {
   }
 };
 
+const inputNodeBlock: NodeBlock = {
+  id: 'input-node',
+  type: 'node',
+  label: 'Input',
+  icon: '📥',
+  nodeType: 'Input',
+  description: 'Input node',
+  defaultData: {
+    width: 150,
+    height: 50,
+  }
+};
 
+const outputNodeBlock: NodeBlock = {
+  id: 'output-node',
+  type: 'node',
+  label: 'Output',
+  icon: '📤',
+  nodeType: 'Output',
+  description: 'Output node',
+  defaultData: {
+    width: 150,
+    height: 50,
+  }
+};
 
 // Export all blocks
 export const toolbarBlocksList: Block[] = [
@@ -74,7 +98,9 @@ export const toolbarBlocksList: Block[] = [
   endNodeBlock,
   declareVariableNodeBlock,
   assignVariableNodeBlock,
-  conditionalNodeBlock
+  conditionalNodeBlock,
+  inputNodeBlock,
+  outputNodeBlock
 ];
 
 export default toolbarBlocksList;
