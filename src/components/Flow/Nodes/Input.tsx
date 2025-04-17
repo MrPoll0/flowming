@@ -1,15 +1,76 @@
-import { Handle, Position } from '@xyflow/react';
-import { memo } from 'react';
+import { Handle, Position, ReactFlowInstance, useReactFlow } from '@xyflow/react';
+import { memo, useEffect } from 'react';
 import { getNodeStyles } from '../../../utils/nodeStyles';
-import { BaseNode } from './NodeTypes';
-import { IVariable } from '../../../models/Variable';
+import { BaseNode, NodeProcessor } from './NodeTypes';
+import { IVariable, VariableType, Variable } from '../../../models/Variable';
+import { IValuedVariable } from '../../../models/ValuedVariable';
+import { ValuedVariable } from '../../../models/ValuedVariable';
 
 interface InputNode extends BaseNode {
   variable?: IVariable;
 }
 
+class InputProcessor implements NodeProcessor {
+    constructor(private reactFlow: ReactFlowInstance, private nodeId: string) {}
+    
+    process(): ValuedVariable<VariableType>[] {
+      const node = this.reactFlow.getNode(this.nodeId)!;
+      const data = node.data as InputNode;
+      console.log(`Processing Input node ${this.nodeId} with variable:`, data.variable);
+  
+      let currentValuedVariables: ValuedVariable<VariableType>[] = [];
+      data.currentValuedVariables?.forEach((valuedVariable: IValuedVariable<VariableType>) => {
+        currentValuedVariables.push(ValuedVariable.fromObject(valuedVariable));
+      });
+  
+      console.log("Current valued variables:");
+      currentValuedVariables.forEach((valuedVariable: ValuedVariable<VariableType>) => {
+        console.log(valuedVariable.toString());
+      });
+
+      // TODO: input sanitization for XSS attacks
+
+      // Get basic input from user with prompt (TODO: how to handle user input?)
+      const input = prompt(data.variable?.name);
+      if (input && data.variable) {
+        // Convert IVariable to Variable before passing to fromVariable
+        const variableObj = Variable.fromObject(data.variable);
+        const newValuedVariable = ValuedVariable.fromVariable(variableObj, input);
+        
+        // Overwrite the existing variable
+        const existingIndex = currentValuedVariables.findIndex(v => v.id === newValuedVariable.id);
+        if (existingIndex !== -1) {
+          currentValuedVariables[existingIndex] = newValuedVariable;
+        } else {
+          currentValuedVariables.push(newValuedVariable);
+        }
+      }
+  
+      return currentValuedVariables;
+    }
+  }
+
 const Input = memo(function InputComponent({ data, id: nodeId }: { data: InputNode; id: string }) {
   const { isHovered, isSelected, isHighlighted, variable, width, height } = data;
+
+  const reactFlow = useReactFlow();
+
+  // Update processor only on mount/unmount to prevent infinite loops
+  useEffect(() => {
+    const processor = new InputProcessor(reactFlow, nodeId);
+
+    // Set the processor to the node data to make it available for the flow executor to use 
+    reactFlow.updateNodeData(nodeId, {
+      processor: processor
+    });
+
+    // Clean up on unmount
+    return () => {
+      reactFlow.updateNodeData(nodeId, {
+        processor: null
+      });
+    };
+  }, [nodeId, reactFlow]);
 
   return (
     <div className="input-node" style={getNodeStyles({
