@@ -151,5 +151,5 @@ body {
 }
  
 .react-flow__edge-textbg {
-  fill: #f7f9fb;
+  fill: #f7f9fb !important; /* Override default background color */
 }

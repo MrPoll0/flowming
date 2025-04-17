@@ -2,7 +2,7 @@ import { ValuedVariable } from '../../../models/ValuedVariable';
 import { VariableType } from '../../../models/Variable';
 
 export interface NodeProcessor {
-    process: () => void; // TODO: change this (?)
+    process: () => ValuedVariable<VariableType>[] | { valuedVariables: ValuedVariable<VariableType>[], result: boolean };
 }
 
 export interface BaseNode {

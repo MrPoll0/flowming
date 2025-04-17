@@ -1,8 +1,10 @@
-import { Handle, Position } from '@xyflow/react';
-import { memo } from 'react'; 
-import { BaseNode } from './NodeTypes';
-import { Expression } from '../../../models';
+import { Handle, Position, useReactFlow, ReactFlowInstance } from '@xyflow/react';
+import { memo, useEffect } from 'react'; 
+import { BaseNode, NodeProcessor } from './NodeTypes';
+import { Expression, VariableType } from '../../../models';
 import { getNodeActionsStyles } from '../../../utils/nodeStyles';
+import { IValuedVariable } from '../../../models/ValuedVariable';
+import { ValuedVariable } from '../../../models/ValuedVariable';
 
 // TODO: check https://codesandbox.io/s/react-flow-node-shapes-k47gz
 // https://github.com/xyflow/xyflow/discussions/2608
@@ -10,14 +12,68 @@ import { getNodeActionsStyles } from '../../../utils/nodeStyles';
 // https://codesandbox.io/s/condescending-silence-lbzfd?file=/src/DiamondNode.js
 // https://danieliser.com/react-flow-example-resources/
 
+// Decision edge labels ([0] = False/No, [1] = True/Yes)
+export const decisionEdgeLabels = ['No', 'Yes'];
 
 interface ConditionalNode extends BaseNode {
   expression?: Expression;
 }
 
-const Conditional = memo(function ConditionalComponent({ data, id: _nodeId }: { data: ConditionalNode; id: string }) {
+class ConditionalProcessor implements NodeProcessor {
+  constructor(private reactFlow: ReactFlowInstance, private nodeId: string) {}
+  
+  process(): { valuedVariables: ValuedVariable<VariableType>[], result: boolean } {
+    const node = this.reactFlow.getNode(this.nodeId)!;
+    const data = node.data as ConditionalNode;
+    console.log(`Processing Conditional node ${this.nodeId} with expression:`, data.expression);
+    const expr = data.expression ? Expression.fromObject(data.expression) : null;
+    if (!expr) {
+      return { valuedVariables: [], result: false };
+    }
+
+    let currentValuedVariables: ValuedVariable<VariableType>[] = [];
+    data.currentValuedVariables?.forEach((valuedVariable: IValuedVariable<VariableType>) => {
+      currentValuedVariables.push(ValuedVariable.fromObject(valuedVariable));
+    });
+
+    console.log("Current valued variables:");
+    currentValuedVariables.forEach((valuedVariable: ValuedVariable<VariableType>) => {
+      console.log(valuedVariable.toString());
+    });
+
+    const evaluatedExpression = expr.evaluate(currentValuedVariables);
+    console.log(`Evaluated expression: ${evaluatedExpression}`);
+
+    return { 
+      valuedVariables: currentValuedVariables, 
+      result: evaluatedExpression 
+    };
+  }
+}
+
+const Conditional = memo(function ConditionalComponent({ data, id: nodeId }: { data: ConditionalNode; id: string }) {
   const { isHovered, isSelected, isHighlighted, width, height } = data;
   
+  const reactFlow = useReactFlow();
+
+  // Update processor only on mount/unmount to prevent infinite loops
+  useEffect(() => {
+    const processor = new ConditionalProcessor(reactFlow, nodeId);
+
+    // Set the processor to the node data to make it available for the flow executor to use 
+    reactFlow.updateNodeData(nodeId, {
+      processor: processor
+    });
+
+    // Clean up on unmount
+    return () => {
+      reactFlow.updateNodeData(nodeId, {
+        processor: null
+      });
+    };
+  }, [nodeId, reactFlow]);
+
+
   const diamondStyle = {
     width: width,
     height: height,
@@ -68,9 +124,14 @@ const Conditional = memo(function ConditionalComponent({ data, id: _nodeId }: { 
     top: '100%',
   } as React.CSSProperties;
 
+  const expr = data.expression ? Expression.fromObject(data.expression) : null;
+  const label = (expr && !expr.isEmpty()) ? expr.toString() : 'Conditional';
+
+  // TODO: fix styling wtr expression length
+
   return (
     <div className="conditional-node" style={diamondStyle}>
-      <div style={labelStyle}>{data.label}</div>
+      <div style={labelStyle}><code>{label}</code></div>
       <Handle style={topHandleStyle} type="target" id="top-target" position={Position.Top} />
       <Handle style={topHandleStyle} type="source" id="top-source" position={Position.Top} />
       <Handle style={bottomHandleStyle} type="target" id="bottom-target" position={Position.Bottom} />

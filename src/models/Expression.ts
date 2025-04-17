@@ -51,13 +51,14 @@ export class Expression implements IExpression {
   /**
    * Calculates the value of the expression
    */
-  calculateValue(currentValuedVariables: ValuedVariable<VariableType>[]): ValueTypeMap[VariableType] {
-    if (this.rightSide.length === 0) {
+  calculateValue(exprElements: ExpressionElement[], exprTyping: ValueTypeMap[VariableType] | null, currentValuedVariables: ValuedVariable<VariableType>[]): ValueTypeMap[VariableType] {
+    if (exprElements.length === 0) {
       // Return default value based on the left side variable type
       // TODO: refactor this to not have duplicated code (ValuedVariable)
       // TODO: return error instead?
-      if (!(this.leftSide instanceof Variable)) throw new Error('leftSide must be a Variable instance');
-      switch (this.leftSide.type) {
+
+      // TODO: does this work properly?
+      switch (exprTyping) {
         case 'string': return '' as ValueTypeMap[VariableType];
         case 'integer': return 0 as ValueTypeMap[VariableType];
         case 'float': return 0.0 as ValueTypeMap[VariableType];
@@ -87,8 +88,8 @@ export class Expression implements IExpression {
 
 
 
-    for (let i = 0; i < this.rightSide.length; i++) {
-      const element = this.rightSide[i];
+    for (let i = 0; i < exprElements.length; i++) {
+      const element = exprElements[i];
       
       // Get the value of the current element
       let elementValue: any;
@@ -103,8 +104,7 @@ export class Expression implements IExpression {
         elementValue = variable.value;
       } else if (element.isLiteral()) {
         // Parse literal value based on the target variable type
-        if (!(this.leftSide instanceof Variable)) throw new Error('leftSide must be a Variable instance');
-        switch (this.leftSide.type) {
+        switch (exprTyping) {
           case 'string':
             elementValue = element.value;
             break;
@@ -139,7 +139,7 @@ export class Expression implements IExpression {
 
         switch (currentOperator) {
           case '+':
-            currentValue = this.leftSide instanceof Variable && this.leftSide.type === 'string' 
+            currentValue = exprTyping === 'string' 
               ? String(currentValue) + String(elementValue)
               : currentValue + elementValue;
             break;
@@ -189,8 +189,7 @@ export class Expression implements IExpression {
     // (e.g. 1 + true)
 
     // Ensure the calculated value matches the expected type
-    if (!(this.leftSide instanceof Variable)) throw new Error('leftSide must be a Variable instance');
-    switch (this.leftSide.type) {
+    switch (exprTyping) {
       case 'string':
         return String(currentValue) as ValueTypeMap[VariableType];
       case 'integer':
@@ -211,15 +210,47 @@ export class Expression implements IExpression {
   assignValue(currentValuedVariables: ValuedVariable<VariableType>[]): ValuedVariable<VariableType> {
     if (!(this.leftSide instanceof Variable)) throw new Error('leftSide must be a Variable instance');
 
-    const value = this.calculateValue(currentValuedVariables);
+    const value = this.calculateValue(this.rightSide, this.leftSide.type, currentValuedVariables);
     return new ValuedVariable(this.leftSide.id, this.leftSide.type, this.leftSide.name, this.leftSide.nodeId, value);
+  }
+
+  /**
+   * Evaluates the expression and returns a boolean value
+   */
+  evaluate(currentValuedVariables: ValuedVariable<VariableType>[]): boolean {
+    if (!this.equality) throw new Error('Expression must have an equality operator');
+
+    // TODO: typing? (consensuated? just not used here?)
+    const leftSideValue = this.calculateValue((this.leftSide as ExpressionElement[]), null, currentValuedVariables);
+    const rightSideValue = this.calculateValue(this.rightSide, null, currentValuedVariables);
+
+    switch (this.equality) {
+      case '==':
+        return leftSideValue == rightSideValue;
+      case '!=':
+        return leftSideValue != rightSideValue;
+      case '>':
+        return leftSideValue > rightSideValue;
+      case '<':
+        return leftSideValue < rightSideValue;
+      case '>=':
+        return leftSideValue >= rightSideValue;
+      case '<=':
+        return leftSideValue <= rightSideValue;
+      default:
+        throw new Error(`Unsupported equality operator: ${this.equality}`);
+    }
   }
 
   /**
    * Creates a string representation of the expression
    */
   toString(): string {
-    return `${this.leftSide.toString()} ${this.equality ? this.equality : '='} ${this.rightSide.map(e => e.toString()).join(' ')}`;
+    const leftSideStr = Array.isArray(this.leftSide) 
+      ? this.leftSide.map(e => e.toString()).join(' ')
+      : this.leftSide.toString();
+      
+    return `${leftSideStr} ${this.equality ? this.equality : '='} ${this.rightSide.map(e => e.toString()).join(' ')}`;
   }
 
   /**
@@ -304,6 +335,16 @@ export class Expression implements IExpression {
       const expressionElement = new ExpressionElement(e.id, e.type, variable.name, variable);
       return [expressionElement];
     });
+  }
+
+  /**
+   * Checks if the expression is empty
+   */
+  isEmpty(): boolean {
+    if(this.equality) {
+      return (this.leftSide as ExpressionElement[]).length === 0 && this.rightSide.length === 0;
+    }
+    return !(this.leftSide as Variable) && this.rightSide.length === 0;
   }
 
   /**

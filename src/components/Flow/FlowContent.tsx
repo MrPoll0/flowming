@@ -24,7 +24,7 @@ import ContextMenu from './ContextMenu';
 import { useDnD } from '../../context/DnDContext';
 import { useFlowExecutorContext } from '../../context/FlowExecutorContext';
 import { Expression } from '../../models';
-
+import { decisionEdgeLabels } from './Nodes/Conditional';
 
 const FlowContent: React.FC = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -396,13 +396,47 @@ const FlowContent: React.FC = () => {
       // Create a copy of current edges
       let newEdges = [...eds];
       
-      // For every node except Conditional, limit the number of outgoing edges to 1
-      if (sourceNode?.type != 'Conditional') {
+      // For conditional nodes, limit to 2 outgoing edges (True/Yes and False/No)
+      if (sourceNode?.type === 'Conditional') {
+        // Get existing outgoing edges for this conditional node
+        const existingOutgoingEdges = newEdges.filter(edge => edge.source === params.source);
+        
+        // If already has 2 edges, don't allow more connections (not even replace) [TODO: consistency with non-conditional nodes?]
+        if (existingOutgoingEdges.length >= 2) {
+          return newEdges;
+        }
+        
+        // Determine label for new edge based on existing edges
+        const hasYesEdge = existingOutgoingEdges.some(edge => 
+          edge.data?.conditionalLabel === decisionEdgeLabels[1]);
+        const hasNoEdge = existingOutgoingEdges.some(edge => 
+          edge.data?.conditionalLabel === decisionEdgeLabels[0]);
+
+        let newEdgeLabel = '';
+        if (!hasYesEdge && !hasNoEdge) {
+          // If no yes nor no edge, set the label randomly (TODO: think this through, user experience?)
+          newEdgeLabel = decisionEdgeLabels[Math.floor(Math.random() * decisionEdgeLabels.length)];
+        } else {
+          newEdgeLabel = hasYesEdge ? decisionEdgeLabels[0] : decisionEdgeLabels[1];
+        }
+          
+        const newEdgeParams = {
+          ...params,
+          data: {
+            ...params.data,
+            conditionalLabel: newEdgeLabel,
+          }
+        };
+        
+        // Add the new edge with appropriate label
+        return addEdge(newEdgeParams, newEdges);
+      } else {
+        // For every node except Conditional, limit the number of outgoing edges to 1
         newEdges = newEdges.filter(edge => edge.source !== params.source);
+        
+        // Add the new edge
+        return addEdge(params, newEdges);
       }
-      
-      // Add the new edge
-      return addEdge(params, newEdges);
     });
   };
 
@@ -632,6 +666,18 @@ const FlowContent: React.FC = () => {
           // TODO: checkout ReactFlowInstance.getNodeConnections that returns NodeConnection[] with edgeId and source/target and source/targetHandle
 
 
+          // TODO: check https://reactflow.dev/examples/nodes/add-node-on-edge-drop
+          // https://reactflow.dev/examples/nodes/easy-connect
+
+
+          // TODO: disable adding blocks to flow when executing
+          
+
+          // TODO: disable edge creation when executing
+
+          // TODO: handle float correctly in AssignVariable
+
+          // TODO: are variables (normal) being resetted correctly?
 
           // (should be fixed now by using ReactFlow drag & drop events)
           // TODO: bug - sometimes when dragging a node handle, it appears like you were dragging a block from toolbar and you kind of "drag" what you copied

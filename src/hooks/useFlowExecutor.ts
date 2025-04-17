@@ -11,6 +11,7 @@ import {
 import { NodeProcessor } from "../components/Flow/Nodes/NodeTypes";
 import { ValuedVariable } from "../models/ValuedVariable";
 import { VariableType } from "../models/Variable";
+import { decisionEdgeLabels } from "../components/Flow/Nodes/Conditional";
 
 export interface IExecutor {
     isRunning: boolean;
@@ -75,8 +76,8 @@ export function useFlowExecutor(): IExecutor {
         // however, the current node data being processed shouldnt change, so that should be fine
 
         if (currentNodeRef.current) {
-            // Reset previous node highlight and animated edges
-            toggleNodeAnimations(reactFlow, currentNodeRef.current!, false);
+            // Reset previous node highlight and animated edges (node.id was the previous target node id)
+            toggleNodeAnimations(reactFlow, currentNodeRef.current!, node.id, false);
         }
         
         // Keep track of the active node
@@ -85,15 +86,21 @@ export function useFlowExecutor(): IExecutor {
 
         // Process the node using its processor if available
         let valuedVariables: ValuedVariable<VariableType>[] = [];
+        let processorResult: any = null;
+        
         if (node.data && node.data.processor) {
             try {
                 const processor = node.data.processor as NodeProcessor;
-                const result = processor.process();
+                processorResult = processor.process();
 
-                // TODO: should process() always return ValuedVariable[] or let it also return void or other?
-                // Set valuedVariables to the result if it is an array (ValuedVariable[])
-                if (Array.isArray(result)) {
-                    valuedVariables = result;
+                if (node.type === "Conditional") {
+                    // For condition nodes, extract the valuedVariables
+                    if (processorResult && typeof processorResult === 'object' && 'valuedVariables' in processorResult) {
+                        valuedVariables = processorResult.valuedVariables;
+                    }
+                } else if (Array.isArray(processorResult)) {
+                    // For other nodes, use the array result directly (currentValuedVariables)
+                    valuedVariables = processorResult;
                 }
             } catch (error) {
                 console.error(`Error processing node ${node.id}:`, error);
@@ -101,23 +108,54 @@ export function useFlowExecutor(): IExecutor {
             }
         }
         
-        let targetNodeId: string | null = null;
-        if (node.type === "Condition") {
+        let targetNodeId: string = '';
+        if (node.type === "Conditional") {
             // Special handling for condition nodes
-
+ 
             // TODO: processor.process() returns true or false depending on the result
             // then this gets the node target (getNodeConnections?) that corresponds to the result (Yes/No) and return that node id
             // so that processCurrentNode can pick it up
+            const conditionResult = processorResult && typeof processorResult === 'object' && 'result' in processorResult 
+                ? processorResult.result 
+                : false;
+            
+            const connections = reactFlow.getNodeConnections({ nodeId: node.id });
+            const outgoingConnections = connections.filter(connection => connection.source === node.id);
+            
+            // Find the connection for Yes (true) or No (false) based on the condition result
+            const targetLabel = conditionResult ? decisionEdgeLabels[1] : decisionEdgeLabels[0];
+            
+            // Find the edge with matching label
+            const matchingConnection = outgoingConnections.find(connection => {
+                const edge = reactFlow.getEdge(connection.edgeId);
+                return edge?.data?.conditionalLabel === targetLabel;
+            });
+            
+            if (matchingConnection) {
+                targetNodeId = matchingConnection.target;
+                console.log(`Condition evaluated to ${conditionResult}, following '${targetLabel}' path to node ${targetNodeId}`);
+            } else {
+                console.warn(`No edge labeled '${targetLabel}' found for condition result ${conditionResult}`);
+                
+                // Fallback: take any available edge if one with the right label doesn't exist
+                if (outgoingConnections.length > 0) {
+                    targetNodeId = outgoingConnections[0].target;
+                    console.log(`Using fallback edge to node ${targetNodeId}`);
+                }
+            }
         } else {
             const connections = reactFlow.getNodeConnections({ nodeId: node.id }); // TODO: why is this marked as deprecated?
             const outgoingConnections = connections.filter(connection => connection.source === node.id);
             if (outgoingConnections.length !== 1) {
                 console.error(`Node ${node.id} has ${outgoingConnections.length} outgoing connections instead of 1`);
             }
-            targetNodeId = outgoingConnections[0].target;
+            
+            if (outgoingConnections.length > 0) {
+                targetNodeId = outgoingConnections[0].target;
+            }
         }
         
-        toggleNodeAnimations(reactFlow, node, true, executionSpeedRef.current);
+        toggleNodeAnimations(reactFlow, node, targetNodeId, true, executionSpeedRef.current);
         
         return { targetNodeId, valuedVariables };
     }, [reactFlow]);

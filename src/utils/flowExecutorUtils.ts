@@ -1,4 +1,4 @@
-import { Node, getConnectedEdges, ReactFlowInstance } from "@xyflow/react";
+import { Node, ReactFlowInstance } from "@xyflow/react";
 import { RefObject } from "react";
 import { IValuedVariable, ValuedVariable } from "../models/ValuedVariable";
 import { VariableType } from "../models/Variable";
@@ -6,21 +6,18 @@ import { VariableType } from "../models/Variable";
 /**
  * Animates/deactivates outgoing edges from a node
  */
-export function animateNodeOutgoingEdges(
+export function animateNodeOutgoingEdge(
   reactFlow: ReactFlowInstance,
   node: Node,
+  targetNodeId: string,
   animated: boolean,
   executionSpeed?: number
 ): void {
     const edges = reactFlow.getEdges();
-    const connectedEdges = getConnectedEdges([node], edges);
-    const outgoingEdges = connectedEdges.filter(edge => edge.source === node.id);
+    const targetEdge = edges.find(edge => edge.source === node.id && edge.target === targetNodeId);
 
-    // TODO: instead of animating ALL outgoing edges, only animate the edge which has as target the next node to be processed in the queue
-        // although parallel execution is not allowed and nodes with multiple outgoing edges are only conditionals which only will have 1 outcome branch...
-    
-    for (const edge of outgoingEdges) {
-      reactFlow.updateEdgeData(edge.id, {
+    if (targetEdge) {
+      reactFlow.updateEdgeData(targetEdge.id, {
         isAnimated: animated,
         animationDuration: animated ? executionSpeed : undefined
       });
@@ -104,9 +101,9 @@ export function resetAllAnimations(reactFlow: ReactFlowInstance): void {
 /**
  * Toggles the animations of a node (outgoing edges and node highlight)
  */
-export function toggleNodeAnimations(reactFlow: ReactFlowInstance, node: Node, animated: boolean, executionSpeed?: number): void {
+export function toggleNodeAnimations(reactFlow: ReactFlowInstance, node: Node, targetNodeId: string, animated: boolean, executionSpeed?: number): void {
   toggleNodeHighlight(reactFlow, node, animated);
-  animateNodeOutgoingEdges(reactFlow, node, animated, executionSpeed);
+  animateNodeOutgoingEdge(reactFlow, node, targetNodeId, animated, executionSpeed);
 }
 
 /**
