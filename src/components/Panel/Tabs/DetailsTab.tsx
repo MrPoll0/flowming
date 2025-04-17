@@ -266,7 +266,7 @@ const DetailsTab = () => {
         reactFlowInstance.getNode(previousNodeIdRef.current)?.type !== selectedNode.type) {
       setExpression(null);
       // Also reset leftSideVariable to avoid side effects with AssignVariable type
-      if (selectedNode.type !== 'AssignVariable') {
+      if (selectedNode.type !== 'AssignVariable' && selectedNode.type !== 'Input') {
         setLeftSideVariable('');
       }
     }
@@ -339,6 +339,18 @@ const DetailsTab = () => {
           }
         }
       }
+    } else if (selectedNode && selectedNode.type === 'Input') {
+      // Load input variable data if available
+      if (previousNodeIdRef.current !== selectedNode.id) {
+        previousNodeIdRef.current = selectedNode.id;
+        
+        // Initialize with existing variable if available
+        if (selectedNode.data.variable && selectedNode.data.variable.id) {
+          setLeftSideVariable(selectedNode.data.variable.id);
+        } else {
+          setLeftSideVariable('');
+        }
+      }
     } else {
       previousNodeIdRef.current = null;
       setVariables([]);
@@ -351,6 +363,26 @@ const DetailsTab = () => {
       clearUpdateTimeout();
     };
   }, [selectedNode]);
+  
+  // Update the node data when variable changes for Input node
+  useEffect(() => {
+    if (selectedNode?.type === 'Input' && !isInitialLoadRef.current) {
+      const allVariables = getAllVariables();
+      const selectedVariable = allVariables.find(v => v.id === leftSideVariable);
+      
+      let updatedData;
+      if (selectedVariable) {
+        updatedData = {
+          variable: selectedVariable
+        };
+      } else {
+        updatedData = { variable: null };
+      }
+      
+      // Update the node data
+      reactFlowInstance.updateNodeData(selectedNode.id, updatedData);
+    }
+  }, [leftSideVariable, reactFlowInstance, selectedNode]);
   
   // Save variables when they change
   useEffect(() => {
@@ -1630,6 +1662,59 @@ const DetailsTab = () => {
       </DndContext>
     );
   };
+
+  // Render input editor for Input nodes
+  const renderInputEditor = () => {
+    if (!selectedNode || selectedNode.type !== 'Input') return null;
+    
+    const allVariables = getAllVariables();
+    
+    // Style for section boxes
+    const sectionStyle = {
+      marginBottom: '15px',
+      border: '1px solid #ddd',
+      borderRadius: '4px',
+      padding: '10px',
+    };
+    
+    return (
+      <div key={selectedNode.id}>
+        <h4>Input Configuration</h4>
+        
+        {/* Variable selection */}
+        <div style={sectionStyle}>
+          <h5 style={{ marginTop: 0, marginBottom: '10px' }}>Select Input Variable</h5>
+          <select
+            value={leftSideVariable}
+            onChange={(e) => {
+              const newValue = e.target.value;
+              setLeftSideVariable(newValue);
+            }}
+            style={{
+              width: '100%',
+              padding: '8px',
+              borderRadius: '4px',
+              border: '1px solid #ccc',
+              backgroundColor: isRunning ? '#f0f0f0' : 'white',
+              cursor: isRunning ? 'not-allowed' : 'pointer'
+            }}
+            disabled={isRunning}
+          >
+            <option value="">-- Select Variable --</option>
+            {allVariables.map(variable => (
+              <option key={variable.id} value={variable.id}>
+                {variable.name} ({variable.type})
+              </option>
+            ))}
+          </select>
+          
+          <div style={{ marginTop: '15px', fontStyle: 'italic', color: '#888' }}>
+            During execution, the program will prompt for this variable's value.
+          </div>
+        </div>
+      </div>
+    );
+  };
     
   return (
     <>
@@ -1650,7 +1735,7 @@ const DetailsTab = () => {
             {renderVariableEditor()}
           </div>
 
-          {/* Scrollable assignment editor */}
+          {/* Scrollable editors */}
           <div style={{ 
             flex: 1,
             overflowY: 'auto',
@@ -1658,6 +1743,7 @@ const DetailsTab = () => {
           }}>
             {renderAssignmentEditor()}
             {renderConditionalEditor()}
+            {renderInputEditor()}
           </div>
         </div>
       ) : (

@@ -74,7 +74,7 @@ const inputNodeBlock: NodeBlock = {
   nodeType: 'Input',
   description: 'Input node',
   defaultData: {
-    width: 150,
+    width: 175,
     height: 50,
   }
 };
@@ -87,7 +87,7 @@ const outputNodeBlock: NodeBlock = {
   nodeType: 'Output',
   description: 'Output node',
   defaultData: {
-    width: 150,
+    width: 175,
     height: 50,
   }
 };

@@ -11,8 +11,6 @@ interface InputNode extends BaseNode {
 const Input = memo(function InputComponent({ data, id: nodeId }: { data: InputNode; id: string }) {
   const { isHovered, isSelected, isHighlighted, variable, width, height } = data;
 
-  const label = variable ? `${variable.name} = Input` : 'Input';
-
   return (
     <div className="input-node" style={getNodeStyles({
       isHovered,
@@ -23,15 +21,16 @@ const Input = memo(function InputComponent({ data, id: nodeId }: { data: InputNo
       additionalStyles: { transform: 'skewX(-20deg)', transformOrigin: '0 0' }
     })}>
       <div style={{ transform: 'skewX(20deg)', transformOrigin: '50% 50%' }}>
-        <div style={{ fontWeight: 'bold', textAlign: 'center', marginBottom: '10px' }}>{label}</div>
+        <div style={{ fontWeight: 'bold', textAlign: 'center', marginBottom: '10px' }}>Input</div>
 
         {variable ? (
           <div style={{
-            textAlign: 'center', 
-            color: '#888', 
+            textAlign: 'center',
             padding: '5px 10px',
-            fontStyle: 'italic',
+            backgroundColor: '#f5f5f5',
+            borderRadius: '4px',
             fontSize: '14px',
+            fontFamily: 'monospace',
             marginBottom: '4px'
           }}>
             <code>{variable.name}</code>
