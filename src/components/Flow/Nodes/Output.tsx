@@ -13,6 +13,9 @@ const Output = memo(function OutputComponent({ data, id: nodeId }: { data: Outpu
 
   // TODO: expression is not Expression but ExpressionElement[]
   // or just Expression without leftSide? (setup in constructor)
+  // but it may be an extension of Expression or somewhat because it can also have string concatenation, commas, etc (e.g. variable1, variable2?)
+
+  const expr = expression && !(expression instanceof Expression) ? Expression.fromObject(expression) : null;
 
   return (
     <div className="output-node" style={getNodeStyles({
@@ -26,7 +29,7 @@ const Output = memo(function OutputComponent({ data, id: nodeId }: { data: Outpu
       <div style={{ transform: 'skewX(20deg)', transformOrigin: '50% 50%' }}>
         <div style={{ fontWeight: 'bold', textAlign: 'center', marginBottom: '10px' }}>Output</div>
 
-        {expression ? (
+        {expr && !expr.isEmpty() ? (
           <div style={{
             padding: '5px 10px',
             backgroundColor: '#f5f5f5',
@@ -34,7 +37,7 @@ const Output = memo(function OutputComponent({ data, id: nodeId }: { data: Outpu
             fontSize: '14px',
             fontFamily: 'monospace',
           }}>
-            <code>{expression instanceof Expression ? expression.toString() : Expression.fromObject(expression).toString()}</code>
+            <code>{expr.toString()}</code>
           </div>
         ) : (
           <div style={{
