@@ -180,6 +180,7 @@ const DetailsTab = () => {
   const isInitialLoadRef = useRef(true);
   const updateTimeoutRef = useRef<number | null>(null);
   const previousNodeIdRef = useRef<string | null>(null);
+  const scrollableContainerRef = useRef<HTMLDivElement>(null); // Ref for the scrollable container
 
   const [expression, setExpression] = useState<Expression | null>(null);
   
@@ -261,6 +262,11 @@ const DetailsTab = () => {
   useEffect(() => {
     // Reset initial load flag
     isInitialLoadRef.current = true;
+    
+    // Reset scroll position when node changes
+    if (scrollableContainerRef.current) {
+      scrollableContainerRef.current.scrollTop = 0;
+    }
     
     // Clear previous state if node type changes (to avoid Maximum depth exceeded error)
     if (previousNodeIdRef.current && selectedNode &&
@@ -1957,11 +1963,14 @@ const DetailsTab = () => {
           </div>
 
           {/* Scrollable editors */}
-          <div style={{ 
-            flex: 1,
-            overflowY: 'auto',
-            marginTop: '20px'
-          }}>
+          <div 
+            ref={scrollableContainerRef}
+            style={{ 
+              flex: 1,
+              overflowY: 'auto',
+              marginTop: '20px'
+            }}
+          >
             {renderAssignmentEditor()}
             {renderOutputEditor()}
             {renderConditionalEditor()}
