@@ -30,8 +30,6 @@ import { operators as expressionOperators, equalities, IEquality } from '../../.
 
 // TODO: reset scroll when changing between AssignVariable and Conditional nodes
 
-
-// TODO: bug when clicking in AssignVariable then Output (if no clicked before ==> initialize expression on node creation, not on clicking?)
 // TODO: proper expression reset depending on type (null, leftside undefined, empty array, etc)
 
 // Available operators for expression building

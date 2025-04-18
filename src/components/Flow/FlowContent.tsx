@@ -378,6 +378,13 @@ const FlowContent: React.FC = () => {
           ...(block.defaultData || {})
         },
       };
+
+      // Initialize expression for specific node types upon creation
+      if (newNode.type === 'Conditional') {
+        newNode.data.expression = new Expression([], [], '==').toObject();
+      } else if (newNode.type === 'Output') {
+        newNode.data.expression = new Expression(undefined, []).toObject();
+      }
       
       // Add the new node to the flow
       setNodes((nds) => nds.concat(newNode));
