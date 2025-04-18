@@ -530,21 +530,23 @@ const FlowContent: React.FC = () => {
 
   
   useEffect(() => {
-    // Update expressions in AssignVariable and Conditional nodes and variables in Input nodes with variable changes
+    // Update expressions in AssignVariable, Conditional, Input, and Output nodes with variable changes
     const assignVarNodes = nodes.filter(node => node.type === 'AssignVariable');
     const inputNodes = nodes.filter(node => node.type === 'Input');
     const conditionalNodes = nodes.filter(node => node.type === 'Conditional');
+    const outputNodes = nodes.filter(node => node.type === 'Output');
 
     // TODO: this needs to always be updated if new data depending on variables is added (refactor this to the node components?)
 
-    if (assignVarNodes.length === 0 && inputNodes.length === 0 && conditionalNodes.length === 0) return;
+    if (assignVarNodes.length === 0 && inputNodes.length === 0 && conditionalNodes.length === 0 && outputNodes.length === 0) return;
 
     setNodes(prevNodes => 
       prevNodes.map(node => {
-        if (node.type !== 'AssignVariable' && node.type !== 'Input' && node.type !== 'Conditional') return node;
+        if (node.type !== 'AssignVariable' && node.type !== 'Input' && node.type !== 'Conditional' && node.type !== 'Output') return node;
         if (node.type === 'AssignVariable' && !node.data.expression) return node;
         if (node.type === 'Conditional' && !node.data.expression) return node;
         if (node.type === 'Input' && !node.data.variable) return node;
+        if (node.type === 'Output' && !node.data.expression) return node;
 
         if (node.type === 'AssignVariable') {
           try {
@@ -577,6 +579,20 @@ const FlowContent: React.FC = () => {
           }
         } else if (node.type === 'Input') {
           return { ...node, data: { ...node.data, variable: variables.find(v => v.id === node.data.variable.id) } };
+        } else if (node.type === 'Output') {
+          try {
+            // Create an Expression instance from the stored object
+            const expression = Expression.fromObject(node.data.expression);
+            
+            // Update variable references
+            expression.updateVariables(variables);
+            
+            // Return updated node with the latest expression data
+            return { ...node, data: { ...node.data, expression: expression.toObject() } };
+          } catch (error) {
+            // Error means that the variable was deleted, so we need to delete the expression;
+            return { ...node, data: { ...node.data, expression: null } };
+          }
         }
         return node;
       })
