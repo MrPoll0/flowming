@@ -43,6 +43,9 @@ class DeclareVariableProcessor implements NodeProcessor {
     // NOTE: inconsistencies between Variable and ValuedVariable (in type, id, etc) could be a problem
     // but since Variable cannot be modified during execution and ValuedVariable only exists during it, that wont be an issue
     
+
+    // TODO: get all the data with getNode(nodeId) directly?
+
     let currentValuedVariables: ValuedVariable<VariableType>[] = [];
     const uniqueVariableIds = new Set<string>(); // Set to track unique variable IDs
 

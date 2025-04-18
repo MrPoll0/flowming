@@ -21,6 +21,9 @@ class AssignVariableProcessor implements NodeProcessor {
       return []; // NOTE: returning [] will cause the currentValuedVariables to be returned unchanged
                  // do not return this.currentValuedVariables as its an array of objects and not class instances
     }
+
+
+    // TODO: get all the data with getNode(nodeId) directly?
     
     let currentValuedVariables: ValuedVariable<VariableType>[] = [];
     // Get the current valued variables from the current node, which are stored as objects in node.data

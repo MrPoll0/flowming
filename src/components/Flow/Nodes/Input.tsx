@@ -11,44 +11,44 @@ interface InputNode extends BaseNode {
 }
 
 class InputProcessor implements NodeProcessor {
-    constructor(private reactFlow: ReactFlowInstance, private nodeId: string) {}
-    
-    process(): ValuedVariable<VariableType>[] {
-      const node = this.reactFlow.getNode(this.nodeId)!;
-      const data = node.data as InputNode;
-      console.log(`Processing Input node ${this.nodeId} with variable:`, data.variable);
+  constructor(private reactFlow: ReactFlowInstance, private nodeId: string) {}
   
-      let currentValuedVariables: ValuedVariable<VariableType>[] = [];
-      data.currentValuedVariables?.forEach((valuedVariable: IValuedVariable<VariableType>) => {
-        currentValuedVariables.push(ValuedVariable.fromObject(valuedVariable));
-      });
-  
-      console.log("Current valued variables:");
-      currentValuedVariables.forEach((valuedVariable: ValuedVariable<VariableType>) => {
-        console.log(valuedVariable.toString());
-      });
+  process(): ValuedVariable<VariableType>[] {
+    const node = this.reactFlow.getNode(this.nodeId)!;
+    const data = node.data as InputNode;
+    console.log(`Processing Input node ${this.nodeId} with variable:`, data.variable);
 
-      // TODO: input sanitization for XSS attacks
+    let currentValuedVariables: ValuedVariable<VariableType>[] = [];
+    data.currentValuedVariables?.forEach((valuedVariable: IValuedVariable<VariableType>) => {
+      currentValuedVariables.push(ValuedVariable.fromObject(valuedVariable));
+    });
 
-      // Get basic input from user with prompt (TODO: how to handle user input?)
-      const input = prompt(data.variable?.name);
-      if (input && data.variable) {
-        // Convert IVariable to Variable before passing to fromVariable
-        const variableObj = Variable.fromObject(data.variable);
-        const newValuedVariable = ValuedVariable.fromVariable(variableObj, input);
-        
-        // Overwrite the existing variable
-        const existingIndex = currentValuedVariables.findIndex(v => v.id === newValuedVariable.id);
-        if (existingIndex !== -1) {
-          currentValuedVariables[existingIndex] = newValuedVariable;
-        } else {
-          currentValuedVariables.push(newValuedVariable);
-        }
+    console.log("Current valued variables:");
+    currentValuedVariables.forEach((valuedVariable: ValuedVariable<VariableType>) => {
+      console.log(valuedVariable.toString());
+    });
+
+    // TODO: input sanitization for XSS attacks
+
+    // Get basic input from user with prompt (TODO: how to handle user input?)
+    const input = prompt(data.variable?.name);
+    if (input && data.variable) {
+      // Convert IVariable to Variable before passing to fromVariable
+      const variableObj = Variable.fromObject(data.variable);
+      const newValuedVariable = ValuedVariable.fromVariable(variableObj, input);
+      
+      // Overwrite the existing variable
+      const existingIndex = currentValuedVariables.findIndex(v => v.id === newValuedVariable.id);
+      if (existingIndex !== -1) {
+        currentValuedVariables[existingIndex] = newValuedVariable;
+      } else {
+        currentValuedVariables.push(newValuedVariable);
       }
-  
-      return currentValuedVariables;
     }
+
+    return currentValuedVariables;
   }
+}
 
 const Input = memo(function InputComponent({ data, id: nodeId }: { data: InputNode; id: string }) {
   const { isHovered, isSelected, isHighlighted, variable, width, height } = data;
