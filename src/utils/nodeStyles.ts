@@ -13,19 +13,16 @@ interface NodeStyleOptions {
   additionalStyles?: React.CSSProperties;
 }
 
-export function getNodeStyles({
+
+// TODO: move this to NodeTypes? (even rename that to BaseNode or similar)
+
+export function getNodeActionsStyles({
   isHovered,
   isSelected,
   isHighlighted,
-  borderRadius = '0px',
-  padding = '10px 20px',
-  minWidth = '250px',
-  minHeight,
   additionalStyles = {}
 }: NodeStyleOptions): React.CSSProperties {
   return {
-    borderRadius, 
-    padding,
     border: isHighlighted
       ? '2px solid #0066ff'
       : isSelected 
@@ -40,6 +37,27 @@ export function getNodeStyles({
         : isHovered 
           ? '0 0 5px rgba(77, 156, 255, 0.5)' 
           : 'none',
+    ...additionalStyles
+  };
+}
+export function getNodeStyles({
+  isHovered,
+  isSelected,
+  isHighlighted,
+  borderRadius = '0px',
+  padding = '10px 20px',
+  minWidth = '250px',
+  minHeight,
+  additionalStyles = {}
+}: NodeStyleOptions): React.CSSProperties {
+  return {
+    borderRadius, 
+    padding,
+    ...getNodeActionsStyles({
+      isHovered,
+      isSelected,
+      isHighlighted,
+    }),
     backgroundColor: '#fff',
     display: 'flex',
     flexDirection: 'column',

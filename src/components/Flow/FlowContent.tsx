@@ -24,7 +24,7 @@ import ContextMenu from './ContextMenu';
 import { useDnD } from '../../context/DnDContext';
 import { useFlowExecutorContext } from '../../context/FlowExecutorContext';
 import { Expression } from '../../models';
-
+import { decisionEdgeLabels } from './Nodes/Conditional';
 
 const FlowContent: React.FC = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -378,6 +378,13 @@ const FlowContent: React.FC = () => {
           ...(block.defaultData || {})
         },
       };
+
+      // Initialize expression for specific node types upon creation
+      if (newNode.type === 'Conditional') {
+        newNode.data.expression = new Expression([], [], '==').toObject();
+      } else if (newNode.type === 'Output') {
+        newNode.data.expression = new Expression(undefined, []).toObject();
+      }
       
       // Add the new node to the flow
       setNodes((nds) => nds.concat(newNode));
@@ -396,13 +403,47 @@ const FlowContent: React.FC = () => {
       // Create a copy of current edges
       let newEdges = [...eds];
       
-      // For every node except Conditional, limit the number of outgoing edges to 1
-      if (sourceNode?.type != 'Conditional') {
+      // For conditional nodes, limit to 2 outgoing edges (True/Yes and False/No)
+      if (sourceNode?.type === 'Conditional') {
+        // Get existing outgoing edges for this conditional node
+        const existingOutgoingEdges = newEdges.filter(edge => edge.source === params.source);
+        
+        // If already has 2 edges, don't allow more connections (not even replace) [TODO: consistency with non-conditional nodes?]
+        if (existingOutgoingEdges.length >= 2) {
+          return newEdges;
+        }
+        
+        // Determine label for new edge based on existing edges
+        const hasYesEdge = existingOutgoingEdges.some(edge => 
+          edge.data?.conditionalLabel === decisionEdgeLabels[1]);
+        const hasNoEdge = existingOutgoingEdges.some(edge => 
+          edge.data?.conditionalLabel === decisionEdgeLabels[0]);
+
+        let newEdgeLabel = '';
+        if (!hasYesEdge && !hasNoEdge) {
+          // If no yes nor no edge, set the label randomly (TODO: think this through, user experience?)
+          newEdgeLabel = decisionEdgeLabels[Math.floor(Math.random() * decisionEdgeLabels.length)];
+        } else {
+          newEdgeLabel = hasYesEdge ? decisionEdgeLabels[0] : decisionEdgeLabels[1];
+        }
+          
+        const newEdgeParams = {
+          ...params,
+          data: {
+            ...params.data,
+            conditionalLabel: newEdgeLabel,
+          }
+        };
+        
+        // Add the new edge with appropriate label
+        return addEdge(newEdgeParams, newEdges);
+      } else {
+        // For every node except Conditional, limit the number of outgoing edges to 1
         newEdges = newEdges.filter(edge => edge.source !== params.source);
+        
+        // Add the new edge
+        return addEdge(params, newEdges);
       }
-      
-      // Add the new edge
-      return addEdge(params, newEdges);
     });
   };
 
@@ -494,28 +535,73 @@ const FlowContent: React.FC = () => {
   }, [deleteNodeVariables, selectedElement, setSelectedNode, setSelectedElement]);
 
 
-  // Update expressions in AssignVariable nodes with variable changes
+  
   useEffect(() => {
+    // Update expressions in AssignVariable, Conditional, Input, and Output nodes with variable changes
     const assignVarNodes = nodes.filter(node => node.type === 'AssignVariable');
-    if (assignVarNodes.length === 0) return;
+    const inputNodes = nodes.filter(node => node.type === 'Input');
+    const conditionalNodes = nodes.filter(node => node.type === 'Conditional');
+    const outputNodes = nodes.filter(node => node.type === 'Output');
+
+    // TODO: this needs to always be updated if new data depending on variables is added (refactor this to the node components?)
+
+    if (assignVarNodes.length === 0 && inputNodes.length === 0 && conditionalNodes.length === 0 && outputNodes.length === 0) return;
 
     setNodes(prevNodes => 
       prevNodes.map(node => {
-        if (node.type !== 'AssignVariable' || !node.data.expression) return node;
+        if (node.type !== 'AssignVariable' && node.type !== 'Input' && node.type !== 'Conditional' && node.type !== 'Output') return node;
+        if (node.type === 'AssignVariable' && !node.data.expression) return node;
+        if (node.type === 'Conditional' && !node.data.expression) return node;
+        if (node.type === 'Input' && !node.data.variable) return node;
+        if (node.type === 'Output' && !node.data.expression) return node;
 
-        try {
-          // Create an Expression instance from the stored object
-          const expression = Expression.fromObject(node.data.expression);
-          
-          // Update variable references
-          expression.updateVariables(variables);
-          
-          // Return updated node with the latest expression data
-          return { ...node, data: { ...node.data, expression: expression.toObject() } };
-        } catch (error) {
-          // Error means that the variable was deleted, so we need to delete the expression;
-          return { ...node, data: { ...node.data, expression: null } };
+        if (node.type === 'AssignVariable') {
+          try {
+            // Create an Expression instance from the stored object
+            const expression = Expression.fromObject(node.data.expression);
+            
+            // Update variable references
+            expression.updateVariables(variables);
+            
+            // Return updated node with the latest expression data
+            return { ...node, data: { ...node.data, expression: expression.toObject() } };
+          } catch (error) {
+            // Error means that the variable was deleted, so we need to delete the expression;
+            return { ...node, data: { ...node.data, expression: null } };
+          }
+        } else if (node.type === 'Conditional') {
+          // TODO: refactor this
+          try {
+            // Create an Expression instance from the stored object
+            const expression = Expression.fromObject(node.data.expression);
+            
+            // Update variable references
+            expression.updateVariables(variables);
+            
+            // Return updated node with the latest expression data
+            return { ...node, data: { ...node.data, expression: expression.toObject() } };
+          } catch (error) {
+            // Error means that the variable was deleted, so we need to delete the expression;
+            return { ...node, data: { ...node.data, expression: null } };
+          }
+        } else if (node.type === 'Input') {
+          return { ...node, data: { ...node.data, variable: variables.find(v => v.id === node.data.variable.id) } };
+        } else if (node.type === 'Output') {
+          try {
+            // Create an Expression instance from the stored object
+            const expression = Expression.fromObject(node.data.expression);
+            
+            // Update variable references
+            expression.updateVariables(variables);
+            
+            // Return updated node with the latest expression data
+            return { ...node, data: { ...node.data, expression: expression.toObject() } };
+          } catch (error) {
+            // Error means that the variable was deleted, so we need to delete the expression;
+            return { ...node, data: { ...node.data, expression: null } };
+          }
         }
+        return node;
       })
     );
   }, [variables, setNodes]);
@@ -632,6 +718,18 @@ const FlowContent: React.FC = () => {
           // TODO: checkout ReactFlowInstance.getNodeConnections that returns NodeConnection[] with edgeId and source/target and source/targetHandle
 
 
+          // TODO: check https://reactflow.dev/examples/nodes/add-node-on-edge-drop
+          // https://reactflow.dev/examples/nodes/easy-connect
+
+
+          // TODO: disable adding blocks to flow when executing
+          
+
+          // TODO: disable edge creation when executing
+
+          // TODO: handle float correctly in AssignVariable
+
+          // TODO: are variables (normal) being resetted correctly?
 
           // (should be fixed now by using ReactFlow drag & drop events)
           // TODO: bug - sometimes when dragging a node handle, it appears like you were dragging a block from toolbar and you kind of "drag" what you copied

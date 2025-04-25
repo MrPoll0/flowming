@@ -1,14 +1,8 @@
-export type ExpressionElementType = 'variable' | 'operator' | 'literal';
-
-export interface ExpressionElement {
-  id: string;
-  type: ExpressionElementType;
-  value: string; // The display value
-  variableId?: string; // For variables, store the ID for resilience
-}
+import { ValuedVariable } from '../../../models/ValuedVariable';
+import { VariableType } from '../../../models/Variable';
 
 export interface NodeProcessor {
-    process: () => void;
+    process: () => ValuedVariable<VariableType>[] | { valuedVariables: ValuedVariable<VariableType>[], result: boolean };
 }
 
 export interface BaseNode {
@@ -18,6 +12,7 @@ export interface BaseNode {
     isHovered?: boolean;
     isSelected?: boolean;
     isHighlighted?: boolean;
+    currentValuedVariables?: ValuedVariable<VariableType>[];
     processor?: NodeProcessor;
     [key: string]: any; // TODO: remove this?
 }

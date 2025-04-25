@@ -9,6 +9,7 @@ interface FlowlineData extends Record<string, unknown> {
     isEditing?: boolean;
     isAnimated?: boolean;
     animationDuration?: number;
+    conditionalLabel?: string;
 }
 
 // Memoize the node component to prevent unnecessary re-renders
@@ -180,7 +181,62 @@ const Flowline: FC<EdgeProps<Edge<FlowlineData>>> = (props) => {
                     </motion.svg>
                 )}
             </AnimatePresence>
+
+            {/* Conditional edge label (True/Yes False/No) */}
+            {data?.conditionalLabel && (
+                <EdgeLabelRenderer>
+                    <div
+                        style={{
+                            position: 'absolute',
+                            background: 'transparent',
+                            padding: 10,
+                            fontSize: 12,
+                            fontWeight: 700,
+                            transform: (() => {
+                                // Calculate edge direction
+                                const xDiff = props.targetX - props.sourceX;
+                                const yDiff = props.targetY - props.sourceY;
+                                const xOffset = 13;
+                                const yOffset = 13;
+                                
+                                let x = props.sourceX;
+                                let y = props.sourceY;
+                                
+                                // Handle vertical connections (top/bottom)
+                                if (props.sourcePosition === 'top' || props.sourcePosition === 'bottom') {
+                                    // Correct y offset for good visual
+                                    if(props.sourcePosition === 'top') y -= yOffset;
+                                    else y += yOffset;
+
+                                    // If edge goes left, place label to the left
+                                    if (xDiff < 0) x += xOffset;
+                                    // If edge goes right, place label to the right
+                                    else if (xDiff > 0) x -= xOffset;
+                                }
+                                
+                                // Handle horizontal connections (left/right)
+                                if (props.sourcePosition === 'left' || props.sourcePosition === 'right') {
+                                    // Correct x offset for good visual
+                                    if(props.sourcePosition === 'left') x -= xOffset;
+                                    else x += xOffset;
+
+                                    // If edge goes up, place label above
+                                    if (yDiff < 0) y += yOffset;
+                                    // If edge goes down, place label below
+                                    else if (yDiff > 0) y -= yOffset;
+                                }
+                                
+                                return `translate(-50%, -50%)translate(${x}px, ${y}px)`;
+                            })(),
+                        }}
+                        className="nodrag nopan"
+                    >
+                        {data.conditionalLabel}
+                    </div>
+                </EdgeLabelRenderer>
+            )}
             
+            {/* Editable edge label */}
             {(isEditing || labelText || data?.label) && (
                 <EdgeLabelRenderer>
                     <div

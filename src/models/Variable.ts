@@ -1,27 +1,37 @@
 // Available variable types
 export const variableTypes = [
-    'string',
-    'integer',
-    'float',
-    'boolean',
-    'array'
-  ];
+  'string',
+  'integer',
+  'float',
+  'boolean',
+  //'array'
+] as const;
+
+export type VariableType = typeof variableTypes[number];
+
+export type ValueTypeMap = {
+  string: string;
+  integer: number;
+  float: number;
+  boolean: boolean;
+  //array: any[];
+};
 
 // Define the variable structure
 export interface IVariable {
-    id: string;
-    type: string;
-    name: string;
-    nodeId: string; // ID of the node that declared this variable
+  id: string;
+  type: VariableType;
+  name: string;
+  nodeId: string; // ID of the node that declared this variable
 }
 
 export class Variable implements IVariable {
   id: string;
-  type: string;
+  type: VariableType;
   name: string;
   nodeId: string;
 
-  constructor(id: string, type: string, name: string, nodeId: string) {
+  constructor(id: string, type: VariableType, name: string, nodeId: string) {
     this.id = id;
     this.type = type;
     this.name = name;
@@ -70,7 +80,7 @@ export class Variable implements IVariable {
   /**
    * Creates an object representation of the variable
    */
-  toObject(): {id: string, type: string, name: string, nodeId: string} {
+  toObject(): IVariable {
     return {id: this.id, type: this.type, name: this.name, nodeId: this.nodeId};
   }
 
@@ -78,6 +88,6 @@ export class Variable implements IVariable {
    * Creates a Variable from a plain object
    */
   static fromObject(obj: IVariable): Variable {
-    return new Variable(obj.id, obj.type, obj.name, obj.nodeId);
+    return new Variable(obj.id, obj.type as VariableType, obj.name, obj.nodeId);
   }
 } 
