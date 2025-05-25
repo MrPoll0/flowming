@@ -112,9 +112,6 @@ export function useFlowExecutor(): IExecutor {
         if (node.type === "Conditional") {
             // Special handling for condition nodes
  
-            // TODO: processor.process() returns true or false depending on the result
-            // then this gets the node target (getNodeConnections?) that corresponds to the result (Yes/No) and return that node id
-            // so that processCurrentNode can pick it up
             const conditionResult = processorResult && typeof processorResult === 'object' && 'result' in processorResult 
                 ? processorResult.result 
                 : false;
@@ -124,6 +121,8 @@ export function useFlowExecutor(): IExecutor {
             
             // Find the connection for Yes (true) or No (false) based on the condition result
             const targetLabel = conditionResult ? decisionEdgeLabels[1] : decisionEdgeLabels[0];
+
+            // TODO: if both outgoing connections go to the same node, then we are not exactly choosing the correct one (Yes/No), but the first one
             
             // Find the edge with matching label
             const matchingConnection = outgoingConnections.find(connection => {
@@ -144,7 +143,7 @@ export function useFlowExecutor(): IExecutor {
                 }
             }
         } else {
-            const connections = reactFlow.getNodeConnections({ nodeId: node.id }); // TODO: why is this marked as deprecated?
+            const connections = reactFlow.getNodeConnections({ nodeId: node.id });
             const outgoingConnections = connections.filter(connection => connection.source === node.id);
             if (outgoingConnections.length !== 1) {
                 console.error(`Node ${node.id} has ${outgoingConnections.length} outgoing connections instead of 1`);

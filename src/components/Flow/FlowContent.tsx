@@ -54,6 +54,9 @@ const FlowContent: React.FC = () => {
 
   // TODO: possible problems when modifying node data from multiple places at the same time?
 
+
+  // TODO: conditional edges cannot be created after being created, runned, etc
+
   // Apply visual styles based on hover and selection states
   useEffect(() => {
     // Apply styles to nodes

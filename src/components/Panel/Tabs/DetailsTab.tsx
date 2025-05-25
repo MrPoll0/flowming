@@ -28,8 +28,6 @@ import { operators as expressionOperators, equalities, IEquality } from '../../.
 
 // TODO: if cannot select element while running, then also hide its editor in DetailsTab for consistency (i prefer being able to select elements while running and see their values but not modify them)
 
-// TODO: reset scroll when changing between AssignVariable and Conditional nodes
-
 // TODO: proper expression reset depending on type (null, leftside undefined, empty array, etc)
 
 // Available operators for expression building
