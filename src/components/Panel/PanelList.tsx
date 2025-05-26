@@ -33,10 +33,6 @@ const topPanelTabs: PanelTab[] = [
   
   const bottomPanelTabs: PanelTab[] = [
     {
-      label: "Comandos",
-      content: <CommandTab />
-    },
-    {
       label: "Depurador",
       content: <DebuggerTab />
     }
