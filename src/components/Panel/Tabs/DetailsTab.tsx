@@ -205,22 +205,27 @@ const DetailsTab = () => {
 
   // Initialize expression when variable is selected
   useEffect(() => {
-    if (selectedNode?.type === 'AssignVariable' && leftSideVariable) {
-      const varInstance = getAllVariables().find(v => v.id === leftSideVariable);
+    if (selectedNode?.type === 'AssignVariable') {
+      if (leftSideVariable) {
+        const varInstance = getAllVariables().find(v => v.id === leftSideVariable);
 
-      if (!varInstance) {
+        if (!varInstance) {
+          if (expression !== null) setExpression(null);
+          return;
+        }
+
+        // Only update if the left side has changed or if the expression is null
+        if (!expression || (expression.leftSide instanceof Variable && expression.leftSide.id !== varInstance.id)) {
+          // Preserve right side if expression already exists and has one
+          setExpression(new Expression(varInstance, expression?.rightSide || []));
+        }
+      } else { // AssignVariable selected, but no variable chosen for its LHS, so reset expression
         if (expression !== null) setExpression(null);
-        return;
       }
-
-      // Only update if the left side has changed
-      if (!expression || (expression.leftSide instanceof Variable && expression.leftSide.id !== varInstance.id)) {
-        setExpression(new Expression(varInstance, expression?.rightSide || []));
-      }
-    } else if (!leftSideVariable) {
-      if (expression !== null) setExpression(null);
     }
-  }, [leftSideVariable, selectedNode]);
+    // For other node types, their expressions are managed by the main useEffect hook that listens to selectedNode changes
+    // and reloads/initializes expressions from node.data. This hook should not interfere.
+  }, [leftSideVariable, selectedNode, getAllVariables, expression]);
 
   // Update the node data when expression changes
   useEffect(() => {
@@ -371,7 +376,7 @@ const DetailsTab = () => {
     };
   }, [selectedNode]);
   
-  // Update the node data when variable changes for Input node (TODO: is this needed or already done in other useEffect?)
+  // Update the node data when variable changes for Input node (TODO: is this needed or already done in other useEffect?) [needed for this specific case because of variable]
   useEffect(() => {
     if (selectedNode?.type === 'Input' && !isInitialLoadRef.current) {
       const allVariables = getAllVariables();
