@@ -609,13 +609,29 @@ const FlowContent: React.FC = () => {
     );
   }, [variables, setNodes]);
 
-  // Prevent self-connections (a node connecting to itself)
   const isValidConnection: IsValidConnection = useCallback(
     (connection: Connection | Edge) => {
-      // If source and target are the same node, it's an invalid connection
-      return connection.source !== connection.target;
+      // Prevent self-connections (a node connecting to itself)
+      if (connection.source === connection.target) {
+        return false;
+      }
+
+      const sourceNode = nodes.find(node => node.id === connection.source);
+
+      // Get the existing edges from the source handle
+      const existingEdgesFromHandle = edges.filter(
+        edge => edge.source === connection.source && edge.sourceHandle === connection.sourceHandle
+      );
+
+      // Only for the case of Conditional nodes (as dragging a new edge from a handle if there are already Yes/No wont create a new edge, per onConnect)
+      // If there's already an edge from this specific handle, prevent another one (1 outgoing edge per handle Yes/No to prevent label confusion and follow standard)
+      if (sourceNode?.type === 'Conditional' && existingEdgesFromHandle.length > 0) {
+        return false;
+      }
+
+      return true;
     },
-    []
+    [edges]
   );
 
   return (
@@ -746,7 +762,17 @@ const FlowContent: React.FC = () => {
               at HTMLDivElement.handleDirectDrop (FlowContent.tsx:268:28)
 
           */
-          
+
+
+
+          // TODO: Yes/No labels in arrows are in the contrary side (Conditional, get 2 arrows from below to each side; same with from side to up and down)
+          // ===> NO! it is correct. but Yes/No labels must come from DIFFERENT handles
+          // cannot use the same handle for both (this should apply also for other nodes connections)
+
+
+
+
+          // Timer: https://www.timeanddate.com/countdown/generic?iso=20250616T12&p0=%3A&font=cursive
 
           type: 'Flowline',
         }}
