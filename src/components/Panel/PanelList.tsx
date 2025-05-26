@@ -22,7 +22,7 @@ const topPanelTabs: PanelTab[] = [
       content: <CodeTab />
     },
     {
-      label: "Problemas",
+      label: "Ejercicios",
       content: <ProblemTab />
     },
     {
