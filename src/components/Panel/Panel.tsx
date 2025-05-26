@@ -16,7 +16,7 @@ const mapping: Record<PanelType, PanelTab[]> = {
 
 const Panel: React.FC<PanelProps> = ({ type }) => {
   return (
-    <Tabs>
+    <Tabs forceRenderTabPanel={true}>
       {/* Tabs label definition */}
       <TabList>
         {mapping[type].map((tab, index) => (
