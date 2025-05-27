@@ -779,7 +779,7 @@ const FlowContent: React.FC = () => {
         <Controls />
         <Background variant={BackgroundVariant.Lines} gap={12} size={1} />
         <Panel style={{ userSelect: 'none' }}> {/* prevent text selection when double clicking on edge */}
-          Nombre del archivo/diagrama (TODO)
+          File/diagram name (TODO)
         </Panel>
       </ReactFlow>
       <ContextMenu onDelete={onDelete} />

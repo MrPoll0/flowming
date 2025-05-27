@@ -13,26 +13,26 @@ export interface PanelTab {
 
 const topPanelTabs: PanelTab[] = [
     {
-      label: "Detalles",
+      label: "Details",
       content: <DetailsTab />
     },
     {
-      label: "Ejercicios",
+      label: "Exercises",
       content: <ExercisesTab />
     },
     {
-      label: "Colaborar",
+      label: "Collaboration",
       content: <CollaborateTab />
     }
   ];
   
 const bottomPanelTabs: PanelTab[] = [
     {
-      label: "Depurador",
+      label: "Debugger",
       content: <DebuggerTab />
     },
     {
-      label: "Código",
+      label: "Code",
       content: <CodeTab />
     }
   ];

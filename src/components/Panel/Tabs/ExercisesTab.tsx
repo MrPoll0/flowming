@@ -1,7 +1,7 @@
 const ExercisesTab = () => {
     return (
         <div>
-            <h3>Ejercicios</h3>
+            <h3>Exercises</h3>
         </div>
     );
 };  

@@ -1736,7 +1736,6 @@ const DetailsTab = () => {
     
   return (
     <>
-      <h3>Details</h3>
       {selectedNode ? (
         <div className="h-full flex flex-col overflow-hidden">
           {/* Scrollable editors */}

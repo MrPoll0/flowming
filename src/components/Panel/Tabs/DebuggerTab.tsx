@@ -1,7 +1,7 @@
 const DebuggerTab = () => {
     return (
         <div>
-            <h3>Depurador</h3>
+            <h3>Debugger</h3>
         </div>
     );
 };  
