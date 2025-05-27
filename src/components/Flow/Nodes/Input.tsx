@@ -94,7 +94,7 @@ const Input = memo(function InputComponent({ data, id: nodeId }: { data: InputNo
             fontFamily: 'monospace',
             marginBottom: '4px'
           }}>
-            <code>{variable.name}</code>
+            <code>{variable.name} = {variable.type}(👤)</code>
           </div>
         ) : (
           <div style={{
