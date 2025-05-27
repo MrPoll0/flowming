@@ -2,9 +2,8 @@
 import React from 'react';
 import DetailsTab from './Tabs/DetailsTab';
 import CodeTab from './Tabs/CodeTab';
-import ProblemTab from './Tabs/ProblemTab';
+import ExercisesTab from './Tabs/ExercisesTab';
 import CollaborateTab from './Tabs/CollaborateTab';
-import CommandTab from './Tabs/CommandTab';
 import DebuggerTab from './Tabs/DebuggerTab';
 
 export interface PanelTab {
@@ -18,12 +17,8 @@ const topPanelTabs: PanelTab[] = [
       content: <DetailsTab />
     },
     {
-      label: "Código",
-      content: <CodeTab />
-    },
-    {
       label: "Ejercicios",
-      content: <ProblemTab />
+      content: <ExercisesTab />
     },
     {
       label: "Colaborar",
@@ -31,10 +26,14 @@ const topPanelTabs: PanelTab[] = [
     }
   ];
   
-  const bottomPanelTabs: PanelTab[] = [
+const bottomPanelTabs: PanelTab[] = [
     {
       label: "Depurador",
       content: <DebuggerTab />
+    },
+    {
+      label: "Código",
+      content: <CodeTab />
     }
   ];
 

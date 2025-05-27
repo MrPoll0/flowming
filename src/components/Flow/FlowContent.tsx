@@ -159,10 +159,9 @@ const FlowContent: React.FC = () => {
       return;
     }
 
-    // Calculate cursor position relative to the ReactFlow wrapper
-    const reactFlowBounds = reactFlowWrapper.current?.getBoundingClientRect();
-    const x = event.clientX - (reactFlowBounds?.left || 0);
-    const y = event.clientY - (reactFlowBounds?.top || 0);
+    // Use viewport coordinates directly since ContextMenu is fixed positioned
+    const x = event.clientX;
+    const y = event.clientY;
 
     showContextMenu(x, y, nodes.map(node => ({ id: node.id, type: 'node' })));
   };
@@ -182,10 +181,9 @@ const FlowContent: React.FC = () => {
     setSelectedNode(node as FlowNode);
     setSelectedElement({ id: node.id, type: 'node' });
     
-    // Calculate cursor position relative to the ReactFlow wrapper
-    const reactFlowBounds = reactFlowWrapper.current?.getBoundingClientRect();
-    const x = event.clientX - (reactFlowBounds?.left || 0);
-    const y = event.clientY - (reactFlowBounds?.top || 0);
+    // Use viewport coordinates directly since ContextMenu is fixed positioned
+    const x = event.clientX;
+    const y = event.clientY;
     
     showContextMenu(x, y, [{ id: node.id, type: 'node' }]);
   };
@@ -203,10 +201,9 @@ const FlowContent: React.FC = () => {
     // Select the edge (same as in onEdgeClick)
     setSelectedElement({ id: edge.id, type: 'edge' });
     
-    // Calculate cursor position relative to the ReactFlow wrapper
-    const reactFlowBounds = reactFlowWrapper.current?.getBoundingClientRect();
-    const x = event.clientX - (reactFlowBounds?.left || 0);
-    const y = event.clientY - (reactFlowBounds?.top || 0);
+    // Use viewport coordinates directly since ContextMenu is fixed positioned
+    const x = event.clientX;
+    const y = event.clientY;
     
     showContextMenu(x, y, [{ id: edge.id, type: 'edge' }]);
   };
@@ -770,6 +767,8 @@ const FlowContent: React.FC = () => {
           // cannot use the same handle for both (this should apply also for other nodes connections)
 
 
+
+          // TODO: BUG with Conditional edges -> add both, remove one, cannot get a new one?
 
 
           // Timer: https://www.timeanddate.com/countdown/generic?iso=20250616T12&p0=%3A&font=cursive

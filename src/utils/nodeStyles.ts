@@ -16,6 +16,8 @@ interface NodeStyleOptions {
 
 // TODO: move this to NodeTypes? (even rename that to BaseNode or similar)
 
+// TODO: use shadcn/ui
+
 export function getNodeActionsStyles({
   isHovered,
   isSelected,

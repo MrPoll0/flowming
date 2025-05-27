@@ -18,7 +18,7 @@ function Start({ data }: { data: BaseNode }) {
         alignItems: 'center'
       }
     })}>
-      <div style={{ fontWeight: 'bold' }}>Start</div>
+      <div className="font-bold">Start</div>
       <Handle 
         type="source" 
         position={Position.Top} 

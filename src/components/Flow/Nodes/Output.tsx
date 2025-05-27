@@ -5,6 +5,7 @@ import { BaseNode, NodeProcessor, } from './NodeTypes';
 import { Expression, VariableType } from '../../../models';
 import { IValuedVariable } from '../../../models/ValuedVariable';
 import { ValuedVariable } from '../../../models/ValuedVariable';
+import { Badge } from '@/components/ui/badge';
 
 interface OutputNode extends BaseNode {
   expression?: Expression;
@@ -80,26 +81,14 @@ const Output = memo(function OutputComponent({ data, id: nodeId }: { data: Outpu
       additionalStyles: { transform: 'skewX(-20deg)', transformOrigin: '0 0' }
     })}>
       <div style={{ transform: 'skewX(20deg)', transformOrigin: '50% 50%' }}>
-        <div style={{ fontWeight: 'bold', textAlign: 'center', marginBottom: '10px' }}>Output</div>
+        <div className="font-bold text-center mb-2.5">Output</div>
 
         {expr && !expr.isEmpty() ? (
-          <div style={{
-            padding: '5px 10px',
-            backgroundColor: '#f5f5f5',
-            borderRadius: '4px',
-            fontSize: '14px',
-            fontFamily: 'monospace',
-          }}>
-            <code>{expr.toString()}</code>
-          </div>
+          <Badge variant="outline" className="font-mono text-sm">
+            {expr.toString()}
+          </Badge>
         ) : (
-          <div style={{
-            textAlign: 'center', 
-            color: '#888', 
-            padding: '5px 10px',
-            fontStyle: 'italic',
-            fontSize: '14px',
-          }}>
+          <div className="text-center text-muted-foreground px-2.5 py-1 italic text-sm">
             No output defined
           </div>
         )}

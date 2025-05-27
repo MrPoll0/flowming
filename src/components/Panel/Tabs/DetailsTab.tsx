@@ -25,6 +25,23 @@ import { variableTypes } from '../../../models';
 import { useFlowExecutorContext } from '../../../context/FlowExecutorContext';
 import { operators as expressionOperators, equalities, IEquality } from '../../../models/Expression';
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Label } from "@/components/ui/label";
 
 // TODO: if cannot select element while running, then also hide its editor in DetailsTab for consistency (i prefer being able to select elements while running and see their values but not modify them)
 
@@ -54,44 +71,39 @@ const DraggableExpressionElement = ({ element, removeExpressionElement, disabled
     isDragging
   } = useSortable({ id: element.id, disabled });
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    backgroundColor: 
-      element.type === 'variable' ? '#d1e7ff' :
-      element.type === 'operator' ? '#ffd1d1' : '#d1ffd1',
-    padding: '4px 8px',
-    margin: '4px',
-    borderRadius: '4px',
-    cursor: disabled ? 'not-allowed' : 'grab',
-    display: 'inline-block',
-    fontSize: '14px',
-    opacity: isDragging ? 0 : 1,
-  };
+  const bgColor = 
+    element.type === 'variable' ? 'bg-blue-100' :
+    element.type === 'operator' ? 'bg-red-100' : 'bg-green-100';
 
   return (
     <div
       ref={setNodeRef}
-      style={style}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+      }}
       {...attributes}
       {...listeners}
+      className={`
+        group relative inline-block px-2 py-1 m-1 rounded text-sm
+        ${bgColor}
+        ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-grab'}
+        ${isDragging ? 'opacity-0' : 'opacity-100'}
+      `}
     >
-      {element.value}
-      <button
-        onClick={() => removeExpressionElement(element.id)}
-        style={{
-          marginLeft: '5px',
-          background: 'none',
-          border: 'none',
-          cursor: disabled ? 'not-allowed' : 'pointer',
-          fontSize: '12px',
-          padding: '0',
-          display: 'inline-block',
-          verticalAlign: 'middle'
+      <span>{element.value}</span>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={(e) => {
+          e.stopPropagation();
+          removeExpressionElement(element.id);
         }}
+        disabled={disabled}
+        className="ml-1 h-4 w-4 p-0 text-xs opacity-70 hover:opacity-100"
       >
         ×
-      </button>
+      </Button>
     </div>
   );
 };
@@ -112,23 +124,22 @@ const DraggablePaletteItem = ({ id, value, backgroundColor, disabled }: Draggabl
     disabled
   });
 
-  const style = {
-    backgroundColor: backgroundColor || '#e0e0e0',
-    padding: '4px 8px',
-    margin: '4px',
-    borderRadius: '4px',
-    cursor: disabled ? 'not-allowed' : 'grab',
-    display: 'inline-block',
-    fontSize: '14px',
-    opacity: disabled ? 0.5 : 1,
-  };
+  // Map background colors to Tailwind classes
+  const bgColorClass = 
+    backgroundColor === '#d1e7ff' ? 'bg-blue-100' :
+    backgroundColor === '#ffd1d1' ? 'bg-red-100' :
+    backgroundColor === '#d1ffd1' ? 'bg-green-100' : 'bg-gray-200';
 
   return (
     <div
       ref={setNodeRef}
-      style={style}
       {...attributes}
       {...listeners}
+      className={`
+        inline-block px-2 py-1 m-1 rounded text-sm
+        ${bgColorClass}
+        ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-grab'}
+      `}
     >
       {value}
     </div>
@@ -144,26 +155,20 @@ const ExpressionDropArea = ({ id, children, disabled }: { id: string, children: 
   return (
     <div 
       ref={setNodeRef}
-      style={{
-        padding: '10px',
-        border: `2px ${isOver ? 'solid' : 'dashed'} ${isOver ? '#4d9cff' : '#ccc'}`,
-        borderRadius: '4px',
-        minHeight: '60px',
-        display: 'flex',
-        flexWrap: 'wrap',
-        alignItems: 'center',
-        backgroundColor: isOver ? 'rgba(77, 156, 255, 0.1)' : 'transparent',
-        opacity: disabled ? 0.5 : 1
-      }}
+      className={`
+        p-2.5 
+        ${isOver 
+          ? 'border-2 border-solid border-blue-400 bg-blue-50' 
+          : 'border-2 border-dashed border-gray-300 bg-transparent'
+        }
+        rounded 
+        min-h-[60px] 
+        flex 
+        flex-wrap 
+        items-center
+        ${disabled ? 'opacity-50' : ''}
+      `}
     >
-      { /* 
-      {isEmpty ? (
-        <span style={{ color: '#888', fontStyle: 'italic' }}>
-          Drag elements here to build expression
-        </span>
-      ) : children}
-      */
-      }
       {children}
     </div>
   );
@@ -179,6 +184,7 @@ const DetailsTab = () => {
   const updateTimeoutRef = useRef<number | null>(null);
   const previousNodeIdRef = useRef<string | null>(null);
   const scrollableContainerRef = useRef<HTMLDivElement>(null); // Ref for the scrollable container
+  const additionalInfoRef = useRef<HTMLDivElement>(null); // Ref for auto-scrolling to additional info
 
   const [expression, setExpression] = useState<Expression | null>(null);
   
@@ -197,7 +203,6 @@ const DetailsTab = () => {
   );
 
   const { isRunning } = useFlowExecutorContext();
-
 
   // NOTE: multiple useEffects
   // 1. UI changes -> state
@@ -785,84 +790,60 @@ const DetailsTab = () => {
     if (!selectedNode || selectedNode.type !== 'DeclareVariable') return null;
     
     return (
-      <div key={selectedNode.id} style={{ marginTop: '20px' }}>
-        <h4>Variable Declaration</h4>
-        
-        {variables.map((variable) => (
-          <div key={variable.id} style={{ 
-            display: 'flex', 
-            marginBottom: '8px',
-            alignItems: 'center'
-          }}>
-            <select
-              value={variable.type}
-              onChange={(e) => updateVariable(variable.id, 'type', e.target.value)}
-              style={{
-                flex: '1',
-                padding: '8px',
-                borderRadius: '4px',
-                marginRight: '8px',
-                border: '1px solid #ccc',
-                backgroundColor: isRunning ? '#f0f0f0' : 'white',
-                cursor: isRunning ? 'not-allowed' : 'pointer'
-              }}
-              disabled={isRunning}
-            >
-              {variableTypes.map(type => (
-                <option key={type} value={type}>{type}</option>
-              ))}
-            </select>
-            <input
-              value={variable.name}
-              onChange={(e) => updateVariable(variable.id, 'name', e.target.value)}
-              placeholder="Variable name"
-              style={{
-                flex: '1',
-                padding: '8px',
-                borderRadius: '4px',
-                border: '1px solid #ccc',
-                backgroundColor: isRunning ? '#f0f0f0' : 'white',
-                cursor: isRunning ? 'not-allowed' : 'pointer'
-              }}
-              disabled={isRunning}
-            />
-            {variables.length > 1 && (
-              <button 
-                onClick={() => deleteVariable(variable.id)}
-                style={{
-                  marginLeft: '8px',
-                  background: 'none',
-                  border: 'none',
-                  cursor: isRunning ? 'not-allowed' : 'pointer',
-                  fontSize: '18px'
-                }}
+      <Card className="mt-5">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Variable Declaration</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {variables.map((variable) => (
+            <div key={variable.id} className="flex items-center gap-2">
+              <Select
+                value={variable.type}
+                onValueChange={(value) => updateVariable(variable.id, 'type', value)}
                 disabled={isRunning}
               >
-                ×
-              </button>
-            )}
-          </div>
-        ))}
-        
-        <button
-          onClick={addVariable}
-          style={{
-            background: '#f0f0f0',
-            border: '1px solid #ccc',
-            borderRadius: '4px',
-            padding: '8px 12px',
-            marginTop: '10px',
-            cursor: isRunning ? 'not-allowed' : 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '100%'
-          }}
-          disabled={isRunning}
-        >
-          + Add variable
-        </button>
-      </div>
+                <SelectTrigger className="flex-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {variableTypes.map(type => (
+                    <SelectItem key={type} value={type}>{type}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              <Input
+                value={variable.name}
+                onChange={(e) => updateVariable(variable.id, 'name', e.target.value)}
+                placeholder="Variable name"
+                className="flex-1"
+                disabled={isRunning}
+              />
+              
+              {variables.length > 1 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => deleteVariable(variable.id)}
+                  disabled={isRunning}
+                  className="px-2 text-destructive hover:text-destructive"
+                >
+                  ×
+                </Button>
+              )}
+            </div>
+          ))}
+          
+          <Button
+            onClick={addVariable}
+            variant="outline"
+            className="w-full mt-3"
+            disabled={isRunning}
+          >
+            + Add variable
+          </Button>
+        </CardContent>
+      </Card>
     );
   };
 
@@ -873,24 +854,6 @@ const DetailsTab = () => {
     if (!selectedNode || selectedNode.type !== 'AssignVariable') return null;
     
     const allVariables = getAllVariables();
-    
-    // Style for expression box
-    const expressionBoxStyle = {
-      padding: '10px',
-      border: '1px solid #ccc',
-      borderRadius: '4px',
-      minHeight: '50px',
-      marginBottom: '15px',
-      backgroundColor: '#f9f9f9',
-    };
-    
-    // Style for section boxes
-    const sectionStyle = {
-      marginBottom: '15px',
-      border: '1px solid #ddd',
-      borderRadius: '4px',
-      padding: '10px',
-    };
     
     return (
       <DndContext
@@ -904,51 +867,35 @@ const DetailsTab = () => {
         <div key={selectedNode.id}>
           <h4>Variable Assignment</h4>
           
-          {/* Left side (variable selection) */}
-          <div style={sectionStyle}>
-            <h5 style={{ marginTop: 0, marginBottom: '10px' }}>Select Variable to Assign (Left-hand side)</h5>
-            <select
+          {/* Assignment header: variable, '=', expression */}
+          <div className="flex items-center gap-3 mb-4">
+            <Select
               value={leftSideVariable}
-              onChange={(e) => {
-                const newValue = e.target.value;
-                setLeftSideVariable(newValue);
-              }}
-              style={{
-                width: '100%',
-                padding: '8px',
-                borderRadius: '4px',
-                border: '1px solid #ccc',
-                backgroundColor: isRunning ? '#f0f0f0' : 'white',
-                cursor: isRunning ? 'not-allowed' : 'pointer'
-              }}
+              onValueChange={setLeftSideVariable}
               disabled={isRunning}
             >
-              <option value="">-- Select Variable --</option>
-              {allVariables.map(variable => (
-                <option key={variable.id} value={variable.id}>
-                  {variable.name} ({variable.type})
-                </option>
-              ))}
-            </select>
-          </div>
-          
-          {/* Expression display box */}
-          <div style={{ marginBottom: '15px' }}>
-            <h5 style={{ marginTop: 0, marginBottom: '5px' }}>Expression</h5>
-            <div style={expressionBoxStyle}>
-              {leftSideVariable && expression ? (
-                <>
-                  <span style={{ fontWeight: 'bold', marginBottom: '10px', display: 'block' }}>
-                    {expression.leftSide?.toString()} = 
-                  </span>
-                  
+              <SelectTrigger className="w-auto min-w-[200px]">
+                <SelectValue placeholder="-- Select Variable --" />
+              </SelectTrigger>
+              <SelectContent>
+                {allVariables.map(variable => (
+                  <SelectItem key={variable.id} value={variable.id}>
+                    {variable.name} ({variable.type})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span className="text-lg font-bold">=</span>
+            <div className="flex-1">
+              <div className="p-2.5 border border-gray-300 rounded min-h-[50px] mb-4 bg-gray-50">
+                {leftSideVariable && expression ? (
                   <ExpressionDropArea id="expression-drop-area" disabled={isRunning}>
-                    <SortableContext 
+                    <SortableContext
                       items={expression.rightSide.map(item => item.id)}
                       strategy={horizontalListSortingStrategy}
                     >
                       {expression.rightSide.map((element, index) => (
-                        <DraggableExpressionElement 
+                        <DraggableExpressionElement
                           key={element.id}
                           element={element}
                           index={index}
@@ -958,177 +905,397 @@ const DetailsTab = () => {
                       ))}
                     </SortableContext>
                   </ExpressionDropArea>
-                </>
-              ) : (
-                <span style={{ color: '#888', fontStyle: 'italic' }}>Select a variable for the left-hand side</span>
-              )}
+                ) : (
+                  <span className="text-gray-500 italic">
+                    Select a variable for the left-hand side
+                  </span>
+                )}
+              </div>
             </div>
           </div>
           
-          {/* Building blocks section */}
+          {/* Building blocks: variables, operators, literals */}
           {leftSideVariable && (
             <>
-              {/* Variables section */}
-              <div style={sectionStyle}>
-                <h5 style={{ marginTop: 0, marginBottom: '10px' }}>Variables</h5>
-                <div>
-                  {allVariables.map(variable => (
-                    <DraggablePaletteItem
-                      key={`var-${variable.id}`}
-                      id={`var-${variable.id}`}
-                      type="variable"
-                      value={variable.name}
-                      backgroundColor="#d1e7ff"
-                      disabled={isRunning}
-                    />
-                  ))}
-                  {allVariables.length === 0 && (
-                    <div style={{ color: '#888', fontStyle: 'italic' }}>No variables declared</div>
-                  )}
-                </div>
-              </div>
-              
-              {/* Operators section */}
-              <div style={sectionStyle}>
-                <h5 style={{ marginTop: 0, marginBottom: '10px' }}>Operators</h5>
-                <div>
-                  {operators.map(op => (
-                    <DraggablePaletteItem
-                      key={`op-${op}`}
-                      id={`op-${op}`}
-                      type="operator"
-                      value={op}
-                      backgroundColor="#ffd1d1"
-                      disabled={isRunning}
-                    />
-                  ))}
-                </div>
-              </div>
-              
-              {/* Literals section */}
-              <div style={sectionStyle}>
-                <h5 style={{ marginTop: 0, marginBottom: '10px' }}>Literals</h5>
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                {/* Variables column */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Variables</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {allVariables.map(variable => (
+                      <DraggablePaletteItem
+                        key={`var-${variable.id}`}
+                        id={`var-${variable.id}`}
+                        type="variable"
+                        value={variable.name}
+                        backgroundColor="#d1e7ff"
+                        disabled={isRunning}
+                      />
+                    ))}
+                    {allVariables.length === 0 && (
+                      <div className="text-muted-foreground text-sm italic">No variables declared</div>
+                    )}
+                  </CardContent>
+                </Card>
                 
+                {/* Operators column */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Operators</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {operators.map(op => (
+                      <DraggablePaletteItem
+                        key={`op-${op}`}
+                        id={`op-${op}`}
+                        type="operator"
+                        value={op}
+                        backgroundColor="#ffd1d1"
+                        disabled={isRunning}
+                      />
+                    ))}
+                  </CardContent>
+                </Card>
+                
+                {/* Literals column */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Literals</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {/* String literal */}
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">String</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          type="text"
+                          placeholder="String value"
+                          id="string-literal-input"
+                          className="flex-1"
+                          disabled={isRunning}
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const input = document.getElementById('string-literal-input') as HTMLInputElement;
+                            if (input && input.value) {
+                              const value = input.value;
+                              const element = new ExpressionElement(
+                                crypto.randomUUID(),
+                                'literal',
+                                `"${value}"`
+                              );
+                              addExpressionElement(element);
+                              input.value = '';
+                            }
+                          }}
+                          disabled={isRunning}
+                        >
+                          Add String
+                        </Button>
+                      </div>
+                    </div>
+                    {/* Integer literal */}
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Integer</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          type="number"
+                          step="1"
+                          placeholder="Integer value" 
+                          id="integer-literal-input"
+                          className="flex-1"
+                          disabled={isRunning}
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const input = document.getElementById('integer-literal-input') as HTMLInputElement;
+                            if (input && input.value) {
+                              const value = parseInt(input.value).toString();
+                              const element = new ExpressionElement(
+                                crypto.randomUUID(),
+                                'literal',
+                                value
+                              );
+                              addExpressionElement(element);
+                              input.value = '';
+                            }
+                          }}
+                          disabled={isRunning}
+                        >
+                          Add Integer
+                        </Button>
+                      </div>
+                    </div>
+                    {/* Float literal */}
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Float</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          type="number"
+                          step="0.1"
+                          placeholder="Float value"
+                          id="float-literal-input"
+                          className="flex-1"
+                          disabled={isRunning}
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const input = document.getElementById('float-literal-input') as HTMLInputElement;
+                            if (input && input.value) {
+                              const value = parseFloat(input.value).toString();
+                              const element = new ExpressionElement(
+                                crypto.randomUUID(),
+                                'literal',
+                                value
+                              );
+                              addExpressionElement(element);
+                              input.value = '';
+                            }
+                          }}
+                          disabled={isRunning}
+                        >
+                          Add Float
+                        </Button>
+                      </div>
+                    </div>
+                    {/* Boolean literals */}
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Boolean</Label>
+                      <div className="flex gap-2">
+                        <DraggablePaletteItem
+                          id="lit-boolean-true"
+                          type="literal"
+                          value="true"
+                          backgroundColor="#d1ffd1"
+                          disabled={isRunning}
+                        />
+                        <DraggablePaletteItem
+                          id="lit-boolean-false"
+                          type="literal"
+                          value="false"
+                          backgroundColor="#d1ffd1"
+                          disabled={isRunning}
+                        />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </>
+          )}
+        </div>
+        
+        <DragOverlay>
+          {activeItem ? (
+            <div className={`
+              px-2 py-1 m-1 rounded text-sm shadow-lg cursor-grabbing
+              ${activeItem.type === 'variable' ? 'bg-blue-100' :
+                activeItem.type === 'operator' ? 'bg-red-100' : 'bg-green-100'}
+            `}>
+              {activeItem.value}
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+    );
+  };
+
+  // Render output editor for Output nodes
+  const renderOutputEditor = () => {
+    if (!selectedNode || selectedNode.type !== 'Output' || !expression) return null;
+    
+    const allVariables = getAllVariables();
+
+    return (
+      <DndContext
+        sensors={sensors}
+        collisionDetection={rectIntersection}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        // TODO: horizontal restriction does not work properly with vertical scrolling
+        modifiers={isReordering ? [restrictToHorizontalAxis] : undefined}
+      >
+        <div key={selectedNode.id}>
+          <h4>Output Expression</h4>
+
+          {/* Expression display box */}
+          <Card className="mb-4">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Expression</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="min-h-[50px] p-2 bg-muted/30 border rounded">
+                { expression ? (
+                  <>
+                    <ExpressionDropArea id="expression-drop-area" disabled={isRunning}>
+                      <SortableContext 
+                        items={expression.rightSide.map(e => e.id)} 
+                        strategy={horizontalListSortingStrategy}
+                      >
+                        {expression.rightSide.map((element, index) => (
+                          <DraggableExpressionElement
+                            key={element.id}
+                            element={element}
+                            index={index}
+                            removeExpressionElement={removeExpressionElement}
+                            disabled={isRunning}
+                          />
+                        ))}
+                      </SortableContext>
+                    </ExpressionDropArea>
+                  </>
+                ) : ( <></> )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Building blocks section */}
+          <div className="space-y-4">
+            {/* Variables section */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Variables</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {allVariables.map(variable => (
+                  <DraggablePaletteItem
+                    key={`var-${variable.id}`}
+                    id={`var-${variable.id}`}
+                    type="variable"
+                    value={variable.name}
+                    backgroundColor="#d1e7ff"
+                    disabled={isRunning}
+                  />
+                ))}
+                {allVariables.length === 0 && (
+                  <div className="text-muted-foreground text-sm italic">No variables declared</div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Operators section */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Operators</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {operators.map(op => (
+                  <DraggablePaletteItem
+                    key={`op-${op}`}
+                    id={`op-${op}`}
+                    type="operator"
+                    value={op}
+                    backgroundColor="#ffd1d1"
+                    disabled={isRunning}
+                  />
+                ))}
+              </CardContent>
+            </Card>
+
+            {/* Literals section */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Literals</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
                 {/* String literal */}
-                <div>
-                  <h6 style={{ margin: '5px 0' }}>String</h6>
-                  <input 
-                    type="text" 
-                    placeholder="String value" 
-                    id="string-literal-input"
-                    style={{ width: '70%', padding: '4px', marginRight: '5px' }}
-                    disabled={isRunning}
-                  />
-                  <button
-                    onClick={() => {
-                      const input = document.getElementById('string-literal-input') as HTMLInputElement;
-                      if (input && input.value) {
-                        const value = input.value;
-                        const element = new ExpressionElement(
-                          crypto.randomUUID(),
-                          'literal',
-                          `"${value}"`
-                        );
-                        addExpressionElement(element);
-                        input.value = '';
-                      }
-                    }}
-                    style={{ 
-                      padding: '4px 8px',
-                      backgroundColor: '#d1ffd1',
-                      border: '1px solid #ccc',
-                      borderRadius: '4px',
-                      cursor: isRunning ? 'not-allowed' : 'pointer',
-                      opacity: isRunning ? 0.5 : 1
-                    }}
-                    disabled={isRunning}
-                  >
-                    Add String
-                  </button>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">String</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="text"
+                      placeholder="String value"
+                      id="output-string-literal-input"
+                      className="flex-1"
+                      disabled={isRunning}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const input = document.getElementById('output-string-literal-input') as HTMLInputElement;
+                        if (input && input.value) {
+                          const element = new ExpressionElement(crypto.randomUUID(), 'literal', `"${input.value}"`);
+                          addExpressionElement(element);
+                          input.value = '';
+                        }
+                      }}
+                      disabled={isRunning}
+                    >
+                      Add String
+                    </Button>
+                  </div>
                 </div>
-                
                 {/* Integer literal */}
-                <div style={{ marginTop: '10px' }}>
-                  <h6 style={{ margin: '5px 0' }}>Integer</h6>
-                  <input 
-                    type="number" 
-                    step="1"
-                    placeholder="Integer value" 
-                    id="integer-literal-input"
-                    style={{ width: '70%', padding: '4px', marginRight: '5px' }}
-                    disabled={isRunning}
-                  />
-                  <button
-                    onClick={() => {
-                      const input = document.getElementById('integer-literal-input') as HTMLInputElement;
-                      if (input && input.value) {
-                        const value = parseInt(input.value).toString(); // Ensure it's an integer
-                        const element = new ExpressionElement(
-                          crypto.randomUUID(),
-                          'literal',
-                          value
-                        );
-                        addExpressionElement(element);
-                        input.value = '';
-                      }
-                    }}
-                    style={{ 
-                      padding: '4px 8px',
-                      backgroundColor: '#d1ffd1',
-                      border: '1px solid #ccc',
-                      borderRadius: '4px',
-                      cursor: isRunning ? 'not-allowed' : 'pointer',
-                      opacity: isRunning ? 0.5 : 1
-                    }}
-                    disabled={isRunning}
-                  >
-                    Add Integer
-                  </button>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Integer</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      step="1"
+                      placeholder="Integer value"
+                      id="output-integer-literal-input"
+                      className="flex-1"
+                      disabled={isRunning}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const input = document.getElementById('output-integer-literal-input') as HTMLInputElement;
+                        if (input && input.value) {
+                          const element = new ExpressionElement(crypto.randomUUID(), 'literal', input.value);
+                          addExpressionElement(element);
+                          input.value = '';
+                        }
+                      }}
+                      disabled={isRunning}
+                    >
+                      Add Integer
+                    </Button>
+                  </div>
                 </div>
-                
                 {/* Float literal */}
-                <div style={{ marginTop: '10px' }}>
-                  <h6 style={{ margin: '5px 0' }}>Float</h6>
-                  <input 
-                    type="number" 
-                    step="0.1"
-                    placeholder="Float value"
-                    id="float-literal-input"
-                    style={{ width: '70%', padding: '4px', marginRight: '5px' }}
-                    disabled={isRunning}
-                  />
-                  <button
-                    onClick={() => {
-                      const input = document.getElementById('float-literal-input') as HTMLInputElement;
-                      if (input && input.value) {
-                        const value = parseFloat(input.value).toString();
-                        const element = new ExpressionElement(
-                          crypto.randomUUID(),
-                          'literal',
-                          value
-                        );
-                        addExpressionElement(element);
-                        input.value = '';
-                      }
-                    }}
-                    style={{ 
-                      padding: '4px 8px',
-                      backgroundColor: '#d1ffd1',
-                      border: '1px solid #ccc',
-                      borderRadius: '4px',
-                      cursor: isRunning ? 'not-allowed' : 'pointer',
-                      opacity: isRunning ? 0.5 : 1
-                    }}
-                    disabled={isRunning}
-                  >
-                    Add Float
-                  </button>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Float</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      step="0.1"
+                      placeholder="Float value"
+                      id="output-float-literal-input"
+                      className="flex-1"
+                      disabled={isRunning}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const input = document.getElementById('output-float-literal-input') as HTMLInputElement;
+                        if (input && input.value) {
+                          const element = new ExpressionElement(crypto.randomUUID(), 'literal', input.value);
+                          addExpressionElement(element);
+                          input.value = '';
+                        }
+                      }}
+                      disabled={isRunning}
+                    >
+                      Add Float
+                    </Button>
+                  </div>
                 </div>
-                
                 {/* Boolean literals */}
-                <div style={{ marginTop: '10px' }}>
-                  <h6 style={{ margin: '5px 0' }}>Boolean</h6>
-                  <div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Boolean</Label>
+                  <div className="flex gap-2">
                     <DraggablePaletteItem
                       id="lit-boolean-true"
                       type="literal"
@@ -1145,244 +1312,18 @@ const DetailsTab = () => {
                     />
                   </div>
                 </div>
-              </div>
-            </>
-          )}
-        </div>
-        
-        <DragOverlay>
-          {activeItem ? (
-            <div style={{
-              padding: '4px 8px',
-              margin: '4px',
-              borderRadius: '4px',
-              fontSize: '14px',
-              backgroundColor: 
-                activeItem.type === 'variable' ? '#d1e7ff' :
-                activeItem.type === 'operator' ? '#ffd1d1' : '#d1ffd1',
-              boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-              cursor: 'grabbing',
-            }}>
-              {activeItem.value}
-            </div>
-          ) : null}
-        </DragOverlay>
-      </DndContext>
-    );
-  };
-
-  // Render output editor for Output nodes
-  const renderOutputEditor = () => {
-    if (!selectedNode || selectedNode.type !== 'Output' || !expression) return null;
-    
-    
-    const allVariables = getAllVariables();
-
-    // Style for expression box
-    const expressionBoxStyle = {
-      padding: '10px',
-      border: '1px solid #ccc',
-      borderRadius: '4px',
-      minHeight: '50px',
-      marginBottom: '15px',
-      backgroundColor: '#f9f9f9',
-    };
-
-    // Style for section boxes
-    const sectionStyle = {
-      marginBottom: '15px',
-      border: '1px solid #ddd',
-      borderRadius: '4px',
-      padding: '10px',
-    };
-
-    return (
-      <DndContext
-        sensors={sensors}
-        collisionDetection={rectIntersection}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-        // TODO: horizontal restriction does not work properly with vertical scrolling
-        modifiers={isReordering ? [restrictToHorizontalAxis] : undefined}
-      >
-        <div key={selectedNode.id}>
-          <h4>Output Expression</h4>
-
-          {/* Expression display box */}
-          <div style={{ marginBottom: '15px' }}>
-            <h5 style={{ marginTop: 0, marginBottom: '5px' }}>Expression</h5>
-            <div style={expressionBoxStyle}>
-              { expression ? (
-                <>
-                  <ExpressionDropArea id="expression-drop-area" disabled={isRunning}>
-                    <SortableContext 
-                      items={expression.rightSide.map(e => e.id)} 
-                      strategy={horizontalListSortingStrategy}
-                    >
-                      {expression.rightSide.map((element, index) => (
-                        <DraggableExpressionElement
-                          key={element.id}
-                          element={element}
-                          index={index}
-                          removeExpressionElement={removeExpressionElement}
-                          disabled={isRunning}
-                        />
-                      ))}
-                    </SortableContext>
-                  </ExpressionDropArea>
-                </>
-              ) : ( <></> )}
-            </div>
-          </div>
-
-          {/* Building blocks section */}
-          {/* Variables section */}
-          <div style={sectionStyle}>
-            <h5 style={{ marginTop: 0, marginBottom: '10px' }}>Variables</h5>
-            <div>
-              {allVariables.map(variable => (
-                <DraggablePaletteItem
-                  key={`var-${variable.id}`}
-                  id={`var-${variable.id}`}
-                  type="variable"
-                  value={variable.name}
-                  backgroundColor="#d1e7ff"
-                  disabled={isRunning}
-                />
-              ))}
-              {allVariables.length === 0 && (
-                <div style={{ color: '#888', fontStyle: 'italic' }}>No variables declared</div>
-              )}
-            </div>
-          </div>
-
-          {/* Operators section */}
-          <div style={sectionStyle}>
-            <h5 style={{ marginTop: 0, marginBottom: '10px' }}>Operators</h5>
-            <div>
-              {operators.map(op => (
-                <DraggablePaletteItem
-                  key={`op-${op}`}
-                  id={`op-${op}`}
-                  type="operator"
-                  value={op}
-                  backgroundColor="#ffd1d1"
-                  disabled={isRunning}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Literals section */}
-          <div style={sectionStyle}>
-            <h5 style={{ marginTop: 0, marginBottom: '10px' }}>Literals</h5>
-            
-            {/* String literal */}
-            <div>
-              <h6 style={{ margin: '5px 0' }}>String</h6>
-              <input
-                type="text"
-                placeholder="String value"
-                id="output-string-literal-input"
-                style={{ width: '70%', padding: '4px', marginRight: '5px' }}
-                disabled={isRunning}
-              />
-              <button
-                onClick={() => {
-                  const strInput = document.getElementById('output-string-literal-input') as HTMLInputElement;
-                  if (strInput && strInput.value) {
-                    const element = new ExpressionElement(crypto.randomUUID(), 'literal', `"${strInput.value}"`);
-                    addExpressionElement(element);
-                    strInput.value = '';
-                  }
-                }}
-                style={{ padding: '4px 8px', backgroundColor: '#d1ffd1', border: '1px solid #ccc', borderRadius: '4px', cursor: isRunning ? 'not-allowed' : 'pointer', opacity: isRunning ? 0.5 : 1 }}
-                disabled={isRunning}
-              >Add String</button>
-            </div>
-
-            {/* Integer literal */}
-            <div style={{ marginTop: '10px' }}>
-              <h6 style={{ margin: '5px 0' }}>Integer</h6>
-              <input
-                type="number"
-                step="1"
-                placeholder="Integer value"
-                id="output-integer-literal-input"
-                style={{ width: '70%', padding: '4px', marginRight: '5px' }}
-                disabled={isRunning}
-              />
-              <button
-                onClick={() => {
-                  const intInput = document.getElementById('output-integer-literal-input') as HTMLInputElement;
-                  if (intInput && intInput.value) {
-                    const element = new ExpressionElement(crypto.randomUUID(), 'literal', intInput.value);
-                    addExpressionElement(element);
-                    intInput.value = '';
-                  }
-                }}
-                style={{ padding: '4px 8px', backgroundColor: '#d1ffd1', border: '1px solid #ccc', borderRadius: '4px', cursor: isRunning ? 'not-allowed' : 'pointer', opacity: isRunning ? 0.5 : 1 }}
-                disabled={isRunning}
-              >Add Integer</button>
-            </div>
-
-            {/* Float literal */}
-            <div style={{ marginTop: '10px' }}>
-              <h6 style={{ margin: '5px 0' }}>Float</h6>
-              <input
-                type="number"
-                step="0.1"
-                placeholder="Float value"
-                id="output-float-literal-input"
-                style={{ width: '70%', padding: '4px', marginRight: '5px' }}
-                disabled={isRunning}
-              />
-              <button
-                onClick={() => {
-                  const floatInput = document.getElementById('output-float-literal-input') as HTMLInputElement;
-                  if (floatInput && floatInput.value) {
-                    const element = new ExpressionElement(crypto.randomUUID(), 'literal', floatInput.value);
-                    addExpressionElement(element);
-                    floatInput.value = '';
-                  }
-                }}
-                style={{ padding: '4px 8px', backgroundColor: '#d1ffd1', border: '1px solid #ccc', borderRadius: '4px', cursor: isRunning ? 'not-allowed' : 'pointer', opacity: isRunning ? 0.5 : 1 }}
-                disabled={isRunning}
-              >Add Float</button>
-            </div>
-
-            {/* Boolean literals */}
-            <div style={{ marginTop: '10px' }}>
-              <h6 style={{ margin: '5px 0' }}>Boolean</h6>
-              <div style={{ display: 'flex', gap: '5px' }}>
-                <button
-                  onClick={() => { const element = new ExpressionElement(crypto.randomUUID(), 'literal', 'true'); addExpressionElement(element); }}
-                  style={{ padding: '4px 8px', backgroundColor: '#d1ffd1', border: '1px solid #ccc', borderRadius: '4px', cursor: isRunning ? 'not-allowed' : 'pointer', opacity: isRunning ? 0.5 : 1 }}
-                  disabled={isRunning}
-                >true</button>
-                <button
-                  onClick={() => { const element = new ExpressionElement(crypto.randomUUID(), 'literal', 'false'); addExpressionElement(element); }}
-                  style={{ padding: '4px 8px', backgroundColor: '#d1ffd1', border: '1px solid #ccc', borderRadius: '4px', cursor: isRunning ? 'not-allowed' : 'pointer', opacity: isRunning ? 0.5 : 1 }}
-                  disabled={isRunning}
-                >false</button>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
 
         <DragOverlay>
           {activeItem ? (
-            <div style={{
-              padding: '4px 8px',
-              margin: '4px',
-              borderRadius: '4px',
-              fontSize: '14px',
-              backgroundColor: 
-                activeItem.type === 'variable' ? '#d1e7ff' :
-                activeItem.type === 'operator' ? '#ffd1d1' : '#d1ffd1',
-              boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-              cursor: 'grabbing',
-            }}>
+            <div className={`
+              px-2 py-1 m-1 rounded text-sm shadow-lg cursor-grabbing
+              ${activeItem.type === 'variable' ? 'bg-blue-100' :
+                activeItem.type === 'operator' ? 'bg-red-100' : 'bg-green-100'}
+            `}>
               {activeItem.value}
             </div>
           ) : null}
@@ -1397,24 +1338,6 @@ const DetailsTab = () => {
     
     const allVariables = getAllVariables();
     
-    // Style for expression box
-    const expressionBoxStyle = {
-      padding: '10px',
-      border: '1px solid #ccc',
-      borderRadius: '4px',
-      minHeight: '50px',
-      marginBottom: '15px',
-      backgroundColor: '#f9f9f9',
-    };
-    
-    // Style for section boxes
-    const sectionStyle = {
-      marginBottom: '15px',
-      border: '1px solid #ddd',
-      borderRadius: '4px',
-      padding: '10px',
-    };
-    
     return (
       <DndContext
         sensors={sensors}
@@ -1428,21 +1351,74 @@ const DetailsTab = () => {
           <h4>Conditional Expression</h4>
           
           {/* Expression display box */}
-          <div style={{ marginBottom: '15px' }}>
-            <h5 style={{ marginTop: 0, marginBottom: '5px' }}>Condition</h5>
-            <div style={expressionBoxStyle}>
-              <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-                {/* Left side expression */}
-                <div style={{ flex: '1' }}>
-                  <ExpressionDropArea id="left-expression-drop-area" disabled={isRunning}>
-                    <SortableContext 
-                      items={expression?.leftSide && Array.isArray(expression.leftSide) 
-                          ? expression.leftSide.map(item => item.id) 
-                          : []}
-                      strategy={horizontalListSortingStrategy}
+          <Card className="mb-4">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Condition</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="min-h-[50px] p-2 bg-muted/30 border rounded">
+                <div className="flex items-center flex-wrap gap-4">
+                  {/* Left side expression */}
+                  <div className="flex-1 min-w-[150px]">
+                    <ExpressionDropArea id="left-expression-drop-area" disabled={isRunning}>
+                      <SortableContext 
+                        items={expression?.leftSide && Array.isArray(expression.leftSide) 
+                            ? expression.leftSide.map(item => item.id) 
+                            : []}
+                        strategy={horizontalListSortingStrategy}
+                      >
+                        {expression?.leftSide && Array.isArray(expression.leftSide) ? (
+                          expression.leftSide.map((element, index) => (
+                            <DraggableExpressionElement 
+                              key={element.id}
+                              element={element}
+                              index={index}
+                              removeExpressionElement={removeExpressionElement}
+                              disabled={isRunning}
+                            />
+                          ))
+                        ) : (
+                          <span className="text-muted-foreground text-sm italic">
+                            Drag elements here to build left side
+                          </span>
+                        )}
+                      </SortableContext>
+                    </ExpressionDropArea>
+                  </div>
+                  
+                  {/* Equality operator selector */}
+                  <div>
+                    <Select
+                      value={expression?.equality || '=='}
+                      onValueChange={(value) => {
+                        setExpression(prev => {
+                          if (!prev) return null;
+                          const newExpr = prev.clone();
+                          newExpr.equality = value as IEquality;
+                          return newExpr;
+                        });
+                      }}
+                      disabled={isRunning}
                     >
-                      {expression?.leftSide && Array.isArray(expression.leftSide) ? (
-                        expression.leftSide.map((element, index) => (
+                      <SelectTrigger className="w-20 font-bold">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {equalities.map(eq => (
+                          <SelectItem key={eq} value={eq}>{eq}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  {/* Right side expression */}
+                  <div className="flex-1 min-w-[150px]">
+                    <ExpressionDropArea id="right-expression-drop-area" disabled={isRunning}>
+                      <SortableContext 
+                        items={expression?.rightSide.map(item => item.id) || []}
+                        strategy={horizontalListSortingStrategy}
+                      >
+                        {expression?.rightSide.map((element, index) => (
                           <DraggableExpressionElement 
                             key={element.id}
                             element={element}
@@ -1450,77 +1426,27 @@ const DetailsTab = () => {
                             removeExpressionElement={removeExpressionElement}
                             disabled={isRunning}
                           />
-                        ))
-                      ) : (
-                        <span style={{ color: '#888', fontStyle: 'italic' }}>
-                          Drag elements here to build left side
-                        </span>
-                      )}
-                    </SortableContext>
-                  </ExpressionDropArea>
-                </div>
-                
-                {/* Equality operator selector */}
-                <div>
-                  <select
-                    value={expression?.equality || '=='}
-                    onChange={(e) => {
-                      setExpression(prev => {
-                        if (!prev) return null;
-                        const newExpr = prev.clone();
-                        newExpr.equality = e.target.value as IEquality;
-                        return newExpr;
-                      });
-                    }}
-                    style={{
-                      padding: '8px',
-                      borderRadius: '4px',
-                      border: '1px solid #ccc',
-                      backgroundColor: isRunning ? '#f0f0f0' : 'white',
-                      cursor: isRunning ? 'not-allowed' : 'pointer',
-                      fontWeight: 'bold'
-                    }}
-                    disabled={isRunning}
-                  >
-                    {equalities.map(eq => (
-                      <option key={eq} value={eq}>{eq}</option>
-                    ))}
-                  </select>
-                </div>
-                
-                {/* Right side expression */}
-                <div style={{ flex: '1' }}>
-                  <ExpressionDropArea id="right-expression-drop-area" disabled={isRunning}>
-                    <SortableContext 
-                      items={expression?.rightSide.map(item => item.id) || []}
-                      strategy={horizontalListSortingStrategy}
-                    >
-                      {expression?.rightSide.map((element, index) => (
-                        <DraggableExpressionElement 
-                          key={element.id}
-                          element={element}
-                          index={index}
-                          removeExpressionElement={removeExpressionElement}
-                          disabled={isRunning}
-                        />
-                      )) || (
-                        <span style={{ color: '#888', fontStyle: 'italic' }}>
-                          Drag elements here to build right side
-                        </span>
-                      )}
-                    </SortableContext>
-                  </ExpressionDropArea>
+                        )) || (
+                          <span className="text-muted-foreground text-sm italic">
+                            Drag elements here to build right side
+                          </span>
+                        )}
+                      </SortableContext>
+                    </ExpressionDropArea>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
           
           {/* Building blocks section */}
-          <>
+          <div className="space-y-4">
             {/* Variables section */}
-            <div style={sectionStyle}>
-              <h5 style={{ marginTop: 0, marginBottom: '10px' }}>Variables</h5>
-              <div>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Variables</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
                 {allVariables.map(variable => (
                   <DraggablePaletteItem
                     key={`var-${variable.id}`}
@@ -1532,15 +1458,17 @@ const DetailsTab = () => {
                   />
                 ))}
                 {allVariables.length === 0 && (
-                  <div style={{ color: '#888', fontStyle: 'italic' }}>No variables declared</div>
+                  <div className="text-muted-foreground text-sm italic">No variables declared</div>
                 )}
-              </div>
-            </div>
+              </CardContent>
+            </Card>
             
             {/* Operators section */}
-            <div style={sectionStyle}>
-              <h5 style={{ marginTop: 0, marginBottom: '10px' }}>Operators</h5>
-              <div>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Operators</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
                 {operators.map(op => (
                   <DraggablePaletteItem
                     key={`op-${op}`}
@@ -1551,340 +1479,211 @@ const DetailsTab = () => {
                     disabled={isRunning}
                   />
                 ))}
-              </div>
-            </div>
+              </CardContent>
+            </Card>
             
             {/* Literals section */}
-            <div style={sectionStyle}>
-              <h5 style={{ marginTop: 0, marginBottom: '10px' }}>Literals</h5>
-              
-              {/* String literal */}
-              <div>
-                <h6 style={{ margin: '5px 0' }}>String</h6>
-                <input 
-                  type="text" 
-                  placeholder="String value" 
-                  id="conditional-string-literal-input"
-                  style={{ width: '60%', padding: '4px', marginRight: '5px' }}
-                  disabled={isRunning}
-                />
-                <div style={{ display: 'flex', gap: '5px', marginTop: '5px' }}>
-                  <button
-                    onClick={() => {
-                      const input = document.getElementById('conditional-string-literal-input') as HTMLInputElement;
-                      if (input && input.value) {
-                        const value = input.value;
-                        const element = new ExpressionElement(
-                          crypto.randomUUID(),
-                          'literal',
-                          `"${value}"`
-                        );
-                        addExpressionElement(element, 'left');
-                        input.value = '';
-                      }
-                    }}
-                    style={{ 
-                      padding: '4px 8px',
-                      backgroundColor: '#d1ffd1',
-                      border: '1px solid #ccc',
-                      borderRadius: '4px',
-                      cursor: isRunning ? 'not-allowed' : 'pointer',
-                      opacity: isRunning ? 0.5 : 1,
-                      fontSize: '12px'
-                    }}
-                    disabled={isRunning}
-                  >
-                    Add to Left
-                  </button>
-                  <button
-                    onClick={() => {
-                      const input = document.getElementById('conditional-string-literal-input') as HTMLInputElement;
-                      if (input && input.value) {
-                        const value = input.value;
-                        const element = new ExpressionElement(
-                          crypto.randomUUID(),
-                          'literal',
-                          `"${value}"`
-                        );
-                        addExpressionElement(element, 'right');
-                        input.value = '';
-                      }
-                    }}
-                    style={{ 
-                      padding: '4px 8px',
-                      backgroundColor: '#d1ffd1',
-                      border: '1px solid #ccc',
-                      borderRadius: '4px',
-                      cursor: isRunning ? 'not-allowed' : 'pointer',
-                      opacity: isRunning ? 0.5 : 1,
-                      fontSize: '12px'
-                    }}
-                    disabled={isRunning}
-                  >
-                    Add to Right
-                  </button>
-                </div>
-              </div>
-              
-              {/* Integer literal */}
-              <div style={{ marginTop: '10px' }}>
-                <h6 style={{ margin: '5px 0' }}>Integer</h6>
-                <input 
-                  type="number" 
-                  step="1"
-                  placeholder="Integer value" 
-                  id="conditional-integer-literal-input"
-                  style={{ width: '60%', padding: '4px', marginRight: '5px' }}
-                  disabled={isRunning}
-                />
-                <div style={{ display: 'flex', gap: '5px', marginTop: '5px' }}>
-                  <button
-                    onClick={() => {
-                      const input = document.getElementById('conditional-integer-literal-input') as HTMLInputElement;
-                      if (input && input.value) {
-                        const value = parseInt(input.value).toString(); // Ensure it's an integer
-                        const element = new ExpressionElement(
-                          crypto.randomUUID(),
-                          'literal',
-                          value
-                        );
-                        addExpressionElement(element, 'left');
-                        input.value = '';
-                      }
-                    }}
-                    style={{ 
-                      padding: '4px 8px',
-                      backgroundColor: '#d1ffd1',
-                      border: '1px solid #ccc',
-                      borderRadius: '4px',
-                      cursor: isRunning ? 'not-allowed' : 'pointer',
-                      opacity: isRunning ? 0.5 : 1,
-                      fontSize: '12px'
-                    }}
-                    disabled={isRunning}
-                  >
-                    Add to Left
-                  </button>
-                  <button
-                    onClick={() => {
-                      const input = document.getElementById('conditional-integer-literal-input') as HTMLInputElement;
-                      if (input && input.value) {
-                        const value = parseInt(input.value).toString(); // Ensure it's an integer
-                        const element = new ExpressionElement(
-                          crypto.randomUUID(),
-                          'literal',
-                          value
-                        );
-                        addExpressionElement(element, 'right');
-                        input.value = '';
-                      }
-                    }}
-                    style={{ 
-                      padding: '4px 8px',
-                      backgroundColor: '#d1ffd1',
-                      border: '1px solid #ccc',
-                      borderRadius: '4px',
-                      cursor: isRunning ? 'not-allowed' : 'pointer',
-                      opacity: isRunning ? 0.5 : 1,
-                      fontSize: '12px'
-                    }}
-                    disabled={isRunning}
-                  >
-                    Add to Right
-                  </button>
-                </div>
-              </div>
-              
-              {/* Float literal */}
-              <div style={{ marginTop: '10px' }}>
-                <h6 style={{ margin: '5px 0' }}>Float</h6>
-                <input 
-                  type="number" 
-                  step="0.1"
-                  placeholder="Float value"
-                  id="conditional-float-literal-input"
-                  style={{ width: '60%', padding: '4px', marginRight: '5px' }}
-                  disabled={isRunning}
-                />
-                <div style={{ display: 'flex', gap: '5px', marginTop: '5px' }}>
-                  <button
-                    onClick={() => {
-                      const input = document.getElementById('conditional-float-literal-input') as HTMLInputElement;
-                      if (input && input.value) {
-                        const value = parseFloat(input.value).toString();
-                        const element = new ExpressionElement(
-                          crypto.randomUUID(),
-                          'literal',
-                          value
-                        );
-                        addExpressionElement(element, 'left');
-                        input.value = '';
-                      }
-                    }}
-                    style={{ 
-                      padding: '4px 8px',
-                      backgroundColor: '#d1ffd1',
-                      border: '1px solid #ccc',
-                      borderRadius: '4px',
-                      cursor: isRunning ? 'not-allowed' : 'pointer',
-                      opacity: isRunning ? 0.5 : 1,
-                      fontSize: '12px'
-                    }}
-                    disabled={isRunning}
-                  >
-                    Add to Left
-                  </button>
-                  <button
-                    onClick={() => {
-                      const input = document.getElementById('conditional-float-literal-input') as HTMLInputElement;
-                      if (input && input.value) {
-                        const value = parseFloat(input.value).toString();
-                        const element = new ExpressionElement(
-                          crypto.randomUUID(),
-                          'literal',
-                          value
-                        );
-                        addExpressionElement(element, 'right');
-                        input.value = '';
-                      }
-                    }}
-                    style={{ 
-                      padding: '4px 8px',
-                      backgroundColor: '#d1ffd1',
-                      border: '1px solid #ccc',
-                      borderRadius: '4px',
-                      cursor: isRunning ? 'not-allowed' : 'pointer',
-                      opacity: isRunning ? 0.5 : 1,
-                      fontSize: '12px'
-                    }}
-                    disabled={isRunning}
-                  >
-                    Add to Right
-                  </button>
-                </div>
-              </div>
-              
-              {/* Boolean literals */}
-              <div style={{ marginTop: '10px' }}>
-                <h6 style={{ margin: '5px 0' }}>Boolean</h6>
-                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                  <div>
-                    <span style={{ marginBottom: '5px', display: 'block', fontSize: '12px', fontWeight: 'bold' }}>Left side:</span>
-                    <div>
-                      <button
-                        onClick={() => {
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Literals</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* String literal */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">String</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="text"
+                      placeholder="String value"
+                      id="conditional-string-literal-input"
+                      className="flex-1"
+                      disabled={isRunning}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const input = document.getElementById('conditional-string-literal-input') as HTMLInputElement;
+                        if (input && input.value) {
+                          const value = input.value;
                           const element = new ExpressionElement(
                             crypto.randomUUID(),
                             'literal',
-                            'true'
+                            `"${value}"`
                           );
                           addExpressionElement(element, 'left');
-                        }}
-                        style={{ 
-                          padding: '4px 8px',
-                          backgroundColor: '#d1ffd1',
-                          border: '1px solid #ccc',
-                          borderRadius: '4px',
-                          cursor: isRunning ? 'not-allowed' : 'pointer',
-                          margin: '2px',
-                          opacity: isRunning ? 0.5 : 1
-                        }}
-                        disabled={isRunning}
-                      >
-                        true
-                      </button>
-                      <button
-                        onClick={() => {
+                          input.value = '';
+                        }
+                      }}
+                      disabled={isRunning}
+                    >
+                      ← Left
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const input = document.getElementById('conditional-string-literal-input') as HTMLInputElement;
+                        if (input && input.value) {
+                          const value = input.value;
                           const element = new ExpressionElement(
                             crypto.randomUUID(),
                             'literal',
-                            'false'
-                          );
-                          addExpressionElement(element, 'left');
-                        }}
-                        style={{ 
-                          padding: '4px 8px',
-                          backgroundColor: '#d1ffd1',
-                          border: '1px solid #ccc',
-                          borderRadius: '4px',
-                          cursor: isRunning ? 'not-allowed' : 'pointer',
-                          margin: '2px',
-                          opacity: isRunning ? 0.5 : 1
-                        }}
-                        disabled={isRunning}
-                      >
-                        false
-                      </button>
-                    </div>
-                  </div>
-                  <div>
-                    <span style={{ marginBottom: '5px', display: 'block', fontSize: '12px', fontWeight: 'bold' }}>Right side:</span>
-                    <div>
-                      <button
-                        onClick={() => {
-                          const element = new ExpressionElement(
-                            crypto.randomUUID(),
-                            'literal',
-                            'true'
+                            `"${value}"`
                           );
                           addExpressionElement(element, 'right');
-                        }}
-                        style={{ 
-                          padding: '4px 8px',
-                          backgroundColor: '#d1ffd1',
-                          border: '1px solid #ccc',
-                          borderRadius: '4px',
-                          cursor: isRunning ? 'not-allowed' : 'pointer',
-                          margin: '2px',
-                          opacity: isRunning ? 0.5 : 1
-                        }}
-                        disabled={isRunning}
-                      >
-                        true
-                      </button>
-                      <button
-                        onClick={() => {
-                          const element = new ExpressionElement(
-                            crypto.randomUUID(),
-                            'literal',
-                            'false'
-                          );
-                          addExpressionElement(element, 'right');
-                        }}
-                        style={{ 
-                          padding: '4px 8px',
-                          backgroundColor: '#d1ffd1',
-                          border: '1px solid #ccc',
-                          borderRadius: '4px',
-                          cursor: isRunning ? 'not-allowed' : 'pointer',
-                          margin: '2px',
-                          opacity: isRunning ? 0.5 : 1
-                        }}
-                        disabled={isRunning}
-                      >
-                        false
-                      </button>
-                    </div>
+                          input.value = '';
+                        }
+                      }}
+                      disabled={isRunning}
+                    >
+                      Right →
+                    </Button>
                   </div>
                 </div>
-              </div>
-            </div>
-          </>
+                
+                {/* Integer literal */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Integer</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      step="1"
+                      placeholder="Integer value" 
+                      id="conditional-integer-literal-input"
+                      className="flex-1"
+                      disabled={isRunning}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const input = document.getElementById('conditional-integer-literal-input') as HTMLInputElement;
+                        if (input && input.value) {
+                          const value = parseInt(input.value).toString(); // Ensure it's an integer
+                          const element = new ExpressionElement(
+                            crypto.randomUUID(),
+                            'literal',
+                            value
+                          );
+                          addExpressionElement(element, 'left');
+                          input.value = '';
+                        }
+                      }}
+                      disabled={isRunning}
+                    >
+                      ← Left
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const input = document.getElementById('conditional-integer-literal-input') as HTMLInputElement;
+                        if (input && input.value) {
+                          const value = parseInt(input.value).toString(); // Ensure it's an integer
+                          const element = new ExpressionElement(
+                            crypto.randomUUID(),
+                            'literal',
+                            value
+                          );
+                          addExpressionElement(element, 'right');
+                          input.value = '';
+                        }
+                      }}
+                      disabled={isRunning}
+                    >
+                      Right →
+                    </Button>
+                  </div>
+                </div>
+                
+                {/* Float literal */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Float</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      step="0.1"
+                      placeholder="Float value"
+                      id="conditional-float-literal-input"
+                      className="flex-1"
+                      disabled={isRunning}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const input = document.getElementById('conditional-float-literal-input') as HTMLInputElement;
+                        if (input && input.value) {
+                          const value = parseFloat(input.value).toString();
+                          const element = new ExpressionElement(
+                            crypto.randomUUID(),
+                            'literal',
+                            value
+                          );
+                          addExpressionElement(element, 'left');
+                          input.value = '';
+                        }
+                      }}
+                      disabled={isRunning}
+                    >
+                      ← Left
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const input = document.getElementById('conditional-float-literal-input') as HTMLInputElement;
+                        if (input && input.value) {
+                          const value = parseFloat(input.value).toString();
+                          const element = new ExpressionElement(
+                            crypto.randomUUID(),
+                            'literal',
+                            value
+                          );
+                          addExpressionElement(element, 'right');
+                          input.value = '';
+                        }
+                      }}
+                      disabled={isRunning}
+                    >
+                      Right →
+                    </Button>
+                  </div>
+                </div>
+                
+                {/* Boolean literals */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Boolean</Label>
+                  <div className="flex gap-2">
+                    <DraggablePaletteItem
+                      id="lit-boolean-true"
+                      type="literal"
+                      value="true"
+                      backgroundColor="#d1ffd1"
+                      disabled={isRunning}
+                    />
+                    <DraggablePaletteItem
+                      id="lit-boolean-false"
+                      type="literal"
+                      value="false"
+                      backgroundColor="#d1ffd1"
+                      disabled={isRunning}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
         
         <DragOverlay>
           {activeItem ? (
-            <div style={{
-              padding: '4px 8px',
-              margin: '4px',
-              borderRadius: '4px',
-              fontSize: '14px',
-              backgroundColor: 
-                activeItem.type === 'variable' ? '#d1e7ff' :
-                activeItem.type === 'operator' ? '#ffd1d1' : '#d1ffd1',
-              boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-              cursor: 'grabbing',
-            }}>
+            <div className={`
+              px-2 py-1 m-1 rounded text-sm shadow-lg cursor-grabbing
+              ${activeItem.type === 'variable' ? 'bg-blue-100' :
+                activeItem.type === 'operator' ? 'bg-red-100' : 'bg-green-100'}
+            `}>
               {activeItem.value}
             </div>
           ) : null}
@@ -1899,49 +1698,38 @@ const DetailsTab = () => {
     
     const allVariables = getAllVariables();
     
-    // Style for section boxes
-    const sectionStyle = {
-      marginBottom: '15px',
-      border: '1px solid #ddd',
-      borderRadius: '4px',
-      padding: '10px',
-    };
-    
     return (
       <div key={selectedNode.id}>
         <h4>Input Configuration</h4>
         
         {/* Variable selection */}
-        <div style={sectionStyle}>
-          <h5 style={{ marginTop: 0, marginBottom: '10px' }}>Select Input Variable</h5>
-          <select
-            value={leftSideVariable}
-            onChange={(e) => {
-              const newValue = e.target.value;
-              setLeftSideVariable(newValue);
-            }}
-            style={{
-              width: '100%',
-              padding: '8px',
-              borderRadius: '4px',
-              border: '1px solid #ccc',
-              backgroundColor: isRunning ? '#f0f0f0' : 'white',
-              cursor: isRunning ? 'not-allowed' : 'pointer'
-            }}
-            disabled={isRunning}
-          >
-            <option value="">-- Select Variable --</option>
-            {allVariables.map(variable => (
-              <option key={variable.id} value={variable.id}>
-                {variable.name} ({variable.type})
-              </option>
-            ))}
-          </select>
-          
-          <div style={{ marginTop: '15px', fontStyle: 'italic', color: '#888' }}>
-            During execution, the program will prompt for this variable's value.
-          </div>
-        </div>
+        <Card className="mb-4">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Select Input Variable</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Select
+              value={leftSideVariable}
+              onValueChange={setLeftSideVariable}
+              disabled={isRunning}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="-- Select Variable --" />
+              </SelectTrigger>
+              <SelectContent>
+                {allVariables.map(variable => (
+                  <SelectItem key={variable.id} value={variable.id}>
+                    {variable.name} ({variable.type})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            
+            <div className="text-sm text-muted-foreground italic">
+              During execution, the program will prompt for this variable's value.
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   };
@@ -1950,34 +1738,59 @@ const DetailsTab = () => {
     <>
       <h3>Details</h3>
       {selectedNode ? (
-        <div style={{ 
-          height: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden'
-        }}>
-          {/* Header section */}
-          <div style={{ flexShrink: 0 }}>
-            <p>Node ID: <strong>{selectedNode.id}</strong></p>
-            <p>Type: {selectedNode.type || 'default'}</p>
-            <p>Label: {selectedNode.data.label}</p>
-            <p>Position: x={selectedNode.position.x.toFixed(2)}, y={selectedNode.position.y.toFixed(2)}</p>
-            {renderVariableEditor()}
-          </div>
-
+        <div className="h-full flex flex-col overflow-hidden">
           {/* Scrollable editors */}
           <div 
             ref={scrollableContainerRef}
-            style={{ 
-              flex: 1,
-              overflowY: 'auto',
-              marginTop: '20px'
-            }}
+            className="flex-1 overflow-y-auto overflow-x-hidden mt-5"
           >
+            {renderVariableEditor()}
             {renderAssignmentEditor()}
             {renderOutputEditor()}
             {renderConditionalEditor()}
             {renderInputEditor()}
+            
+            {/* Additional information accordion - shown for any selected node */}
+            {selectedNode && (
+              <div ref={additionalInfoRef} className="w-full">
+                <Accordion type="single" collapsible className="mt-5">
+                  <AccordionItem value="additional-info">
+                    <AccordionTrigger 
+                      className="text-sm"
+                      onClick={() => {
+                        // Auto-scroll when expanded (with delay to allow full accordion animation)
+                        setTimeout(() => {
+                          if (additionalInfoRef.current && scrollableContainerRef.current) {
+                            // First try scrollIntoView
+                            additionalInfoRef.current.scrollIntoView({ 
+                              behavior: 'smooth', 
+                              block: 'end'
+                            });
+                            
+                            // Fallback: scroll to the very bottom of the container
+                            setTimeout(() => {
+                              if (scrollableContainerRef.current) {
+                                scrollableContainerRef.current.scrollTop = scrollableContainerRef.current.scrollHeight;
+                              }
+                            }, 100);
+                          }
+                        }, 300); // TODO: smoother/faster animation
+                      }}
+                    >
+                      Additional information
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="space-y-2 text-sm break-words overflow-hidden">
+                        <p className="break-all"><span className="font-medium">Node ID:</span> {selectedNode.id}</p>
+                        <p><span className="font-medium">Type:</span> {selectedNode.type || 'default'}</p>
+                        <p className="break-words"><span className="font-medium">Label:</span> {selectedNode.data.label}</p>
+                        <p><span className="font-medium">Position:</span> x={selectedNode.position.x.toFixed(2)}, y={selectedNode.position.y.toFixed(2)}</p>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              </div>
+            )}
           </div>
         </div>
       ) : (

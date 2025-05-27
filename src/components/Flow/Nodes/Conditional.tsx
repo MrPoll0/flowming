@@ -91,7 +91,8 @@ const Conditional = memo(function ConditionalComponent({ data, id: nodeId }: { d
   const labelStyle = {
     zIndex: 10,
     position: "relative",
-    fontSize: 12,
+    fontSize: "0.75rem",
+    fontFamily: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
@@ -131,7 +132,7 @@ const Conditional = memo(function ConditionalComponent({ data, id: nodeId }: { d
 
   return (
     <div className="conditional-node" style={diamondStyle}>
-      <div style={labelStyle}><code>{label}</code></div>
+      <div style={labelStyle}>{label}</div>
       <Handle style={topHandleStyle} type="target" id="top-target" position={Position.Top} />
       <Handle style={topHandleStyle} type="source" id="top-source" position={Position.Top} />
       <Handle style={bottomHandleStyle} type="target" id="bottom-target" position={Position.Bottom} />

@@ -3,9 +3,9 @@ import { memo, useEffect } from 'react';
 import { useVariables } from '../../../context/VariablesContext';
 import { getNodeStyles } from '../../../utils/nodeStyles';
 import { BaseNode, NodeProcessor } from './NodeTypes';
-import { Variable } from '../../../models/Variable';
+import { Variable, VariableType } from '../../../models/Variable';
 import { IValuedVariable, ValuedVariable } from '../../../models/ValuedVariable';
-import { VariableType } from '../../../models/Variable';
+import { Badge } from '@/components/ui/badge';
 
 class DeclareVariableProcessor implements NodeProcessor {
   // @ts-ignore - _reactFlow is intentionally saved for future use (TODO)
@@ -119,30 +119,20 @@ const DeclareVariable = memo(function DeclareVariableComponent({ data, id: nodeI
       minWidth: width ? `${width}px` : '250px',
       minHeight: height ? `${height}px` : '80px'
     })}>
-      <div style={{ fontWeight: 'bold', textAlign: 'center', marginBottom: '10px' }}>Declare variable</div>
+      <div className="font-bold text-center mb-2.5">Declare variable</div>
       
       {nodeVariables.length > 0 ? (
-        <div style={{ padding: '5px 0' }}>
+        <div className="py-1">
           {nodeVariables.map((variable) => (
-            <div key={variable.id} style={{ 
-              marginBottom: '4px',
-              padding: '5px',
-              backgroundColor: '#f5f5f5',
-              borderRadius: '4px',
-              fontSize: '14px'
-            }}>
-              <code>{variable.type} {variable.name}</code>
+            <div key={variable.id} className="mb-1 last:mb-0">
+              <Badge variant="secondary" className="font-mono text-sm">
+                {variable.type} {variable.name}
+              </Badge>
             </div>
           ))}
         </div>
       ) : (
-        <div style={{ 
-          textAlign: 'center', 
-          color: '#888', 
-          padding: '10px 0',
-          fontStyle: 'italic',
-          fontSize: '14px'
-        }}>
+        <div className="text-center text-muted-foreground py-2.5 italic text-sm">
           No variables defined
         </div>
       )}

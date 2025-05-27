@@ -5,6 +5,7 @@ import { BaseNode, NodeProcessor } from './NodeTypes';
 import { Expression, Variable } from '../../../models';
 import { IValuedVariable, ValuedVariable } from '../../../models/ValuedVariable';
 import { VariableType } from '../../../models/Variable';
+import { Badge } from '@/components/ui/badge';
 
 interface AssignVariableNode extends BaseNode {
   expression?: Expression;
@@ -91,28 +92,16 @@ const AssignVariable = memo(function AssignVariableComponent({ data, id: nodeId 
       minWidth: width ? `${width}px` : '250px',
       minHeight: height ? `${height}px` : '80px'
     })}>
-      <div style={{ fontWeight: 'bold', textAlign: 'center', marginBottom: '10px' }}>Assign variable</div>
+      <div className="font-bold text-center mb-2.5">Assign variable</div>
       
       {expression ? (
-        <div style={{ 
-          padding: '5px 10px',
-          backgroundColor: '#f5f5f5',
-          borderRadius: '4px',
-          fontSize: '14px',
-          fontFamily: 'monospace',
-          marginBottom: '4px'
-        }}>
-          <code>{expression instanceof Expression ? expression.toString() : Expression.fromObject(expression).toString()}</code>
+        <div className="mb-1">
+          <Badge variant="outline" className="font-mono text-sm w-full justify-center">
+            {expression instanceof Expression ? expression.toString() : Expression.fromObject(expression).toString()}
+          </Badge>
         </div>
       ) : (
-        <div style={{ 
-          textAlign: 'center', 
-          color: '#888', 
-          padding: '5px 10px',
-          fontStyle: 'italic',
-          fontSize: '14px',
-          marginBottom: '4px'
-        }}>
+        <div className="text-center text-muted-foreground px-2.5 py-1 italic text-sm mb-1">
           No assignment defined
         </div>
       )}

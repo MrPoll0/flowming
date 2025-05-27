@@ -18,7 +18,7 @@ function End({ data }: { data: BaseNode }) {
         alignItems: 'center'
       }
     })}>
-      <div style={{ fontWeight: 'bold' }}>End</div>
+      <div className="font-bold">End</div>
       <Handle 
         type="target" 
         position={Position.Top} 

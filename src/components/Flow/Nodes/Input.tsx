@@ -5,6 +5,7 @@ import { BaseNode, NodeProcessor } from './NodeTypes';
 import { IVariable, VariableType, Variable } from '../../../models/Variable';
 import { IValuedVariable } from '../../../models/ValuedVariable';
 import { ValuedVariable } from '../../../models/ValuedVariable';
+import { Badge } from '@/components/ui/badge';
 
 interface InputNode extends BaseNode {
   variable?: IVariable;
@@ -82,29 +83,16 @@ const Input = memo(function InputComponent({ data, id: nodeId }: { data: InputNo
       additionalStyles: { transform: 'skewX(-20deg)', transformOrigin: '0 0' }
     })}>
       <div style={{ transform: 'skewX(20deg)', transformOrigin: '50% 50%' }}>
-        <div style={{ fontWeight: 'bold', textAlign: 'center', marginBottom: '10px' }}>Input</div>
+        <div className="font-bold text-center mb-2.5">Input</div>
 
         {variable ? (
-          <div style={{
-            textAlign: 'center',
-            padding: '5px 10px',
-            backgroundColor: '#f5f5f5',
-            borderRadius: '4px',
-            fontSize: '14px',
-            fontFamily: 'monospace',
-            marginBottom: '4px'
-          }}>
-            <code>{variable.name} = {variable.type}(👤)</code>
+          <div className="text-center mb-1">
+            <Badge variant="outline" className="font-mono text-sm">
+              {variable.name} = {variable.type}(👤)
+            </Badge>
           </div>
         ) : (
-          <div style={{
-            textAlign: 'center', 
-            color: '#888', 
-            padding: '5px 10px',
-            fontStyle: 'italic',
-            fontSize: '14px',
-            marginBottom: '4px'
-          }}>
+          <div className="text-center text-muted-foreground px-2.5 py-1 italic text-sm mb-1">
             No variable defined
           </div>
         )}
