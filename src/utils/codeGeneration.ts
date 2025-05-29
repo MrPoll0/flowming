@@ -577,19 +577,47 @@ const buildAST = (
 
       // Find YES/NO branches
       const outs = cfg.succMap.get(nodeId) || [];
-      const t = outs.find(e => (e.data?.conditionalLabel as string)?.toLowerCase?.() === 'yes'); // TODO: use 0-1 instead of yes-no for language support
-      const f = outs.find(e => (e.data?.conditionalLabel as string)?.toLowerCase?.() === 'no');
-      
-      // Create separate visited sets for each branch to avoid cross-contamination
+      const yesEdge = outs.find(e => (e.data?.conditionalLabel as string)?.toLowerCase?.() === 'yes'); // TODO: use 0-1 instead of yes-no for language support
+      const noEdge  = outs.find(e => (e.data?.conditionalLabel as string)?.toLowerCase?.() === 'no');
+
+      // Check for immediate merge: both branches lead to same next node
+      if (yesEdge?.target && noEdge?.target) {
+        const yesSucc = cfg.succMap.get(yesEdge.target) || [];
+        const noSucc  = cfg.succMap.get(noEdge.target) || [];
+        if (yesSucc[0]?.target && yesSucc[0].target === noSucc[0]?.target) {
+          // Merge detected
+          const mergeId = yesSucc[0].target;
+          // Build only branch statements (single nodes)
+          const yesNode = cfg.nodesMap.get(yesEdge.target)!;
+          const noNode  = cfg.nodesMap.get(noEdge.target)!;
+          const consStmts = generateNodeStatements(yesNode, yesEdge.target, cfg);
+          const altStmts  = generateNodeStatements(noNode,  noEdge.target, cfg);
+
+          // Build if statement
+          const ifStmt: IfStatement = {
+            type: 'IfStatement', test,
+            consequent: { type: 'BlockStatement', body: consStmts },
+            alternate:  { type: 'BlockStatement', body: altStmts },
+            diagramNodeId: nodeId, visualId
+          };
+          const stmts: Statement[] = [ifStmt];
+
+          // After if-else, process merge node and its successors
+          stmts.push(...buildAST(cfg, loops, mergeId, visited, inLoop));
+          return stmts;
+        }
+      }
+
+      // Default non-merge conditional handling
       const trueVisited = new Set(visited);
       const falseVisited = new Set(visited);
       
       // Build body statements for YES branch (consequent)
-      const cons = t?.target && cfg.nodesMap.has(t.target) ? buildAST(cfg, loops, t.target, trueVisited, inLoop) : [];
+      const cons = yesEdge?.target && cfg.nodesMap.has(yesEdge.target) ? buildAST(cfg, loops, yesEdge.target, trueVisited, inLoop) : [];
       // Build body statements for NO branch (alternate)
-      const alt = f?.target && cfg.nodesMap.has(f.target) ? buildAST(cfg, loops, f.target, falseVisited, inLoop) : [];
+      const alt  = noEdge?.target && cfg.nodesMap.has(noEdge.target) ? buildAST(cfg, loops, noEdge.target, falseVisited, inLoop) : [];
 
-      // Build if statement for YES/NO branches
+      // Build if statement
       const ifStmt: IfStatement = { type: 'IfStatement', test,
         consequent: { type: 'BlockStatement', body: cons }, diagramNodeId: nodeId, visualId };
       if (alt.length) ifStmt.alternate = { type: 'BlockStatement', body: alt };
