@@ -54,6 +54,24 @@ const FlowContent: React.FC = () => {
 
   // TODO: possible problems when modifying node data from multiple places at the same time?
 
+  // Assign sequential visual IDs to nodes
+  useEffect(() => {
+    setNodes((currentNodes) =>
+      currentNodes.map((node, index) => {
+        const visualId = `B${index + 1}`;
+        if (node.data.visualId === visualId) {
+          return node; // Avoid re-render if ID is already correct
+        }
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            visualId,
+          },
+        };
+      })
+    );
+  }, [nodes.length, setNodes]); // Re-run if the number of nodes changes
 
   // TODO: conditional edges cannot be created after being created, runned, etc
 
@@ -608,6 +626,8 @@ const FlowContent: React.FC = () => {
 
   const isValidConnection: IsValidConnection = useCallback(
     (connection: Connection | Edge) => {
+      // TODO: allow self-connections for while True on the same
+      // careful with which type, e.g. conditional (then not?)
       // Prevent self-connections (a node connecting to itself)
       if (connection.source === connection.target) {
         return false;
@@ -770,6 +790,11 @@ const FlowContent: React.FC = () => {
 
           // TODO: BUG with Conditional edges -> add both, remove one, cannot get a new one?
 
+          // TODO: refactor flowline Yes/No to have 0-1 data instead of relying on a label which may change with language
+
+          // TODO: change Yes/No labels in Conditional edges for one-one instead of random 50%
+          
+          // TODO: cannot move draggable elements in expression builder if its >= 2 lines height (only horizontally)
 
           // Timer: https://www.timeanddate.com/countdown/generic?iso=20250616T12&p0=%3A&font=cursive
 

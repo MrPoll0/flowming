@@ -11,7 +11,11 @@ import Output from './Nodes/Output';
 export interface FlowNode extends Node {
   id: string;
   position: { x: number; y: number };
-  data: { label: string; [key: string]: any };
+  data: { 
+    label: string; 
+    visualId?: string; // For user-friendly sequential numbering
+    [key: string]: any; 
+  };
 }
 
 export const nodeTypes = {

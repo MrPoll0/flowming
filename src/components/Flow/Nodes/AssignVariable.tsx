@@ -62,7 +62,7 @@ class AssignVariableProcessor implements NodeProcessor {
 }
 
 const AssignVariable = memo(function AssignVariableComponent({ data, id: nodeId }: { data: AssignVariableNode; id: string }) {
-  const { isHovered, isSelected, isHighlighted, currentValuedVariables, expression, width, height } = data;
+  const { isHovered, isSelected, isHighlighted, currentValuedVariables, expression, width, height, visualId } = data;
 
   const reactFlow = useReactFlow();
   
@@ -94,6 +94,27 @@ const AssignVariable = memo(function AssignVariableComponent({ data, id: nodeId 
     })}>
       <div className="font-bold text-center mb-2.5">Assign variable</div>
       
+      {visualId && (
+        <div 
+          style={{
+            position: 'absolute',
+            top: '4px',
+            right: '8px',
+            fontSize: '0.65rem',
+            color: 'rgb(119, 119, 119)',
+            fontWeight: 'bold',
+            userSelect: 'none',
+            zIndex: 1,
+            backgroundColor: 'rgba(255, 255, 255, 0.8)',
+            borderRadius: '3px',
+            padding: '1px 3px',
+            lineHeight: '1',
+          }}
+        >
+          {visualId}
+        </div>
+      )}
+
       {expression ? (
         <div className="mb-1">
           <Badge variant="outline" className="font-mono text-sm w-full justify-center">

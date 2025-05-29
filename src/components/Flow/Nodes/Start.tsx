@@ -4,7 +4,7 @@ import { getNodeStyles } from '../../../utils/nodeStyles';
 import { BaseNode } from './NodeTypes';
 
 function Start({ data }: { data: BaseNode }) {
-  const { isHovered, isSelected, isHighlighted, width, height } = data;
+  const { isHovered, isSelected, isHighlighted, width, height, visualId } = data;
   
   return (
     <div className="start-node" style={getNodeStyles({
@@ -15,10 +15,32 @@ function Start({ data }: { data: BaseNode }) {
       minWidth: width ? `${width}px` : '100px',
       minHeight: height ? `${height}px` : '40px',
       additionalStyles: {
-        alignItems: 'center'
+        alignItems: 'center',
+        position: 'relative'
       }
     })}>
       <div className="font-bold">Start</div>
+
+      {visualId && (
+        <div 
+          style={{
+            position: 'absolute',
+            top: '4px',
+            right: '8px',
+            fontSize: '0.65rem',
+            color: 'rgb(119, 119, 119)',
+            fontWeight: 'bold',
+            userSelect: 'none',
+            backgroundColor: 'rgba(255, 255, 255, 0.8)',
+            borderRadius: '3px',
+            padding: '1px 3px',
+            lineHeight: '1',
+          }}
+        >
+          {visualId}
+        </div>
+      )}
+
       <Handle 
         type="source" 
         position={Position.Top} 

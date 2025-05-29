@@ -86,7 +86,7 @@ class DeclareVariableProcessor implements NodeProcessor {
 }
 
 const DeclareVariable = memo(function DeclareVariableComponent({ data, id: nodeId }: { data: BaseNode; id: string }) {
-  const { isHovered, isSelected, isHighlighted, currentValuedVariables, width, height } = data;
+  const { isHovered, isSelected, isHighlighted, currentValuedVariables, width, height, visualId } = data;
   const { getNodeVariables } = useVariables();
   const reactFlow = useReactFlow();
   
@@ -120,6 +120,27 @@ const DeclareVariable = memo(function DeclareVariableComponent({ data, id: nodeI
       minHeight: height ? `${height}px` : '80px'
     })}>
       <div className="font-bold text-center mb-2.5">Declare variable</div>
+
+      {visualId && (
+        <div 
+          style={{
+            position: 'absolute',
+            top: '4px',
+            right: '8px',
+            fontSize: '0.65rem',
+            color: 'rgb(119, 119, 119)',
+            fontWeight: 'bold',
+            userSelect: 'none',
+            zIndex: 1,
+            backgroundColor: 'rgba(255, 255, 255, 0.8)',
+            borderRadius: '3px',
+            padding: '1px 3px',
+            lineHeight: '1',
+          }}
+        >
+          {visualId}
+        </div>
+      )}
       
       {nodeVariables.length > 0 ? (
         <div className="py-1">
