@@ -52,7 +52,7 @@ class InputProcessor implements NodeProcessor {
 }
 
 const Input = memo(function InputComponent({ data, id: nodeId }: { data: InputNode; id: string }) {
-  const { isHovered, isSelected, isHighlighted, variable, width, height, visualId } = data;
+  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, variable, width, height, visualId } = data;
 
   const reactFlow = useReactFlow();
 
@@ -78,6 +78,7 @@ const Input = memo(function InputComponent({ data, id: nodeId }: { data: InputNo
       isHovered,
       isSelected,
       isHighlighted,
+      isCodeHighlighted,
       minWidth: width ? `${width}px` : '150px',
       minHeight: height ? `${height}px` : '50px',
       additionalStyles: { transform: 'skewX(-20deg)', transformOrigin: '0 0' }

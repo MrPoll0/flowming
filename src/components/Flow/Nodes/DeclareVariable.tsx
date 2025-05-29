@@ -86,7 +86,7 @@ class DeclareVariableProcessor implements NodeProcessor {
 }
 
 const DeclareVariable = memo(function DeclareVariableComponent({ data, id: nodeId }: { data: BaseNode; id: string }) {
-  const { isHovered, isSelected, isHighlighted, currentValuedVariables, width, height, visualId } = data;
+  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, currentValuedVariables, width, height, visualId } = data;
   const { getNodeVariables } = useVariables();
   const reactFlow = useReactFlow();
   
@@ -116,6 +116,7 @@ const DeclareVariable = memo(function DeclareVariableComponent({ data, id: nodeI
       isHovered,
       isSelected,
       isHighlighted,
+      isCodeHighlighted,
       minWidth: width ? `${width}px` : '250px',
       minHeight: height ? `${height}px` : '80px'
     })}>

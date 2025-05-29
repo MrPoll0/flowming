@@ -49,6 +49,9 @@ const FlowContent: React.FC = () => {
 
   // Add state to track edge being edited
   const [editingEdge, setEditingEdge] = useState<string | null>(null);
+  
+  // Add state to track code highlighting
+  const [codeHighlightedVisualId, setCodeHighlightedVisualId] = useState<string | null>(null);
 
   const { isRunning } = useFlowExecutorContext();
 
@@ -75,16 +78,52 @@ const FlowContent: React.FC = () => {
 
   // TODO: conditional edges cannot be created after being created, runned, etc
 
-  // Apply visual styles based on hover and selection states
   useEffect(() => {
-    // Apply styles to nodes
+    // Handle code-to-diagram highlighting events
+
+    const handleHighlightDiagramNode = (event: CustomEvent) => {
+      const { visualId } = event.detail;
+      setCodeHighlightedVisualId(visualId);
+    };
+
+    const handleClearDiagramHighlight = () => {
+      setCodeHighlightedVisualId(null);
+    };
+
+    const handleSelectDiagramNode = (event: CustomEvent) => {
+      const { visualId } = event.detail;
+      // Find node by visualId and select it
+      const targetNode = nodes.find(n => n.data.visualId === visualId);
+      if (targetNode) {
+        // Set selected node in context
+        setSelectedNode(targetNode as FlowNode);
+        setSelectedElement({ id: targetNode.id, type: 'node' });
+      }
+    };
+
+    window.addEventListener('highlightDiagramNode', handleHighlightDiagramNode as EventListener);
+    window.addEventListener('clearDiagramHighlight', handleClearDiagramHighlight);
+    window.addEventListener('selectDiagramNode', handleSelectDiagramNode as EventListener);
+
+    return () => {
+      window.removeEventListener('highlightDiagramNode', handleHighlightDiagramNode as EventListener);
+      window.removeEventListener('clearDiagramHighlight', handleClearDiagramHighlight);
+      window.removeEventListener('selectDiagramNode', handleSelectDiagramNode as EventListener);
+    };
+  }, [nodes]);
+
+  useEffect(() => {
+    // Apply visual styles based on hover, selection, and code highlighting states
     setNodes((prevNodes) => 
       prevNodes.map((node) => {
         const isHovered = hoveredElement?.id === node.id && hoveredElement?.type === 'node';
         const isSelected = selectedElement?.id === node.id && selectedElement?.type === 'node';
+        const isCodeHighlighted = codeHighlightedVisualId === node.data.visualId;
         
-        // Only create a new node object if the hover/selection state changed
-        if (node.data.isHovered === isHovered && node.data.isSelected === isSelected) {
+        // Only create a new node object if any state changed
+        if (node.data.isHovered === isHovered && 
+            node.data.isSelected === isSelected && 
+            node.data.isCodeHighlighted === isCodeHighlighted) {
           return node; // Return the existing node if no changes
         }
         
@@ -94,6 +133,7 @@ const FlowContent: React.FC = () => {
             ...node.data,
             isHovered,
             isSelected,
+            isCodeHighlighted,
           },
         };
       })
@@ -120,7 +160,7 @@ const FlowContent: React.FC = () => {
         };
       })
     );
-  }, [hoveredElement, selectedElement]);
+  }, [hoveredElement, selectedElement, codeHighlightedVisualId]);
 
   // Handle node selection
   const onNodeClick = (event: React.MouseEvent, node: Node) => {

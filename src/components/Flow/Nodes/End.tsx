@@ -4,13 +4,14 @@ import { getNodeStyles } from '../../../utils/nodeStyles';
 import { BaseNode } from './NodeTypes';
 
 function End({ data }: { data: BaseNode }) {
-  const { isHovered, isSelected, isHighlighted, width, height, visualId } = data;
+  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, width, height, visualId } = data;
   
   return (
     <div className="end-node" style={getNodeStyles({
       isHovered,
       isSelected,
       isHighlighted,
+      isCodeHighlighted,
       borderRadius: '50px',
       minWidth: width ? `${width}px` : '100px',
       minHeight: height ? `${height}px` : '40px',

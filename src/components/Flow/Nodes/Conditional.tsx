@@ -52,7 +52,7 @@ class ConditionalProcessor implements NodeProcessor {
 }
 
 const Conditional = memo(function ConditionalComponent({ data, id: nodeId }: { data: ConditionalNode; id: string }) {
-  const { isHovered, isSelected, isHighlighted, width, height, visualId } = data;
+  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, width, height, visualId } = data;
   
   const reactFlow = useReactFlow();
 
@@ -85,6 +85,7 @@ const Conditional = memo(function ConditionalComponent({ data, id: nodeId }: { d
       isHovered,
       isSelected,
       isHighlighted,
+      isCodeHighlighted,
     }),
   } as React.CSSProperties;
   

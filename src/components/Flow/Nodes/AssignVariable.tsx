@@ -62,7 +62,7 @@ class AssignVariableProcessor implements NodeProcessor {
 }
 
 const AssignVariable = memo(function AssignVariableComponent({ data, id: nodeId }: { data: AssignVariableNode; id: string }) {
-  const { isHovered, isSelected, isHighlighted, currentValuedVariables, expression, width, height, visualId } = data;
+  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, currentValuedVariables, expression, width, height, visualId } = data;
 
   const reactFlow = useReactFlow();
   
@@ -89,6 +89,7 @@ const AssignVariable = memo(function AssignVariableComponent({ data, id: nodeId 
       isHovered,
       isSelected,
       isHighlighted,
+      isCodeHighlighted,
       minWidth: width ? `${width}px` : '250px',
       minHeight: height ? `${height}px` : '80px'
     })}>

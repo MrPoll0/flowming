@@ -44,7 +44,7 @@ class OutputProcessor implements NodeProcessor {
 }
 
 const Output = memo(function OutputComponent({ data, id: nodeId }: { data: OutputNode; id: string }) {
-  const { isHovered, isSelected, isHighlighted, expression, width, height, visualId } = data;
+  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, expression, width, height, visualId } = data;
 
   // TODO: expression is not Expression but ExpressionElement[]
   // or just Expression without leftSide? (setup in constructor)
@@ -76,6 +76,7 @@ const Output = memo(function OutputComponent({ data, id: nodeId }: { data: Outpu
       isHovered,
       isSelected,
       isHighlighted,
+      isCodeHighlighted,
       minWidth: width ? `${width}px` : '150px',
       minHeight: height ? `${height}px` : '50px',
       additionalStyles: { transform: 'skewX(-20deg)', transformOrigin: '0 0' }
