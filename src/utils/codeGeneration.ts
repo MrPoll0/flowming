@@ -5,14 +5,8 @@ import {
 } from '../models/pythonAST';
 import { Expression as DiagramExpression, ExpressionElement, Variable, IOperator, IExpression as DiagramIExpression } from '../models';
 
-// Helper to find a node by ID
-const findNodeById = (nodes: FlowNode[], id: string): FlowNode | undefined => nodes.find(n => n.id === id);
-
-// Helper to find outgoing edges from a node
-const findOutgoingEdges = (edges: Edge[], nodeId: string): Edge[] => edges.filter(edge => edge.source === nodeId);
-
 // Helper to convert Diagram ExpressionElement[] to Python AST Expression
-// This is a simplified version and needs to handle operator precedence and parentheses correctly if expressions get complex.
+// TODO: This is a simplified version and needs to handle operator precedence and parentheses correctly if expressions get complex.
 // For now, it will handle simple binary operations.
 const convertDiagramExpressionToAST = (elements: ExpressionElement[], diagramNodeId: string): PyExpression => {
   const unsupportedNode = (reason: string): UnsupportedNode =>
@@ -45,11 +39,24 @@ const convertDiagramExpressionToAST = (elements: ExpressionElement[], diagramNod
     }
     if (token.isLiteral()) {
       consume();
+      const lowerValue = token.value.toLowerCase();
+      if (lowerValue === 'true') {
+        return { type: 'Literal', value: true, raw: 'True', diagramNodeId } as Literal;
+      }
+      if (lowerValue === 'false') {
+        return { type: 'Literal', value: false, raw: 'False', diagramNodeId } as Literal;
+      }
+      // Attempt to parse as a number, otherwise treat as a string literal
       const num = parseFloat(token.value);
-      return { type: 'Literal', value: isNaN(num) ? token.value : num, raw: token.value, diagramNodeId } as Literal;
+      if (!isNaN(num)) {
+        return { type: 'Literal', value: num, raw: token.value, diagramNodeId } as Literal;
+      }
+      // For string literals, the value should be the string itself, and raw should also be the string (or quoted version if necessary for Python)
+      // Assuming string literals from the diagram are already appropriately formatted (e.g., not needing extra quotes for Python here, as generateCodeFromASTNode handles JSON.stringify)
+      return { type: 'Literal', value: token.value, raw: JSON.stringify(token.value), diagramNodeId } as Literal; 
     }
-    consume();
-    return unsupportedNode(`Unexpected token: ${token.value}`);
+    consume(); // Consume the unexpected token before reporting
+    return unsupportedNode(`Unexpected token: ${token.value}`); // TODO: error handling (e.g. "test" True)
   };
 
   const parseUnary = (): PyExpression => {
@@ -111,27 +118,6 @@ const convertDiagramExpressionToAST = (elements: ExpressionElement[], diagramNod
   } catch (err) {
     return unsupportedNode(`Expression parse error: ${(err as Error).message}`);
   }
-};
-
-/**
- * Checks if there is a path from a start node to a target node in the graph (used to detect loops).
- */
-const isNodeReachable = (startId: string, targetId: string, edges: Edge[]): boolean => {
-  const visited = new Set<string>();
-  const stack = [startId];
-  while (stack.length > 0) {
-    const current = stack.pop()!;
-    if (current === targetId) {
-      return true;
-    }
-    visited.add(current);
-    for (const edge of edges) {
-      if (edge.source === current && edge.target != null && !visited.has(edge.target)) {
-        stack.push(edge.target);
-      }
-    }
-  }
-  return false;
 };
 
 // Build a Control-Flow Graph (CFG) from nodes and edges
@@ -529,7 +515,7 @@ const buildAST = (
     const next = outs[0].target;
     if (next) stmts.push(...buildAST(cfg, loops, next, visited, inLoop));
   }
-  
+
   return stmts;
 };
 
@@ -627,12 +613,18 @@ const generateCodeFromASTNode = (astNode: ASTNode, indentLevel = 0): string => {
 
     case 'Literal':
       const literal = astNode as Literal;
+      if (literal.raw !== undefined) { // Prioritize raw if available
+        return literal.raw;
+      }
+      // Fallback logic if raw is not provided
       if (typeof literal.value === 'string') {
         return JSON.stringify(literal.value);
       } else if (literal.value === null) {
         return 'None';
+      } else if (typeof literal.value === 'boolean') {
+        return literal.value ? 'True' : 'False'; // Ensure Pythonic booleans
       }
-      return String(literal.value);
+      return String(literal.value); // For numbers and other types
 
     case 'BinaryExpression':
       const binExpr = astNode as BinaryExpression;
