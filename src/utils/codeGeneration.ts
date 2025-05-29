@@ -233,7 +233,15 @@ const findNaturalLoops = (cfg: CFG, dom: Map<string, Set<string>>): Map<string, 
             }
           });
         }
-        loops.set(header, body);
+        // Accumulate nodes if this header already has a loop body from another back-edge (e.g. case 3: both branches loop back → while True with inner if/else)
+        // All body nodes are part of the loop region, without specific distinction between the two branches (not needed)
+        // Not accumulating them would mean the last branch would overwrite the loop body from the first branch and the loop would only be the last branch
+        if (loops.has(header)) {
+          const existing_body = loops.get(header)!;
+          body.forEach(bodyNode => existing_body.add(bodyNode));
+        } else {
+          loops.set(header, body);
+        }
       }
     });
   });
@@ -314,49 +322,135 @@ const buildAST = (
     const headerStmts = generateNodeStatements(headerNode, nodeId);
     // -------------------------------------------------------------
 
-    // gather body statements starting from successors within loop body
-    const bodyStmts: Statement[] = [...headerStmts];
+    // Build a loop based on back-edge patterns
     const loopBodyIds = loops.get(nodeId)!;
-    // choose start edges
-    const startEdges = headerNode.type === 'Conditional'
-      ? (cfg.succMap.get(nodeId) || []).filter(e => (e.data?.conditionalLabel as string)?.toLowerCase?.() === 'yes' || (e.data?.conditionalLabel as string)?.toLowerCase?.() === 'true')
-      : (cfg.succMap.get(nodeId) || []);
-    
-    // Create a fresh visited set for loop body to prevent cross-iteration interference
-    const loopVisited = new Set<string>();
-    startEdges.forEach(e => {
-      if (e.target && loopBodyIds.has(e.target)) {
-        bodyStmts.push(...buildAST(cfg, loops, e.target, loopVisited, nodeId));
-      }
-    });
-    
-    // determine test expression
-    const testExpr: PyExpression = headerNode.type === 'Conditional'
-      ? (() => {
-        const diag = DiagramExpression.fromObject((headerNode.data?.expression as DiagramIExpression));
-        const elems = [] as ExpressionElement[];
-        if (Array.isArray(diag.leftSide)) elems.push(...diag.leftSide);
-        if (diag.equality) elems.push(new ExpressionElement(diag.equality, 'operator', diag.equality));
-        elems.push(...diag.rightSide);
-        return convertDiagramExpressionToAST(elems, nodeId);
-      })()
-      : ({ type: 'Literal', value: true, raw: 'True', diagramNodeId: nodeId } as Literal);
-    const whileStmt: WhileStatement = {
-      type: 'WhileStatement',
-      test: testExpr,
-      body: { type: 'BlockStatement', body: bodyStmts },
-      diagramNodeId: nodeId
-    };
-    const stmts: Statement[] = [whileStmt];
-    // after conditional loop, follow false branch
     if (headerNode.type === 'Conditional') {
-      const falseEdge = (cfg.succMap.get(nodeId) || [])
-        .find(e => (e.data?.conditionalLabel as string)?.toLowerCase?.() === 'no' || (e.data?.conditionalLabel as string)?.toLowerCase?.() === 'false');
-      if (falseEdge?.target) {
-        stmts.push(...buildAST(cfg, loops, falseEdge.target, visited, inLoop));
+      const outs = cfg.succMap.get(nodeId) || [];
+      const yesEdges = outs.filter(e => (e.data?.conditionalLabel as string)?.toLowerCase?.() === 'yes');
+      const noEdges  = outs.filter(e => (e.data?.conditionalLabel as string)?.toLowerCase?.() === 'no');
+      const yesBack = yesEdges.filter(e => e.target && loopBodyIds.has(e.target));
+      const noBack  = noEdges.filter(e => e.target && loopBodyIds.has(e.target));
+      
+      // Build condition expression AST
+      const diag = DiagramExpression.fromObject(headerNode.data?.expression as DiagramIExpression);
+      const elems: ExpressionElement[] = [];
+      if (Array.isArray(diag.leftSide)) elems.push(...diag.leftSide);
+      if (diag.equality) elems.push(new ExpressionElement(diag.equality, 'operator', diag.equality));
+      elems.push(...diag.rightSide);
+      const condExpr = convertDiagramExpressionToAST(elems, nodeId);
+
+      // Case 1: YES branch loops back only → while(cond)
+      if (yesBack.length > 0 && noBack.length === 0) {
+        const bodyStmts: Statement[] = [...headerStmts];
+        const loopVisited = new Set<string>();
+
+        // Build body statements for YES branch
+        yesBack.forEach(e => {
+          if (e.target) bodyStmts.push(...buildAST(cfg, loops, e.target, loopVisited, nodeId));
+        });
+
+        // Build while statement for YES branch
+        const whileStmt: WhileStatement = {
+          type: 'WhileStatement', test: condExpr,
+          body: { type: 'BlockStatement', body: bodyStmts }, diagramNodeId: nodeId
+        };
+        const stmts: Statement[] = [whileStmt];
+
+        // After loop, take NO exit (next code outside loop)
+        noEdges.filter(e => e.target && !loopBodyIds.has(e.target))
+          .forEach(e => stmts.push(...buildAST(cfg, loops, e.target, visited, inLoop)));
+
+        return stmts;
       }
+
+      // Case 2: NO branch loops back only → while(!cond)
+      if (yesBack.length === 0 && noBack.length > 0) {
+        const bodyStmts: Statement[] = [...headerStmts];
+        const loopVisited = new Set<string>();
+
+        // Build body statements for NO branch
+        noBack.forEach(e => {
+          if (e.target) bodyStmts.push(...buildAST(cfg, loops, e.target, loopVisited, nodeId));
+        });
+
+        // Negate the condition expression (i.e. while(!cond) instead of while(cond))
+        const falseLit: Literal = { type: 'Literal', value: false, raw: 'False', diagramNodeId: nodeId };
+        const notExpr: PyExpression = { type: 'BinaryExpression', operator: '==', left: condExpr, right: falseLit, diagramNodeId: nodeId } as BinaryExpression;
+
+        // Build while statement for NO branch
+        const whileStmt: WhileStatement = {
+          type: 'WhileStatement', test: notExpr,
+          body: { type: 'BlockStatement', body: bodyStmts }, diagramNodeId: nodeId
+        };
+        const stmts: Statement[] = [whileStmt];
+
+        // After loop, take YES exit (next code outside loop)
+        yesEdges.filter(e => e.target && !loopBodyIds.has(e.target))
+          .forEach(e => stmts.push(...buildAST(cfg, loops, e.target, visited, inLoop)));
+
+        return stmts;
+      }
+
+      // Case 3: both branches loop back → while True { if(cond) else }
+      if (yesBack.length > 0 && noBack.length > 0) {
+        // Case 3: both branches loop back → while True with inner if/else
+        const yesVisited = new Set<string>();
+        const noVisited  = new Set<string>();
+
+        // Build body statements for YES branch (consequent)
+        const consequent: Statement[] = [];
+        yesBack.forEach(e => {
+          if (e.target) consequent.push(...buildAST(cfg, loops, e.target, yesVisited, nodeId));
+        });
+
+        // Build body statements for NO branch (alternate)
+        const alternate: Statement[] = [];
+        noBack.forEach(e => {
+          if (e.target) alternate.push(...buildAST(cfg, loops, e.target, noVisited, nodeId));
+        });
+
+        // Build if statement for YES/NO branches
+        const ifStmt: IfStatement = {
+          type: 'IfStatement', test: condExpr,
+          consequent: { type: 'BlockStatement', body: consequent },
+          alternate: { type: 'BlockStatement', body: alternate },
+          diagramNodeId: nodeId
+        };
+        const bodyStmts: Statement[] = [...headerStmts, ifStmt];
+
+        // test for while is True (infinite loop)
+        const trueLit: Literal = { type: 'Literal', value: true, raw: 'True', diagramNodeId: nodeId };
+
+        // Build while statement for YES/NO branches
+        return [{
+          type: 'WhileStatement', test: trueLit,
+          body: { type: 'BlockStatement', body: bodyStmts },
+          diagramNodeId: nodeId
+        } as WhileStatement];
+      }
+    } else {
+      // Unconditional loop (while True)
+      const bodyStmts: Statement[] = [...headerStmts];
+      const loopVisited = new Set<string>();
+
+      // Build body statements for nodes contained in the loop body
+      (cfg.succMap.get(nodeId) || []).forEach(e => {
+        if (e.target && loopBodyIds.has(e.target)) {
+          bodyStmts.push(...buildAST(cfg, loops, e.target, loopVisited, nodeId));
+        }
+      });
+
+      // test for while is True (infinite loop)
+      const trueLit: Literal = { type: 'Literal', value: true, raw: 'True', diagramNodeId: nodeId };
+
+      // Build while statement for YES/NO branches
+      const whileStmt: WhileStatement = {
+        type: 'WhileStatement', test: trueLit,
+        body: { type: 'BlockStatement', body: bodyStmts }, diagramNodeId: nodeId
+      };
+
+      return [whileStmt];
     }
-    return stmts;
   }
   
   // If this is a loop header and we're inside its own loop, don't process as regular conditional
@@ -389,27 +483,36 @@ const buildAST = (
       // no-op
     } break;
     case 'Conditional': {
-      // non-loop conditional
+      // non-loop conditional (loops are handled prior to this)
       const diag = DiagramExpression.fromObject(node.data!.expression as DiagramIExpression);
       const elems: ExpressionElement[] = [];
+
+      // Build condition expression AST
       if (Array.isArray(diag.leftSide)) elems.push(...diag.leftSide);
       if (diag.equality) elems.push(new ExpressionElement(diag.equality, 'operator', diag.equality));
       elems.push(...diag.rightSide);
       const test = convertDiagramExpressionToAST(elems, nodeId);
+
+      // Find YES/NO branches
       const outs = cfg.succMap.get(nodeId) || [];
-      const t = outs.find(e => (e.data?.conditionalLabel as string)?.toLowerCase?.() === 'yes' || (e.data?.conditionalLabel as string)?.toLowerCase?.() === 'true');
-      const f = outs.find(e => (e.data?.conditionalLabel as string)?.toLowerCase?.() === 'no' || (e.data?.conditionalLabel as string)?.toLowerCase?.() === 'false');
+      const t = outs.find(e => (e.data?.conditionalLabel as string)?.toLowerCase?.() === 'yes'); // TODO: use 0-1 instead of yes-no for language support
+      const f = outs.find(e => (e.data?.conditionalLabel as string)?.toLowerCase?.() === 'no');
       
       // Create separate visited sets for each branch to avoid cross-contamination
       const trueVisited = new Set(visited);
       const falseVisited = new Set(visited);
       
+      // Build body statements for YES branch (consequent)
       const cons = t?.target ? buildAST(cfg, loops, t.target, trueVisited, inLoop) : [];
+      // Build body statements for NO branch (alternate)
       const alt = f?.target ? buildAST(cfg, loops, f.target, falseVisited, inLoop) : [];
+
+      // Build if statement for YES/NO branches
       const ifStmt: IfStatement = { type: 'IfStatement', test,
         consequent: { type: 'BlockStatement', body: cons }, diagramNodeId: nodeId };
       if (alt.length) ifStmt.alternate = { type: 'BlockStatement', body: alt };
       stmts.push(ifStmt);
+
       return stmts;
     }
     case 'End': {
@@ -419,12 +522,14 @@ const buildAST = (
       stmts.push({ type: 'UnsupportedNode', reason: `Node '${node.type}' not supported.`, diagramNodeId: nodeId } as UnsupportedNode);
     }
   }
-  // fall through to successors
+
+  // Fall through to successors
   const outs = cfg.succMap.get(nodeId) || [];
   if (outs.length && node.type !== 'Conditional' && node.type !== 'End') {
     const next = outs[0].target;
     if (next) stmts.push(...buildAST(cfg, loops, next, visited, inLoop));
   }
+  
   return stmts;
 };
 
