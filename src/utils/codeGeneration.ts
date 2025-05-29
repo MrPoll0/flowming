@@ -257,11 +257,40 @@ const generateNodeStatements = (node: FlowNode, nodeId: string): Statement[] => 
       if (node.data?.variable) {
         const v = node.data.variable as Variable;
         const target: Identifier = { type: 'Identifier', name: v.name, diagramNodeId: nodeId };
-        const baseCall: CallExpression = { type: 'CallExpression', callee: { type: 'Identifier', name: 'input', diagramNodeId: nodeId }, arguments: [], diagramNodeId: nodeId } as CallExpression;
+        const baseCall: CallExpression = { 
+          type: 'CallExpression', 
+          callee: { type: 'Identifier', name: 'input', diagramNodeId: nodeId }, 
+          arguments: [], 
+          diagramNodeId: nodeId 
+        } as CallExpression;
         let value: PyExpression = baseCall;
-        if (v.type === 'integer') value = { type: 'CallExpression', callee: { type: 'Identifier', name: 'int', diagramNodeId: nodeId }, arguments: [baseCall], diagramNodeId: nodeId } as CallExpression;
-        else if (v.type === 'float') value = { type: 'CallExpression', callee: { type: 'Identifier', name: 'float', diagramNodeId: nodeId }, arguments: [baseCall], diagramNodeId: nodeId } as CallExpression;
-        else if (v.type === 'boolean') value = { type: 'BinaryExpression', operator: '==', left: baseCall, right: { type: 'Literal', value: true, raw: 'True', diagramNodeId: nodeId } as Literal, diagramNodeId: nodeId } as BinaryExpression;
+        
+        // TODO: new data types here
+        if (v.type === 'integer') {
+          // int(input())
+          value = { 
+            type: 'CallExpression', 
+            callee: { type: 'Identifier', name: 'int', diagramNodeId: nodeId }, 
+            arguments: [baseCall], 
+            diagramNodeId: nodeId 
+          } as CallExpression;
+        } else if (v.type === 'float') {
+          // float(input())
+          value = { 
+            type: 'CallExpression', 
+            callee: { type: 'Identifier', name: 'float', diagramNodeId: nodeId }, 
+            arguments: [baseCall], 
+            diagramNodeId: nodeId 
+          } as CallExpression;
+        } else if (v.type === 'boolean') {
+          // bool(input())
+          value = { 
+            type: 'CallExpression', 
+            callee: { type: 'Identifier', name: 'bool', diagramNodeId: nodeId }, 
+            arguments: [baseCall], 
+            diagramNodeId: nodeId 
+          } as CallExpression;
+        }
         stmts.push({ type: 'AssignmentStatement', target, value, diagramNodeId: nodeId } as AssignmentStatement);
       }
       break;
