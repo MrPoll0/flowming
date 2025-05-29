@@ -134,266 +134,368 @@ const isNodeReachable = (startId: string, targetId: string, edges: Edge[]): bool
   return false;
 };
 
-export const generatePythonAST = (nodes: FlowNode[], edges: Edge[]): Program => {
-  const program: Program = { type: 'Program', body: [] };
-  const startNode = nodes.find(node => node.type === 'Start');
+// Build a Control-Flow Graph (CFG) from nodes and edges
+interface CFG {
+  nodesMap: Map<string, FlowNode>;
+  succMap: Map<string, Edge[]>;
+  predMap: Map<string, Edge[]>;
+  startId: string;
+}
 
-  if (!startNode) {
-    console.warn('No Start node found. Cannot generate code.');
-    program.body.push({ type: 'UnsupportedNode', reason: 'No Start node found' } as UnsupportedNode);
-    return program;
+const buildCFG = (nodes: FlowNode[], edges: Edge[]): CFG => {
+  const nodesMap = new Map(nodes.map(n => [n.id, n] as [string, FlowNode]));
+  const succMap = new Map<string, Edge[]>();
+  const predMap = new Map<string, Edge[]>();
+  nodes.forEach(n => { succMap.set(n.id, []); predMap.set(n.id, []); });
+  edges.forEach(e => {
+    succMap.get(e.source)?.push(e);
+    if (e.target) predMap.get(e.target)?.push(e);
+  });
+  const start = nodes.find(n => n.type === 'Start');
+  if (!start) {
+    // If no Start node, use the first node as a fallback or create a dummy
+    const firstNode = nodes[0];
+    return { nodesMap, succMap, predMap, startId: firstNode?.id || 'missing' };
   }
+  return { nodesMap, succMap, predMap, startId: start.id };
+};
 
-  const visitedNodes = new Set<string>(); // To handle loops and prevent infinite recursion
-
-  // Recursive function to process nodes
-  const processNode = (nodeId: string, skipNext: boolean = false): Statement[] => {
-    if (visitedNodes.has(nodeId)) {
-      // Handle loops: for now, just add a comment or unsupported node
-      // In Python, this might translate to a 'continue' or 'break' in specific contexts,
-      // or simply stopping the generation for that path if it's an infinite loop.
-      return [{ 
-        type: 'UnsupportedNode', 
-        reason: `Loop detected or node already visited: ${nodeId}`,
-        diagramNodeId: nodeId
-      } as UnsupportedNode];
-    }
-    visitedNodes.add(nodeId);
-
-    const node = findNodeById(nodes, nodeId);
-    if (!node) return [];
-
-    let currentStatements: Statement[] = [];
-
-    switch (node.type) {
-      case 'Start':
-        // Typically, a Start node itself doesn't translate to a Python statement,
-        // but it might initialize something or be a comment.
-        // For now, we can add a comment.
-        // Or, if we wrap the whole thing in a main function:
-        // statements.push({ type: 'FunctionDeclaration', name: {type: 'Identifier', name: 'main'}, params: [], body: {type: 'BlockStatement', body: []} });
-        break; // Handled by initial setup, just proceed to next
-
-      case 'DeclareVariable':
-        // Python is dynamically typed. Declarations like "int x" aren't strictly needed.
-        // We could add a comment with type information if desired.
-        // const vars = (node.data.variables as Variable[]) || []; // Assuming data.variables exists
-        // vars.forEach(v => {
-        //   currentStatements.push({ type: 'CommentStatement', value: `Variable: ${v.name} (${v.type})`, diagramNodeId: node.id });
-        // });
-        // For now, let's treat it as a no-op in Python code generation unless variables are initialized here.
-        // If variables are initialized (e.g. int x = 0), it would be an Assignment.
-        // Based on DeclareVariable.tsx, it seems variables are just declared, not initialized.
-        // We will rely on VariablesContext to get these, if needed elsewhere.
-        break;
-
-      case 'AssignVariable':
-        if (node.data.expression) {
-          const diagExpr = DiagramExpression.fromObject(node.data.expression as DiagramIExpression);
-          if (diagExpr.leftSide instanceof Variable) {
-            const target: Identifier = { type: 'Identifier', name: diagExpr.leftSide.name, diagramNodeId: node.id };
-            const valueAst = convertDiagramExpressionToAST(diagExpr.rightSide, node.id);
-            if (valueAst.type !== 'UnsupportedNode') {
-              currentStatements.push({ type: 'AssignmentStatement', target, value: valueAst, diagramNodeId: node.id } as AssignmentStatement);
-            } else {
-              currentStatements.push(valueAst as UnsupportedNode);
-            }
-          } else {
-            currentStatements.push({ type: 'UnsupportedNode', reason: 'AssignVariable left side is not a simple variable', diagramNodeId: node.id } as UnsupportedNode);
-          }
-        } else {
-            currentStatements.push({ type: 'UnsupportedNode', reason: 'AssignVariable has no expression', diagramNodeId: node.id } as UnsupportedNode);
-        }
-        break;
-
-      case 'Conditional':
-        if (node.data.expression) {
-          const diagCondExpr = DiagramExpression.fromObject(node.data.expression as DiagramIExpression);
-          // Construct elements for conditional expression
-          const conditionElements: ExpressionElement[] = [];
-          if (Array.isArray(diagCondExpr.leftSide)) {
-            conditionElements.push(...diagCondExpr.leftSide);
-          }
-          if (diagCondExpr.equality) {
-            conditionElements.push(new ExpressionElement(diagCondExpr.equality, 'operator', diagCondExpr.equality));
-          }
-          conditionElements.push(...diagCondExpr.rightSide);
-          const testAst = convertDiagramExpressionToAST(conditionElements, node.id);
-          if (testAst.type !== 'UnsupportedNode') {
-            const outgoing = findOutgoingEdges(edges, node.id);
-            const trueEdge = outgoing.find(e => e.data?.conditionalLabel === 'Yes' || e.data?.conditionalLabel === 'True');
-            const falseEdge = outgoing.find(e => e.data?.conditionalLabel === 'No' || e.data?.conditionalLabel === 'False');
-            // Detect loops: if trueEdge path comes back to this conditional
-            if (trueEdge?.target && isNodeReachable(trueEdge.target, node.id, edges)) {
-              // Loop detected: build a single Python while, filtering nested loop markers
-              const rawBody = processNode(trueEdge.target);
-              const loopBody = rawBody.filter(stmt => !(stmt.type === 'UnsupportedNode' &&
-                (stmt as UnsupportedNode).reason.includes('already visited')));
-              const whileStmt: WhileStatement = {
-                type: 'WhileStatement',
-                test: testAst,
-                body: { type: 'BlockStatement', body: loopBody },
-                diagramNodeId: node.id
-              } as WhileStatement;
-              currentStatements.push(whileStmt);
-              // Process exit (false) path
-              if (falseEdge?.target) {
-                currentStatements.push(...processNode(falseEdge.target));
-              }
-            } else {
-              // Regular if statement
-              const consequentBlock: Statement[] = [];
-              const alternateBlock: Statement[] = [];
-              if (trueEdge?.target) {
-                consequentBlock.push(...processNode(trueEdge.target));
-              }
-              if (falseEdge?.target) {
-                alternateBlock.push(...processNode(falseEdge.target));
-              }
-              const ifStmt: IfStatement = {
-                type: 'IfStatement',
-                test: testAst,
-                consequent: { type: 'BlockStatement', body: consequentBlock },
-                diagramNodeId: node.id
-              };
-              if (alternateBlock.length > 0) {
-                ifStmt.alternate = { type: 'BlockStatement', body: alternateBlock };
-              }
-              currentStatements.push(ifStmt);
-            }
-          } else {
-            currentStatements.push(testAst as UnsupportedNode);
-          }
-        } else {
-          currentStatements.push({ type: 'UnsupportedNode', reason: 'Conditional has no expression', diagramNodeId: node.id } as UnsupportedNode);
-        }
-        return currentStatements;
-
-      case 'Output':
-        if (node.data.expression) {
-          const diagOutputExpr = DiagramExpression.fromObject(node.data.expression as DiagramIExpression);
-          // Output node's expression seems to be stored entirely in rightSide in the Expression model
-          const argsAst = convertDiagramExpressionToAST(diagOutputExpr.rightSide, node.id);
-          if (argsAst.type !== 'UnsupportedNode') {
-            currentStatements.push({ type: 'PrintStatement', arguments: [argsAst], diagramNodeId: node.id } as PrintStatement);
-          } else {
-             currentStatements.push(argsAst as UnsupportedNode);
-          }
-        } else {
-            // Output node with no expression could be print() or print("")
-            currentStatements.push({ type: 'PrintStatement', arguments: [], diagramNodeId: node.id } as PrintStatement);
-        }
-        break;
-
-      case 'End':
-        // End node typically signifies termination. Could be a 'return' if inside a function.
-        // For a simple script, it might not translate to any specific code.
-        // currentStatements.push({ type: 'ReturnStatement', diagramNodeId: node.id }); // If we wrap in main()
-        visitedNodes.delete(nodeId); // Allow re-visiting End node if multiple paths lead to it.
-        return currentStatements; // Stop processing this path
-
-      case 'Input':
-        if (node.data.variable) {
-          const inputVar = node.data.variable as Variable;
-          const target: Identifier = { type: 'Identifier', name: inputVar.name, diagramNodeId: node.id };
-          const baseCall: CallExpression = {
-            type: 'CallExpression',
-            callee: { type: 'Identifier', name: 'input', diagramNodeId: node.id },
-            arguments: [],
-            diagramNodeId: node.id
-          };
-          let valueAst: PyExpression = baseCall;
-          if (inputVar.type === 'integer') {
-            valueAst = ({
-              type: 'CallExpression',
-              callee: { type: 'Identifier', name: 'int', diagramNodeId: node.id },
-              arguments: [baseCall],
-              diagramNodeId: node.id
-            } as CallExpression);
-          } else if (inputVar.type === 'float') {
-            valueAst = ({
-              type: 'CallExpression',
-              callee: { type: 'Identifier', name: 'float', diagramNodeId: node.id },
-              arguments: [baseCall],
-              diagramNodeId: node.id
-            } as CallExpression);
-          } else if (inputVar.type === 'boolean') {
-            valueAst = {
-              type: 'BinaryExpression',
-              operator: '==',
-              left: baseCall,
-              right: { type: 'Literal', value: true, raw: 'True', diagramNodeId: node.id },
-              diagramNodeId: node.id
-            } as BinaryExpression;
-          }
-          currentStatements.push({ type: 'AssignmentStatement', target, value: valueAst, diagramNodeId: node.id } as AssignmentStatement);
-        } else {
-          currentStatements.push({ type: 'UnsupportedNode', reason: 'Input node has no target variable defined', diagramNodeId: node.id } as UnsupportedNode);
-        }
-        break;
-
-      default:
-        currentStatements.push({ 
-            type: 'UnsupportedNode', 
-            originalNodeType: node.type, 
-            reason: `Node type '${node.type}' not supported for Python generation.`, 
-            diagramNodeId: node.id 
-        } as UnsupportedNode);
-    }
-
-    // Find next node in sequence (for non-branching nodes)
-    const outgoingEdges = findOutgoingEdges(edges, nodeId);
-    if (!skipNext && node.type !== 'Conditional' && node.type !== 'End' && outgoingEdges.length > 0) {
-      const nextNodeId = outgoingEdges[0].target;
-      if (nextNodeId) {
-        if (!visitedNodes.has(nextNodeId)) {
-          currentStatements.push(...processNode(nextNodeId));
-        } else {
-          // Infinite loop detected: walk the simple cycle and generate a while True loop including all nodes
-          currentStatements.push({
-            type: 'UnsupportedNode',
-            reason: 'Unsupported loop structure (non-conditional loops are not supported reliably).',
-            diagramNodeId: nodeId
-          } as UnsupportedNode);
-          /*const entry = nextNodeId;
-          let curr = entry;
-          const loopBody: Statement[] = [];
-          do {
-            visitedNodes.delete(curr);
-            // Collect only this node's own statements
-            loopBody.push(...processNode(curr, true));
-            visitedNodes.add(curr);
-            const loopEdges = findOutgoingEdges(edges, curr);
-            if (loopEdges.length === 0 || !loopEdges[0].target) break;
-            curr = loopEdges[0].target;
-          } while (curr !== entry);
-          const trueTest: Literal = { type: 'Literal', value: true, raw: 'True', diagramNodeId: node.id };
-          const whileStmt: WhileStatement = {
-            type: 'WhileStatement',
-            test: trueTest,
-            body: { type: 'BlockStatement', body: loopBody },
-            diagramNodeId: node.id
-          } as WhileStatement;
-          currentStatements.push(whileStmt);*/
-        }
+// Compute dominators for each node via iterative algorithm
+const computeDominators = (cfg: CFG): Map<string, Set<string>> => {
+  const ids = Array.from(cfg.nodesMap.keys());
+  const dom = new Map<string, Set<string>>();
+  const all = new Set(ids);
+  ids.forEach(id => dom.set(id, new Set(all)));
+  dom.set(cfg.startId, new Set([cfg.startId]));
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const id of ids) {
+      if (id === cfg.startId) continue;
+      const preds = cfg.predMap.get(id) || [];
+      if (preds.length === 0) continue;
+      // intersect dominators of predecessors
+      let intersection = new Set<string>(dom.get(preds[0].source)!);
+      preds.slice(1).forEach(p => {
+        const pdom = dom.get(p.source)!;
+        intersection = new Set([...intersection].filter(x => pdom.has(x)));
+      });
+      intersection.add(id);
+      const old = dom.get(id)!;
+      if (old.size !== intersection.size || [...old].some(x => !intersection.has(x))) {
+        dom.set(id, intersection);
+        changed = true;
       }
     }
-    
-    // Clean up recursion stack
-    visitedNodes.delete(nodeId);
-    return currentStatements;
-  };
-  
-  // Start processing from the Start node's first successor
-  const initialOutgoingEdges = findOutgoingEdges(edges, startNode.id);
-  if (initialOutgoingEdges.length > 0 && initialOutgoingEdges[0].target) {
-    program.body = processNode(initialOutgoingEdges[0].target);
-  } else if (nodes.length === 1 && startNode) {
-    // Special case: only a Start node exists
-    program.body.push({ type: 'UnsupportedNode', reason: 'Only Start node present. Diagram is empty.', diagramNodeId: startNode.id } as UnsupportedNode);
+  }
+  return dom;
+};
+
+// Detect all loops: natural loops (back edges) and unconditional loops (while-true)
+const findNaturalLoops = (cfg: CFG, dom: Map<string, Set<string>>): Map<string, Set<string>> => {
+  const loops = new Map<string, Set<string>>();
+  cfg.predMap.forEach((preds, header) => {
+    preds.forEach(e => {
+      const node = e.source;
+      if (dom.get(node)?.has(header)) {
+        // back edge from node -> header
+        const body = new Set<string>([header, node]);
+        const stack = [node];
+        while (stack.length) {
+          const n = stack.pop()!;
+          (cfg.predMap.get(n) || []).forEach(pe => {
+            if (!body.has(pe.source)) {
+              body.add(pe.source);
+              stack.push(pe.source);
+            }
+          });
+        }
+        loops.set(header, body);
+      }
+    });
+  });
+  return loops;
+};
+
+const findUnconditionalLoops = (cfg: CFG, dom: Map<string, Set<string>>): Map<string, Set<string>> => {
+  const loops = new Map<string, Set<string>>();
+  cfg.succMap.forEach((outs, src) => {
+    outs.forEach(e => {
+      const header = e.target!;
+      if (dom.get(src)?.has(header)) {
+        const headerNode = cfg.nodesMap.get(header)!;
+        if (headerNode.type !== 'Conditional') {
+          // treat as while-true loop header
+          const body = new Set<string>([header, src]);
+          const stack = [src];
+          while (stack.length) {
+            const n = stack.pop()!;
+            (cfg.predMap.get(n) || []).forEach(pe => {
+              if (!body.has(pe.source)) {
+                body.add(pe.source);
+                stack.push(pe.source);
+              }
+            });
+          }
+          loops.set(header, body);
+        }
+      }
+    });
+  });
+  return loops;
+};
+
+// AST builder: recursively traverse CFG building Python AST, honoring loops
+const buildAST = (
+  cfg: CFG,
+  loops: Map<string, Set<string>>,
+  nodeId: string,
+  visited: Set<string> = new Set(),
+  inLoop: string | null = null
+): Statement[] => {
+  // Handle invalid nodeId
+  if (!nodeId || !cfg.nodesMap.has(nodeId)) {
+    return [{ type: 'UnsupportedNode', reason: `Invalid or missing node ID: ${nodeId}`, diagramNodeId: nodeId } as UnsupportedNode];
   }
 
-  return program;
+  // Loop header handling
+  if (loops.has(nodeId) && inLoop !== nodeId) {
+    const headerNode = cfg.nodesMap.get(nodeId)!;
+
+    // --- prepend header's own statements (for unconditional loops) ---
+    const headerStmts: Statement[] = [];
+    if (headerNode.type === 'AssignVariable') {
+      if (headerNode.data?.expression) {
+        const diag = DiagramExpression.fromObject(headerNode.data.expression as DiagramIExpression);
+        if (diag.leftSide instanceof Variable) {
+          const target: Identifier = { type: 'Identifier', name: diag.leftSide.name, diagramNodeId: nodeId };
+          const val = convertDiagramExpressionToAST(diag.rightSide, nodeId);
+          headerStmts.push(
+            val.type !== 'UnsupportedNode'
+              ? { type: 'AssignmentStatement', target, value: val, diagramNodeId: nodeId } as AssignmentStatement
+              : val as UnsupportedNode
+          );
+        }
+      }
+    } else if (headerNode.type === 'Input') {
+      if (headerNode.data?.variable) {
+        const v = headerNode.data.variable as Variable;
+        const target: Identifier = { type: 'Identifier', name: v.name, diagramNodeId: nodeId };
+        const baseCall: CallExpression = { type: 'CallExpression', callee: { type: 'Identifier', name: 'input', diagramNodeId: nodeId }, arguments: [], diagramNodeId: nodeId } as CallExpression;
+        let value: PyExpression = baseCall;
+        if (v.type === 'integer') value = { type: 'CallExpression', callee: { type: 'Identifier', name: 'int', diagramNodeId: nodeId }, arguments: [baseCall], diagramNodeId: nodeId } as CallExpression;
+        else if (v.type === 'float') value = { type: 'CallExpression', callee: { type: 'Identifier', name: 'float', diagramNodeId: nodeId }, arguments: [baseCall], diagramNodeId: nodeId } as CallExpression;
+        else if (v.type === 'boolean') value = { type: 'BinaryExpression', operator: '==', left: baseCall, right: { type: 'Literal', value: true, raw: 'True', diagramNodeId: nodeId } as Literal, diagramNodeId: nodeId } as BinaryExpression;
+        headerStmts.push({ type: 'AssignmentStatement', target, value, diagramNodeId: nodeId } as AssignmentStatement);
+      }
+    } else if (headerNode.type === 'Output') {
+      if (headerNode.data?.expression) {
+        const diag = DiagramExpression.fromObject(headerNode.data.expression as DiagramIExpression);
+        const val = convertDiagramExpressionToAST(diag.rightSide, nodeId);
+        headerStmts.push(
+          val.type !== 'UnsupportedNode'
+            ? { type: 'PrintStatement', arguments: [val], diagramNodeId: nodeId } as PrintStatement
+            : val as UnsupportedNode
+        );
+      } else {
+        headerStmts.push({ type: 'PrintStatement', arguments: [], diagramNodeId: nodeId } as PrintStatement);
+      }
+    }
+    // -------------------------------------------------------------
+
+    // gather body statements starting from successors within loop body
+    const bodyStmts: Statement[] = [...headerStmts];
+    const loopBodyIds = loops.get(nodeId)!;
+    // choose start edges
+    const startEdges = headerNode.type === 'Conditional'
+      ? (cfg.succMap.get(nodeId) || []).filter(e => (e.data?.conditionalLabel as string)?.toLowerCase?.() === 'yes' || (e.data?.conditionalLabel as string)?.toLowerCase?.() === 'true')
+      : (cfg.succMap.get(nodeId) || []);
+    
+    // Create a fresh visited set for loop body to prevent cross-iteration interference
+    const loopVisited = new Set<string>();
+    startEdges.forEach(e => {
+      if (e.target && loopBodyIds.has(e.target)) {
+        bodyStmts.push(...buildAST(cfg, loops, e.target, loopVisited, nodeId));
+      }
+    });
+    
+    // determine test expression
+    const testExpr: PyExpression = headerNode.type === 'Conditional'
+      ? (() => {
+        const diag = DiagramExpression.fromObject((headerNode.data?.expression as DiagramIExpression));
+        const elems = [] as ExpressionElement[];
+        if (Array.isArray(diag.leftSide)) elems.push(...diag.leftSide);
+        if (diag.equality) elems.push(new ExpressionElement(diag.equality, 'operator', diag.equality));
+        elems.push(...diag.rightSide);
+        return convertDiagramExpressionToAST(elems, nodeId);
+      })()
+      : ({ type: 'Literal', value: true, raw: 'True', diagramNodeId: nodeId } as Literal);
+    const whileStmt: WhileStatement = {
+      type: 'WhileStatement',
+      test: testExpr,
+      body: { type: 'BlockStatement', body: bodyStmts },
+      diagramNodeId: nodeId
+    };
+    const stmts: Statement[] = [whileStmt];
+    // after conditional loop, follow false branch
+    if (headerNode.type === 'Conditional') {
+      const falseEdge = (cfg.succMap.get(nodeId) || [])
+        .find(e => (e.data?.conditionalLabel as string)?.toLowerCase?.() === 'no' || (e.data?.conditionalLabel as string)?.toLowerCase?.() === 'false');
+      if (falseEdge?.target) {
+        stmts.push(...buildAST(cfg, loops, falseEdge.target, visited, inLoop));
+      }
+    }
+    return stmts;
+  }
+  
+  // If this is a loop header and we're inside its own loop, don't process as regular conditional
+  if (loops.has(nodeId) && inLoop === nodeId) {
+    return []; // Skip processing the loop header again within its own loop
+  }
+  
+  // Prevent revisiting
+  if (visited.has(nodeId)) return [];
+  visited.add(nodeId);
+
+  const node = cfg.nodesMap.get(nodeId)!;
+  const stmts: Statement[] = [];
+
+  switch (node.type) {
+    case 'Start': {
+      // Start node: proceed to next node if available
+      const outs = cfg.succMap.get(nodeId) || [];
+      if (outs.length > 0 && outs[0].target) {
+        stmts.push(...buildAST(cfg, loops, outs[0].target, visited, inLoop));
+      }
+      return stmts;
+    }
+    case 'AssignVariable': {
+      if (node.data?.expression) {
+        const diag = DiagramExpression.fromObject(node.data.expression as DiagramIExpression);
+        if (diag.leftSide instanceof Variable) {
+          const target: Identifier = { type: 'Identifier', name: diag.leftSide.name, diagramNodeId: nodeId };
+          const val = convertDiagramExpressionToAST(diag.rightSide, nodeId);
+          stmts.push(val.type !== 'UnsupportedNode'
+            ? { type: 'AssignmentStatement', target, value: val, diagramNodeId: nodeId } as AssignmentStatement
+            : val as UnsupportedNode);
+        }
+      }
+    } break;
+    case 'Input': {
+      if (node.data?.variable) {
+        const v = node.data.variable as Variable;
+        const target: Identifier = { type: 'Identifier', name: v.name, diagramNodeId: nodeId };
+        const base: CallExpression = { type: 'CallExpression', callee: { type: 'Identifier', name: 'input', diagramNodeId: nodeId }, arguments: [], diagramNodeId: nodeId } as CallExpression;
+        let value: PyExpression = base;
+        if (v.type === 'integer') value = { type: 'CallExpression', callee: { type: 'Identifier', name: 'int', diagramNodeId: nodeId }, arguments: [base], diagramNodeId: nodeId } as CallExpression;
+        else if (v.type === 'float') value = { type: 'CallExpression', callee: { type: 'Identifier', name: 'float', diagramNodeId: nodeId }, arguments: [base], diagramNodeId: nodeId } as CallExpression;
+        else if (v.type === 'boolean') value = { type: 'BinaryExpression', operator: '==', left: base, right: { type: 'Literal', value: true, raw: 'True', diagramNodeId: nodeId } as Literal, diagramNodeId: nodeId } as BinaryExpression;
+        stmts.push({ type: 'AssignmentStatement', target, value, diagramNodeId: nodeId } as AssignmentStatement);
+      }
+    } break;
+    case 'Output': {
+      if (node.data?.expression) {
+        const diag = DiagramExpression.fromObject(node.data.expression as DiagramIExpression);
+        const val = convertDiagramExpressionToAST(diag.rightSide, nodeId);
+        stmts.push(val.type !== 'UnsupportedNode'
+          ? { type: 'PrintStatement', arguments: [val], diagramNodeId: nodeId } as PrintStatement
+          : val as UnsupportedNode);
+      } else {
+        stmts.push({ type: 'PrintStatement', arguments: [], diagramNodeId: nodeId } as PrintStatement);
+      }
+    } break;
+    case 'DeclareVariable': {
+      // no-op
+    } break;
+    case 'Conditional': {
+      // non-loop conditional
+      const diag = DiagramExpression.fromObject(node.data!.expression as DiagramIExpression);
+      const elems: ExpressionElement[] = [];
+      if (Array.isArray(diag.leftSide)) elems.push(...diag.leftSide);
+      if (diag.equality) elems.push(new ExpressionElement(diag.equality, 'operator', diag.equality));
+      elems.push(...diag.rightSide);
+      const test = convertDiagramExpressionToAST(elems, nodeId);
+      const outs = cfg.succMap.get(nodeId) || [];
+      const t = outs.find(e => (e.data?.conditionalLabel as string)?.toLowerCase?.() === 'yes' || (e.data?.conditionalLabel as string)?.toLowerCase?.() === 'true');
+      const f = outs.find(e => (e.data?.conditionalLabel as string)?.toLowerCase?.() === 'no' || (e.data?.conditionalLabel as string)?.toLowerCase?.() === 'false');
+      
+      // Create separate visited sets for each branch to avoid cross-contamination
+      const trueVisited = new Set(visited);
+      const falseVisited = new Set(visited);
+      
+      const cons = t?.target ? buildAST(cfg, loops, t.target, trueVisited, inLoop) : [];
+      const alt = f?.target ? buildAST(cfg, loops, f.target, falseVisited, inLoop) : [];
+      const ifStmt: IfStatement = { type: 'IfStatement', test,
+        consequent: { type: 'BlockStatement', body: cons }, diagramNodeId: nodeId };
+      if (alt.length) ifStmt.alternate = { type: 'BlockStatement', body: alt };
+      stmts.push(ifStmt);
+      return stmts;
+    }
+    case 'End': {
+      return stmts;
+    }
+    default: {
+      stmts.push({ type: 'UnsupportedNode', reason: `Node '${node.type}' not supported.`, diagramNodeId: nodeId } as UnsupportedNode);
+    }
+  }
+  // fall through to successors
+  const outs = cfg.succMap.get(nodeId) || [];
+  if (outs.length && node.type !== 'Conditional' && node.type !== 'End') {
+    const next = outs[0].target;
+    if (next) stmts.push(...buildAST(cfg, loops, next, visited, inLoop));
+  }
+  return stmts;
+};
+
+// Main entry: generate Python AST
+export const generatePythonAST = (nodes: FlowNode[], edges: Edge[]): Program => {
+  // Handle empty diagrams
+  if (!nodes || nodes.length === 0) {
+    return { 
+      type: 'Program', 
+      body: [{ type: 'UnsupportedNode', reason: 'No nodes in diagram', diagramNodeId: 'empty' } as UnsupportedNode] 
+    };
+  }
+
+  try {
+    const cfg = buildCFG(nodes, edges);
+
+    console.log("cfg", cfg);
+
+    const dom = computeDominators(cfg);
+
+    console.log("dom", dom);
+
+    const natural = findNaturalLoops(cfg, dom);
+    console.log("natural", natural);
+
+    const unconditional = findUnconditionalLoops(cfg, dom);
+
+    console.log("unconditional", unconditional);
+
+    const loops = new Map<string, Set<string>>([...natural, ...unconditional]);
+
+    console.log("loops", loops);
+
+    const body = buildAST(cfg, loops, cfg.startId);
+
+    console.log("body", body);
+
+    // Handle empty program body
+    if (!body || body.length === 0) {
+      return { 
+        type: 'Program', 
+        body: [{ type: 'UnsupportedNode', reason: 'Empty diagram - only Start node with no connections', diagramNodeId: cfg.startId } as UnsupportedNode] 
+      };
+    }
+    
+    return { type: 'Program', body };
+  } catch (error) {
+    return { 
+      type: 'Program', 
+      body: [{ type: 'UnsupportedNode', reason: `Error building AST: ${(error as Error).message}`, diagramNodeId: 'error' } as UnsupportedNode] 
+    };
+  }
 };
 
 const INDENT_SPACE = '  '; // Two spaces for indentation
@@ -451,7 +553,7 @@ const generateCodeFromASTNode = (astNode: ASTNode, indentLevel = 0): string => {
     case 'Literal':
       const literal = astNode as Literal;
       if (typeof literal.value === 'string') {
-        return `"${literal.value.replace(/"/g, '\\"')}"`;
+        return JSON.stringify(literal.value);
       } else if (literal.value === null) {
         return 'None';
       }
