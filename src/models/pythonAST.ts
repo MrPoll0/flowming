@@ -3,6 +3,8 @@ export interface ASTNode {
   type: string;
   // Optional: for linking generated code to diagram nodes
   diagramNodeId?: string; 
+  // Optional: user-friendly visual block ID
+  visualId?: string;
 }
 
 // Statements

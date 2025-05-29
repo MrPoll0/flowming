@@ -1780,7 +1780,7 @@ const DetailsTab = () => {
                     </AccordionTrigger>
                     <AccordionContent>
                       <div className="space-y-2 text-sm break-words overflow-hidden">
-                        <p className="break-all"><span className="font-medium">Node ID:</span> {selectedNode.id}</p>
+                        <p className="break-all"><span className="font-medium">Node ID:</span> {selectedNode.data.visualId}</p>
                         <p><span className="font-medium">Type:</span> {selectedNode.type || 'default'}</p>
                         <p className="break-words"><span className="font-medium">Label:</span> {selectedNode.data.label}</p>
                         <p><span className="font-medium">Position:</span> x={selectedNode.position.x.toFixed(2)}, y={selectedNode.position.y.toFixed(2)}</p>
