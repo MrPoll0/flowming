@@ -6,118 +6,170 @@ import {
 import { Expression as DiagramExpression, ExpressionElement, Variable, IOperator, IExpression as DiagramIExpression } from '../models';
 
 // Helper to convert Diagram ExpressionElement[] to Python AST Expression
-// TODO: This is a simplified version and needs to handle operator precedence and parentheses correctly if expressions get complex.
-// For now, it will handle simple binary operations.
+// TODO: proper error handling and equivalence with runtime errors in Expression calculation
 const convertDiagramExpressionToAST = (elements: ExpressionElement[], diagramNodeId: string): PyExpression => {
   const unsupportedNode = (reason: string): UnsupportedNode =>
     ({ type: 'UnsupportedNode', reason, diagramNodeId } as UnsupportedNode);
 
-  let idx = 0;
-  const tokens = elements;
-  const peek = (): ExpressionElement | undefined => tokens[idx];
-  const consume = (): ExpressionElement | undefined => tokens[idx++];
-
-  const parseExpression = (): PyExpression => parseLogicalOr();
-
-  const parsePrimary = (): PyExpression => {
-    const token = peek();
-    if (!token) return { type: 'Literal', value: null, diagramNodeId } as Literal;
-    if (token.isOperator() && token.value === '(') {
-      consume();
-      const expr = parseExpression();
-      const next = peek();
-      if (next && next.isOperator() && next.value === ')') {
-        consume();
+  // Preprocessing step to distinguish unary minus and logical not
+  const processedElements: ExpressionElement[] = [];
+  for (let i = 0; i < elements.length; i++) {
+    const token = elements[i];
+    if (token.isOperator()) {
+      if (token.value === '-') {
+        const isUnary = (i === 0) || (elements[i-1].isOperator()) || (elements[i-1].value === '(');
+        if (isUnary) {
+          processedElements.push(new ExpressionElement(token.id, 'operator', '_UMINUS_', token.variable));
+        } else {
+          processedElements.push(token);
+        }
+      } else if (token.value === '!') {
+        // '!' is typically unary. Add more checks if it can be binary in your DSL.
+        processedElements.push(new ExpressionElement(token.id, 'operator', '_UNOT_', token.variable));
       } else {
-        return unsupportedNode('Missing closing parenthesis');
+        processedElements.push(token);
       }
-      return expr;
+    } else {
+      processedElements.push(token);
     }
-    if (token.isVariable() && token.variable) {
-      consume();
-      return { type: 'Identifier', name: token.variable.name, diagramNodeId } as Identifier;
+  }
+
+  // Operator precedence and associativity (L for left, R for right)
+  const precedence: { [key: string]: { prec: number, assoc: 'L' | 'R' } } = {
+    '_UNOT_': { prec: 8, assoc: 'R' }, // Unary not
+    '_UMINUS_': { prec: 8, assoc: 'R' }, // Unary minus
+    '*':  { prec: 7, assoc: 'L' }, '/':  { prec: 7, assoc: 'L' }, '%':  { prec: 7, assoc: 'L' },
+    '+':  { prec: 6, assoc: 'L' }, '-':  { prec: 6, assoc: 'L' }, // Binary minus
+    '>':  { prec: 5, assoc: 'L' }, '<':  { prec: 5, assoc: 'L' }, '>=': { prec: 5, assoc: 'L' }, '<=': { prec: 5, assoc: 'L' },
+    '==': { prec: 4, assoc: 'L' }, '!=': { prec: 4, assoc: 'L' },
+    '&&': { prec: 3, assoc: 'L' }, // Logical AND
+    '||': { prec: 2, assoc: 'L' }  // Logical OR
+  };
+
+  const outputQueue: ExpressionElement[] = [];
+  const operatorStack: ExpressionElement[] = [];
+
+  // Shunting-yard algorithm to convert infix to RPN (Reverse Polish Notation)
+  processedElements.forEach(token => {
+    if (token.isLiteral() || token.isVariable()) {
+      outputQueue.push(token);
+    } else if (token.isOperator()) {
+      const op1Value = token.value; // op1Value can be '_UMINUS_', etc.
+      if (op1Value === '(') {
+        operatorStack.push(token);
+      } else if (op1Value === ')') {
+        while (operatorStack.length > 0 && operatorStack[operatorStack.length - 1].value !== '(') {
+          outputQueue.push(operatorStack.pop()!);
+        }
+        if (operatorStack.length === 0) return unsupportedNode('Mismatched parentheses: missing opening parenthesis');
+        operatorStack.pop(); // Pop '('
+      } else { // An operator
+        const op1PrecedenceDetails = precedence[op1Value];
+        if (!op1PrecedenceDetails) return unsupportedNode(`Unknown operator: ${op1Value}`);
+
+        while (operatorStack.length > 0) {
+          const topOpToken = operatorStack[operatorStack.length - 1];
+          if (topOpToken.value === '(') break;
+          const op2Value = topOpToken.value;
+          const op2PrecedenceDetails = precedence[op2Value];
+          if (!op2PrecedenceDetails) return unsupportedNode(`Unknown operator on stack: ${op2Value}`);
+
+          if ((op1PrecedenceDetails.assoc === 'L' && op1PrecedenceDetails.prec <= op2PrecedenceDetails.prec) ||
+              (op1PrecedenceDetails.assoc === 'R' && op1PrecedenceDetails.prec < op2PrecedenceDetails.prec)) {
+            outputQueue.push(operatorStack.pop()!);
+          } else {
+            break;
+          }
+        }
+        operatorStack.push(token);
+      }
+    } else {
+      return unsupportedNode(`Invalid token type in expression: ${token.type}`);
     }
+  });
+
+  while (operatorStack.length > 0) {
+    const op = operatorStack[operatorStack.length - 1];
+    if (op.value === '(' || op.value === ')') {
+      return unsupportedNode('Mismatched parentheses: extraneous parenthesis on stack');
+    }
+    outputQueue.push(operatorStack.pop()!);
+  }
+
+  // --- Convert RPN (outputQueue) to AST ---
+  const astStack: PyExpression[] = [];
+
+  if (outputQueue.length === 0 && processedElements.length > 0) {
+    return unsupportedNode('Invalid expression structure, RPN queue is empty but input was not.');
+  }
+  if (outputQueue.length === 0 && processedElements.length === 0) {
+    return { type: 'Literal', value: null, raw: 'None', diagramNodeId } as Literal; // Empty expression
+  }
+
+  outputQueue.forEach(token => {
     if (token.isLiteral()) {
-      consume();
       const lowerValue = token.value.toLowerCase();
       if (lowerValue === 'true') {
-        return { type: 'Literal', value: true, raw: 'True', diagramNodeId } as Literal;
-      }
-      if (lowerValue === 'false') {
-        return { type: 'Literal', value: false, raw: 'False', diagramNodeId } as Literal;
-      }
-      // Attempt to parse as a number, otherwise treat as a string literal
-      const num = parseFloat(token.value);
-      if (!isNaN(num)) {
-        return { type: 'Literal', value: num, raw: token.value, diagramNodeId } as Literal;
-      }
-      // For string literals, the value should be the string itself, and raw should also be the string (or quoted version if necessary for Python)
-      // Assuming string literals from the diagram are already appropriately formatted (e.g., not needing extra quotes for Python here, as generateCodeFromASTNode handles JSON.stringify)
-      return { type: 'Literal', value: token.value, raw: JSON.stringify(token.value), diagramNodeId } as Literal; 
-    }
-    consume(); // Consume the unexpected token before reporting
-    return unsupportedNode(`Unexpected token: ${token.value}`); // TODO: error handling (e.g. "test" True)
-  };
-
-  const parseUnary = (): PyExpression => {
-    const token = peek();
-    if (token && token.isOperator() && (token.value === '!' || token.value === '-')) {
-      const op = token.value;
-      consume();
-      const expr = parseUnary();
-      if (op === '!') {
-        return {
-          type: 'BinaryExpression',
-          operator: '==',
-          left: expr,
-          right: { type: 'Literal', value: false, raw: 'False', diagramNodeId } as Literal,
-          diagramNodeId
-        } as BinaryExpression;
+        astStack.push({ type: 'Literal', value: true, raw: 'True', diagramNodeId } as Literal);
+      } else if (lowerValue === 'false') {
+        astStack.push({ type: 'Literal', value: false, raw: 'False', diagramNodeId } as Literal);
       } else {
-        return {
-          type: 'BinaryExpression',
-          operator: '-',
-          left: { type: 'Literal', value: 0, raw: '0', diagramNodeId } as Literal,
-          right: expr,
-          diagramNodeId
-        } as BinaryExpression;
+        const num = parseFloat(token.value);
+        if (!isNaN(num)) {
+          astStack.push({ type: 'Literal', value: num, raw: token.value, diagramNodeId } as Literal);
+        } else {
+          astStack.push({ type: 'Literal', value: token.value, raw: JSON.stringify(token.value), diagramNodeId } as Literal);
+        }
       }
-    }
-    return parsePrimary();
-  };
+    } else if (token.isVariable() && token.variable) {
+      astStack.push({ type: 'Identifier', name: token.variable.name, diagramNodeId } as Identifier);
+    } else if (token.isOperator()) {
+      const operatorValue = token.value;
+      if (operatorValue === '_UNOT_') { // Unary Logical NOT
+        if (astStack.length < 1) return unsupportedNode('Insufficient operands for !_UNOT_ operator');
+        const operand = astStack.pop()!;
+        astStack.push({
+          type: 'BinaryExpression',
+          operator: '==', // Represent 'not x' as 'x == False'
+          left: operand,
+          right: { type: 'Literal', value: false, raw: 'False', diagramNodeId },
+          diagramNodeId
+        } as BinaryExpression);
+      } else if (operatorValue === '_UMINUS_') { // Unary Minus
+        if (astStack.length < 1) return unsupportedNode('Insufficient operands for unary _UMINUS_ operator');
+        const operand = astStack.pop()!;
+        astStack.push({
+          type: 'BinaryExpression',
+          operator: '-', // Represent '-x' as '0 - x'
+          left: { type: 'Literal', value: 0, raw: '0', diagramNodeId },
+          right: operand,
+          diagramNodeId
+        } as BinaryExpression);
+      } else { // Binary operators
+        if (astStack.length < 2) return unsupportedNode(`Insufficient operands for operator ${operatorValue}`);
+        const right = astStack.pop()!;
+        const left = astStack.pop()!;
+        let opForAST = operatorValue as IOperator; // Cast, assuming other ops are IOperator
+        
+        // Python specific operator conversion for '&&' and '||'
+        if (opForAST === '&&') opForAST = 'and' as IOperator; // Ensure 'and' is compatible with IOperator or widen type
+        if (opForAST === '||') opForAST = 'or' as IOperator;  // Ensure 'or' is compatible with IOperator or widen type
 
-  const parseBinary = (nextFn: () => PyExpression, ops: string[]): PyExpression => {
-    let node = nextFn();
-    while (true) {
-      const token = peek();
-      if (token && token.isOperator() && ops.includes(token.value)) {
-        const op = consume()!.value as IOperator;
-        const right = nextFn();
-        node = { type: 'BinaryExpression', operator: op, left: node, right, diagramNodeId } as BinaryExpression;
-      } else break;
+        astStack.push({ type: 'BinaryExpression', operator: opForAST, left, right, diagramNodeId } as BinaryExpression);
+      }
+    } else {
+        return unsupportedNode(`Unknown token in RPN queue: ${token.value}`);
     }
-    return node;
-  };
+  });
 
-  const parseMultiplicative = () => parseBinary(parseUnary, ['*','/','%']);
-  const parseAdditive       = () => parseBinary(parseMultiplicative, ['+','-']);
-  const parseRelational     = () => parseBinary(parseAdditive, ['>','<','>=','<=']);
-  const parseEquality       = () => parseBinary(parseRelational, ['==','!=']);
-  const parseLogicalAnd     = () => parseBinary(parseEquality, ['&&']);
-  const parseLogicalOr      = () => parseBinary(parseLogicalAnd, ['||']);
-
-  try {
-    if (elements.length === 0) {
-      return { type: 'Literal', value: null, diagramNodeId } as Literal;
-    }
-    const result = parseExpression();
-    if (idx < tokens.length) {
-      return unsupportedNode(`Unexpected token: ${tokens[idx].value}`);
-    }
-    return result;
-  } catch (err) {
-    return unsupportedNode(`Expression parse error: ${(err as Error).message}`);
+  if (astStack.length === 1) {
+    return astStack[0];
+  } else if (astStack.length === 0 && outputQueue.length > 0) {
+      return unsupportedNode('Valid RPN but AST stack empty - likely malformed RPN or operator issue.');
+  } else if (astStack.length > 1) {
+    return unsupportedNode('Malformed expression: too many values in AST stack. Operator missing?');
   }
+  return unsupportedNode('Failed to parse expression - unknown state.');
 };
 
 // Build a Control-Flow Graph (CFG) from nodes and edges
