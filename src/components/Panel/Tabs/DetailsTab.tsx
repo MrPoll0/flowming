@@ -42,6 +42,12 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Label } from "@/components/ui/label";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from "@/components/ui/tabs";
 
 // TODO: if cannot select element while running, then also hide its editor in DetailsTab for consistency (i prefer being able to select elements while running and see their values but not modify them)
 
@@ -193,6 +199,9 @@ const DetailsTab = () => {
   const [_activeId, setActiveId] = useState<string | null>(null);
   const [activeItem, setActiveItem] = useState<ExpressionElement | null>(null);
   const [isReordering, setIsReordering] = useState(false);
+  const [assignmentTab, setAssignmentTab] = useState<'variables' | 'literals'>('variables');
+  const [conditionalTab, setConditionalTab] = useState<'variables' | 'literals'>('variables');
+  const [outputTab, setOutputTab] = useState<'variables' | 'literals'>('variables');
   
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -867,80 +876,252 @@ const DetailsTab = () => {
         <div key={selectedNode.id}>
           <h4>Variable Assignment</h4>
           
-          {/* Assignment header: variable, '=', expression */}
-          <div className="flex items-center gap-3 mb-4">
-            <Select
-              value={leftSideVariable}
-              onValueChange={setLeftSideVariable}
-              disabled={isRunning}
-            >
-              <SelectTrigger className="w-auto min-w-[200px]">
-                <SelectValue placeholder="-- Select Variable --" />
-              </SelectTrigger>
-              <SelectContent>
-                {allVariables.map(variable => (
-                  <SelectItem key={variable.id} value={variable.id}>
-                    {variable.name} ({variable.type})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <span className="text-lg font-bold">=</span>
-            <div className="flex-1">
-              <div className="p-2.5 border border-gray-300 rounded min-h-[50px] mb-4 bg-gray-50">
-                {leftSideVariable && expression ? (
-                  <ExpressionDropArea id="expression-drop-area" disabled={isRunning}>
-                    <SortableContext
-                      items={expression.rightSide.map(item => item.id)}
-                      strategy={horizontalListSortingStrategy}
-                    >
-                      {expression.rightSide.map((element, index) => (
-                        <DraggableExpressionElement
-                          key={element.id}
-                          element={element}
-                          index={index}
-                          removeExpressionElement={removeExpressionElement}
-                          disabled={isRunning}
-                        />
-                      ))}
-                    </SortableContext>
-                  </ExpressionDropArea>
-                ) : (
-                  <span className="text-gray-500 italic">
-                    Select a variable for the left-hand side
-                  </span>
-                )}
+          {/* Assignment expression display box */}
+          <Card className="mb-4">
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-4">
+                <div className="flex-none min-w-[200px]">
+                  <Label className="text-sm font-medium">Variable</Label>
+                </div>
+                <div className="flex-none w-6 text-center">
+                  {/* Spacer for equals sign */}
+                </div>
+                <div className="flex-1">
+                  <Label className="text-sm font-medium">Expression</Label>
+                </div>
               </div>
-            </div>
-          </div>
+            </CardHeader>
+            <CardContent>
+              <div className="min-h-[50px] p-2 bg-muted/30 border rounded">
+                <div className="flex items-center gap-4">
+                  {/* Variable selection */}
+                  <div className="flex-none min-w-[200px]">
+                    <Select
+                      value={leftSideVariable}
+                      onValueChange={(value) => setLeftSideVariable(value === '__CLEAR__' ? '' : value)}
+                      disabled={isRunning}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="No variable" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__CLEAR__">No variable</SelectItem>
+                        {allVariables.map(variable => (
+                          <SelectItem key={variable.id} value={variable.id}>
+                            {variable.name} ({variable.type})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  {/* Equals sign */}
+                  <div className="flex-none w-6 text-center">
+                    <span className="text-lg font-bold">=</span>
+                  </div>
+                  
+                  {/* Expression area */}
+                  <div className="flex-1">
+                    {leftSideVariable && expression ? (
+                      <ExpressionDropArea id="expression-drop-area" disabled={isRunning}>
+                        <SortableContext
+                          items={expression.rightSide.map(item => item.id)}
+                          strategy={horizontalListSortingStrategy}
+                        >
+                          {expression.rightSide.map((element, index) => (
+                            <DraggableExpressionElement
+                              key={element.id}
+                              element={element}
+                              index={index}
+                              removeExpressionElement={removeExpressionElement}
+                              disabled={isRunning}
+                            />
+                          ))}
+                        </SortableContext>
+                      </ExpressionDropArea>
+                    ) : (
+                      <div className="p-2.5 border-2 border-dashed border-gray-300 rounded min-h-[60px] flex items-center justify-center bg-transparent">
+                        <span className="text-muted-foreground text-sm italic">
+                          Select a variable to build expression
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
           
           {/* Building blocks: variables, operators, literals */}
           {leftSideVariable && (
             <>
-              <div className="grid grid-cols-3 gap-4 mb-4">
-                {/* Variables column */}
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                {/* Left column: Tabbed Variables and Literals */}
                 <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Variables</CardTitle>
+                    <Tabs value={assignmentTab} onValueChange={(value) => setAssignmentTab(value as 'variables' | 'literals')} className="w-full">
+                      <TabsList className="grid grid-cols-2 w-full">
+                        <TabsTrigger value="variables">Variables</TabsTrigger>
+                        <TabsTrigger value="literals">Literals</TabsTrigger>
+                      </TabsList>
+                    </Tabs>
                   </CardHeader>
-                  <CardContent className="space-y-2">
-                    {allVariables.map(variable => (
-                      <DraggablePaletteItem
-                        key={`var-${variable.id}`}
-                        id={`var-${variable.id}`}
-                        type="variable"
-                        value={variable.name}
-                        backgroundColor="#d1e7ff"
-                        disabled={isRunning}
-                      />
-                    ))}
-                    {allVariables.length === 0 && (
-                      <div className="text-muted-foreground text-sm italic">No variables declared</div>
-                    )}
+                  <CardContent>
+                    <Tabs value={assignmentTab} onValueChange={(value) => setAssignmentTab(value as 'variables' | 'literals')}>
+                      <TabsContent value="variables" className="mt-0">
+                        <div className="space-y-2">
+                          {allVariables.map(variable => (
+                            <DraggablePaletteItem
+                              key={`var-${variable.id}`}
+                              id={`var-${variable.id}`}
+                              type="variable"
+                              value={variable.name}
+                              backgroundColor="#d1e7ff"
+                              disabled={isRunning}
+                            />
+                          ))}
+                          {allVariables.length === 0 && (
+                            <div className="text-muted-foreground text-sm italic">No variables declared</div>
+                          )}
+                        </div>
+                      </TabsContent>
+                      
+                      <TabsContent value="literals" className="mt-0">
+                        <div className="space-y-3">
+                          {/* Boolean literals */}
+                          <div className="space-y-1">
+                            <Label className="text-xs font-medium">Boolean</Label>
+                            <div className="flex gap-1">
+                              <DraggablePaletteItem
+                                id="lit-boolean-true"
+                                type="literal"
+                                value="true"
+                                backgroundColor="#d1ffd1"
+                                disabled={isRunning}
+                              />
+                              <DraggablePaletteItem
+                                id="lit-boolean-false"
+                                type="literal"
+                                value="false"
+                                backgroundColor="#d1ffd1"
+                                disabled={isRunning}
+                              />
+                            </div>
+                          </div>
+                          
+                          {/* String literal */}
+                          <div className="space-y-1">
+                            <Label className="text-xs font-medium">String</Label>
+                            <div className="flex gap-1">
+                              <Input
+                                type="text"
+                                placeholder="String value"
+                                id="string-literal-input"
+                                className="flex-1 text-sm"
+                                disabled={isRunning}
+                              />
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  const input = document.getElementById('string-literal-input') as HTMLInputElement;
+                                  if (input && input.value) {
+                                    const value = input.value;
+                                    const element = new ExpressionElement(
+                                      crypto.randomUUID(),
+                                      'literal',
+                                      `"${value}"`
+                                    );
+                                    addExpressionElement(element);
+                                    input.value = '';
+                                  }
+                                }}
+                                disabled={isRunning}
+                                className="text-xs px-2"
+                              >
+                                Add
+                              </Button>
+                            </div>
+                          </div>
+                          
+                          {/* Integer literal */}
+                          <div className="space-y-1">
+                            <Label className="text-xs font-medium">Integer</Label>
+                            <div className="flex gap-1">
+                              <Input
+                                type="number"
+                                step="1"
+                                placeholder="Integer value" 
+                                id="integer-literal-input"
+                                className="flex-1 text-sm"
+                                disabled={isRunning}
+                              />
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  const input = document.getElementById('integer-literal-input') as HTMLInputElement;
+                                  if (input && input.value) {
+                                    const value = parseInt(input.value).toString();
+                                    const element = new ExpressionElement(
+                                      crypto.randomUUID(),
+                                      'literal',
+                                      value
+                                    );
+                                    addExpressionElement(element);
+                                    input.value = '';
+                                  }
+                                }}
+                                disabled={isRunning}
+                                className="text-xs px-2"
+                              >
+                                Add
+                              </Button>
+                            </div>
+                          </div>
+                          
+                          {/* Float literal */}
+                          <div className="space-y-1">
+                            <Label className="text-xs font-medium">Float</Label>
+                            <div className="flex gap-1">
+                              <Input
+                                type="number"
+                                step="0.1"
+                                placeholder="Float value"
+                                id="float-literal-input"
+                                className="flex-1 text-sm"
+                                disabled={isRunning}
+                              />
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  const input = document.getElementById('float-literal-input') as HTMLInputElement;
+                                  if (input && input.value) {
+                                    const value = parseFloat(input.value).toString();
+                                    const element = new ExpressionElement(
+                                      crypto.randomUUID(),
+                                      'literal',
+                                      value
+                                    );
+                                    addExpressionElement(element);
+                                    input.value = '';
+                                  }
+                                }}
+                                disabled={isRunning}
+                                className="text-xs px-2"
+                              >
+                                Add
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </TabsContent>
+                    </Tabs>
                   </CardContent>
                 </Card>
                 
-                {/* Operators column */}
+                {/* Right column: Operators */}
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm">Operators</CardTitle>
@@ -956,136 +1137,6 @@ const DetailsTab = () => {
                         disabled={isRunning}
                       />
                     ))}
-                  </CardContent>
-                </Card>
-                
-                {/* Literals column */}
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Literals</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {/* String literal */}
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">String</Label>
-                      <div className="flex gap-2">
-                        <Input
-                          type="text"
-                          placeholder="String value"
-                          id="string-literal-input"
-                          className="flex-1"
-                          disabled={isRunning}
-                        />
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const input = document.getElementById('string-literal-input') as HTMLInputElement;
-                            if (input && input.value) {
-                              const value = input.value;
-                              const element = new ExpressionElement(
-                                crypto.randomUUID(),
-                                'literal',
-                                `"${value}"`
-                              );
-                              addExpressionElement(element);
-                              input.value = '';
-                            }
-                          }}
-                          disabled={isRunning}
-                        >
-                          Add String
-                        </Button>
-                      </div>
-                    </div>
-                    {/* Integer literal */}
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">Integer</Label>
-                      <div className="flex gap-2">
-                        <Input
-                          type="number"
-                          step="1"
-                          placeholder="Integer value" 
-                          id="integer-literal-input"
-                          className="flex-1"
-                          disabled={isRunning}
-                        />
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const input = document.getElementById('integer-literal-input') as HTMLInputElement;
-                            if (input && input.value) {
-                              const value = parseInt(input.value).toString();
-                              const element = new ExpressionElement(
-                                crypto.randomUUID(),
-                                'literal',
-                                value
-                              );
-                              addExpressionElement(element);
-                              input.value = '';
-                            }
-                          }}
-                          disabled={isRunning}
-                        >
-                          Add Integer
-                        </Button>
-                      </div>
-                    </div>
-                    {/* Float literal */}
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">Float</Label>
-                      <div className="flex gap-2">
-                        <Input
-                          type="number"
-                          step="0.1"
-                          placeholder="Float value"
-                          id="float-literal-input"
-                          className="flex-1"
-                          disabled={isRunning}
-                        />
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const input = document.getElementById('float-literal-input') as HTMLInputElement;
-                            if (input && input.value) {
-                              const value = parseFloat(input.value).toString();
-                              const element = new ExpressionElement(
-                                crypto.randomUUID(),
-                                'literal',
-                                value
-                              );
-                              addExpressionElement(element);
-                              input.value = '';
-                            }
-                          }}
-                          disabled={isRunning}
-                        >
-                          Add Float
-                        </Button>
-                      </div>
-                    </div>
-                    {/* Boolean literals */}
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">Boolean</Label>
-                      <div className="flex gap-2">
-                        <DraggablePaletteItem
-                          id="lit-boolean-true"
-                          type="literal"
-                          value="true"
-                          backgroundColor="#d1ffd1"
-                          disabled={isRunning}
-                        />
-                        <DraggablePaletteItem
-                          id="lit-boolean-false"
-                          type="literal"
-                          value="false"
-                          backgroundColor="#d1ffd1"
-                          disabled={isRunning}
-                        />
-                      </div>
-                    </div>
                   </CardContent>
                 </Card>
               </div>
@@ -1158,30 +1209,158 @@ const DetailsTab = () => {
           </Card>
 
           {/* Building blocks section */}
-          <div className="space-y-4">
-            {/* Variables section */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* Left column: Tabbed Variables and Literals */}
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Variables</CardTitle>
+                <Tabs value={outputTab} onValueChange={(value) => setOutputTab(value as 'variables' | 'literals')} className="w-full">
+                  <TabsList className="grid grid-cols-2 w-full">
+                    <TabsTrigger value="variables">Variables</TabsTrigger>
+                    <TabsTrigger value="literals">Literals</TabsTrigger>
+                  </TabsList>
+                </Tabs>
               </CardHeader>
-              <CardContent className="space-y-2">
-                {allVariables.map(variable => (
-                  <DraggablePaletteItem
-                    key={`var-${variable.id}`}
-                    id={`var-${variable.id}`}
-                    type="variable"
-                    value={variable.name}
-                    backgroundColor="#d1e7ff"
-                    disabled={isRunning}
-                  />
-                ))}
-                {allVariables.length === 0 && (
-                  <div className="text-muted-foreground text-sm italic">No variables declared</div>
-                )}
+              <CardContent>
+                <Tabs value={outputTab} onValueChange={(value) => setOutputTab(value as 'variables' | 'literals')}>
+                  <TabsContent value="variables" className="mt-0">
+                    <div className="space-y-2">
+                      {allVariables.map(variable => (
+                        <DraggablePaletteItem
+                          key={`var-${variable.id}`}
+                          id={`var-${variable.id}`}
+                          type="variable"
+                          value={variable.name}
+                          backgroundColor="#d1e7ff"
+                          disabled={isRunning}
+                        />
+                      ))}
+                      {allVariables.length === 0 && (
+                        <div className="text-muted-foreground text-sm italic">No variables declared</div>
+                      )}
+                    </div>
+                  </TabsContent>
+                  
+                  <TabsContent value="literals" className="mt-0">
+                    <div className="space-y-3">
+                      {/* Boolean literals */}
+                      <div className="space-y-1">
+                        <Label className="text-xs font-medium">Boolean</Label>
+                        <div className="flex gap-1">
+                          <DraggablePaletteItem
+                            id="lit-boolean-true"
+                            type="literal"
+                            value="true"
+                            backgroundColor="#d1ffd1"
+                            disabled={isRunning}
+                          />
+                          <DraggablePaletteItem
+                            id="lit-boolean-false"
+                            type="literal"
+                            value="false"
+                            backgroundColor="#d1ffd1"
+                            disabled={isRunning}
+                          />
+                        </div>
+                      </div>
+                      
+                      {/* String literal */}
+                      <div className="space-y-1">
+                        <Label className="text-xs font-medium">String</Label>
+                        <div className="flex gap-1">
+                          <Input
+                            type="text"
+                            placeholder="String value"
+                            id="output-string-literal-input"
+                            className="flex-1 text-sm"
+                            disabled={isRunning}
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const input = document.getElementById('output-string-literal-input') as HTMLInputElement;
+                              if (input && input.value) {
+                                const element = new ExpressionElement(crypto.randomUUID(), 'literal', `"${input.value}"`);
+                                addExpressionElement(element);
+                                input.value = '';
+                              }
+                            }}
+                            disabled={isRunning}
+                            className="text-xs px-2"
+                          >
+                            Add
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      {/* Integer literal */}
+                      <div className="space-y-1">
+                        <Label className="text-xs font-medium">Integer</Label>
+                        <div className="flex gap-1">
+                          <Input
+                            type="number"
+                            step="1"
+                            placeholder="Integer value"
+                            id="output-integer-literal-input"
+                            className="flex-1 text-sm"
+                            disabled={isRunning}
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const input = document.getElementById('output-integer-literal-input') as HTMLInputElement;
+                              if (input && input.value) {
+                                const element = new ExpressionElement(crypto.randomUUID(), 'literal', input.value);
+                                addExpressionElement(element);
+                                input.value = '';
+                              }
+                            }}
+                            disabled={isRunning}
+                            className="text-xs px-2"
+                          >
+                            Add
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      {/* Float literal */}
+                      <div className="space-y-1">
+                        <Label className="text-xs font-medium">Float</Label>
+                        <div className="flex gap-1">
+                          <Input
+                            type="number"
+                            step="0.1"
+                            placeholder="Float value"
+                            id="output-float-literal-input"
+                            className="flex-1 text-sm"
+                            disabled={isRunning}
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const input = document.getElementById('output-float-literal-input') as HTMLInputElement;
+                              if (input && input.value) {
+                                const element = new ExpressionElement(crypto.randomUUID(), 'literal', input.value);
+                                addExpressionElement(element);
+                                input.value = '';
+                              }
+                            }}
+                            disabled={isRunning}
+                            className="text-xs px-2"
+                          >
+                            Add
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </TabsContent>
+                </Tabs>
               </CardContent>
             </Card>
-
-            {/* Operators section */}
+            
+            {/* Right column: Operators */}
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm">Operators</CardTitle>
@@ -1197,121 +1376,6 @@ const DetailsTab = () => {
                     disabled={isRunning}
                   />
                 ))}
-              </CardContent>
-            </Card>
-
-            {/* Literals section */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Literals</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* String literal */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">String</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      type="text"
-                      placeholder="String value"
-                      id="output-string-literal-input"
-                      className="flex-1"
-                      disabled={isRunning}
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const input = document.getElementById('output-string-literal-input') as HTMLInputElement;
-                        if (input && input.value) {
-                          const element = new ExpressionElement(crypto.randomUUID(), 'literal', `"${input.value}"`);
-                          addExpressionElement(element);
-                          input.value = '';
-                        }
-                      }}
-                      disabled={isRunning}
-                    >
-                      Add String
-                    </Button>
-                  </div>
-                </div>
-                {/* Integer literal */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Integer</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      type="number"
-                      step="1"
-                      placeholder="Integer value"
-                      id="output-integer-literal-input"
-                      className="flex-1"
-                      disabled={isRunning}
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const input = document.getElementById('output-integer-literal-input') as HTMLInputElement;
-                        if (input && input.value) {
-                          const element = new ExpressionElement(crypto.randomUUID(), 'literal', input.value);
-                          addExpressionElement(element);
-                          input.value = '';
-                        }
-                      }}
-                      disabled={isRunning}
-                    >
-                      Add Integer
-                    </Button>
-                  </div>
-                </div>
-                {/* Float literal */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Float</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      type="number"
-                      step="0.1"
-                      placeholder="Float value"
-                      id="output-float-literal-input"
-                      className="flex-1"
-                      disabled={isRunning}
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const input = document.getElementById('output-float-literal-input') as HTMLInputElement;
-                        if (input && input.value) {
-                          const element = new ExpressionElement(crypto.randomUUID(), 'literal', input.value);
-                          addExpressionElement(element);
-                          input.value = '';
-                        }
-                      }}
-                      disabled={isRunning}
-                    >
-                      Add Float
-                    </Button>
-                  </div>
-                </div>
-                {/* Boolean literals */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Boolean</Label>
-                  <div className="flex gap-2">
-                    <DraggablePaletteItem
-                      id="lit-boolean-true"
-                      type="literal"
-                      value="true"
-                      backgroundColor="#d1ffd1"
-                      disabled={isRunning}
-                    />
-                    <DraggablePaletteItem
-                      id="lit-boolean-false"
-                      type="literal"
-                      value="false"
-                      backgroundColor="#d1ffd1"
-                      disabled={isRunning}
-                    />
-                  </div>
-                </div>
               </CardContent>
             </Card>
           </div>
@@ -1440,30 +1504,236 @@ const DetailsTab = () => {
           </Card>
           
           {/* Building blocks section */}
-          <div className="space-y-4">
-            {/* Variables section */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* Left column: Tabbed Variables and Literals */}
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Variables</CardTitle>
+                <Tabs value={conditionalTab} onValueChange={(value) => setConditionalTab(value as 'variables' | 'literals')} className="w-full">
+                  <TabsList className="grid grid-cols-2 w-full">
+                    <TabsTrigger value="variables">Variables</TabsTrigger>
+                    <TabsTrigger value="literals">Literals</TabsTrigger>
+                  </TabsList>
+                </Tabs>
               </CardHeader>
-              <CardContent className="space-y-2">
-                {allVariables.map(variable => (
-                  <DraggablePaletteItem
-                    key={`var-${variable.id}`}
-                    id={`var-${variable.id}`}
-                    type="variable"
-                    value={variable.name}
-                    backgroundColor="#d1e7ff"
-                    disabled={isRunning}
-                  />
-                ))}
-                {allVariables.length === 0 && (
-                  <div className="text-muted-foreground text-sm italic">No variables declared</div>
-                )}
+              <CardContent>
+                <Tabs value={conditionalTab} onValueChange={(value) => setConditionalTab(value as 'variables' | 'literals')}>
+                  <TabsContent value="variables" className="mt-0">
+                    <div className="space-y-2">
+                      {allVariables.map(variable => (
+                        <DraggablePaletteItem
+                          key={`var-${variable.id}`}
+                          id={`var-${variable.id}`}
+                          type="variable"
+                          value={variable.name}
+                          backgroundColor="#d1e7ff"
+                          disabled={isRunning}
+                        />
+                      ))}
+                      {allVariables.length === 0 && (
+                        <div className="text-muted-foreground text-sm italic">No variables declared</div>
+                      )}
+                    </div>
+                  </TabsContent>
+                  
+                  <TabsContent value="literals" className="mt-0">
+                    <div className="space-y-3">
+                      {/* Boolean literals */}
+                      <div className="space-y-1">
+                        <Label className="text-xs font-medium">Boolean</Label>
+                        <div className="flex gap-1">
+                          <DraggablePaletteItem
+                            id="lit-boolean-true"
+                            type="literal"
+                            value="true"
+                            backgroundColor="#d1ffd1"
+                            disabled={isRunning}
+                          />
+                          <DraggablePaletteItem
+                            id="lit-boolean-false"
+                            type="literal"
+                            value="false"
+                            backgroundColor="#d1ffd1"
+                            disabled={isRunning}
+                          />
+                        </div>
+                      </div>
+                      
+                      {/* String literal */}
+                      <div className="space-y-1">
+                        <Label className="text-xs font-medium">String</Label>
+                        <div className="flex gap-1">
+                          <Input
+                            type="text"
+                            placeholder="String value"
+                            id="conditional-string-literal-input"
+                            className="flex-1 text-sm"
+                            disabled={isRunning}
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const input = document.getElementById('conditional-string-literal-input') as HTMLInputElement;
+                              if (input && input.value) {
+                                const value = input.value;
+                                const element = new ExpressionElement(
+                                  crypto.randomUUID(),
+                                  'literal',
+                                  `"${value}"`
+                                );
+                                addExpressionElement(element, 'left');
+                                input.value = '';
+                              }
+                            }}
+                            disabled={isRunning}
+                            className="text-xs px-2"
+                          >
+                            ← Left
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const input = document.getElementById('conditional-string-literal-input') as HTMLInputElement;
+                              if (input && input.value) {
+                                const value = input.value;
+                                const element = new ExpressionElement(
+                                  crypto.randomUUID(),
+                                  'literal',
+                                  `"${value}"`
+                                );
+                                addExpressionElement(element, 'right');
+                                input.value = '';
+                              }
+                            }}
+                            disabled={isRunning}
+                            className="text-xs px-2"
+                          >
+                            Right →
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      {/* Integer literal */}
+                      <div className="space-y-1">
+                        <Label className="text-xs font-medium">Integer</Label>
+                        <div className="flex gap-1">
+                          <Input
+                            type="number"
+                            step="1"
+                            placeholder="Integer value"
+                            id="conditional-integer-literal-input"
+                            className="flex-1 text-sm"
+                            disabled={isRunning}
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const input = document.getElementById('conditional-integer-literal-input') as HTMLInputElement;
+                              if (input && input.value) {
+                                const value = parseInt(input.value).toString();
+                                const element = new ExpressionElement(
+                                  crypto.randomUUID(),
+                                  'literal',
+                                  value
+                                );
+                                addExpressionElement(element, 'left');
+                                input.value = '';
+                              }
+                            }}
+                            disabled={isRunning}
+                            className="text-xs px-2"
+                          >
+                            ← Left
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const input = document.getElementById('conditional-integer-literal-input') as HTMLInputElement;
+                              if (input && input.value) {
+                                const value = parseInt(input.value).toString();
+                                const element = new ExpressionElement(
+                                  crypto.randomUUID(),
+                                  'literal',
+                                  value
+                                );
+                                addExpressionElement(element, 'right');
+                                input.value = '';
+                              }
+                            }}
+                            disabled={isRunning}
+                            className="text-xs px-2"
+                          >
+                            Right →
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      {/* Float literal */}
+                      <div className="space-y-1">
+                        <Label className="text-xs font-medium">Float</Label>
+                        <div className="flex gap-1">
+                          <Input
+                            type="number"
+                            step="0.1"
+                            placeholder="Float value"
+                            id="conditional-float-literal-input"
+                            className="flex-1 text-sm"
+                            disabled={isRunning}
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const input = document.getElementById('conditional-float-literal-input') as HTMLInputElement;
+                              if (input && input.value) {
+                                const value = parseFloat(input.value).toString();
+                                const element = new ExpressionElement(
+                                  crypto.randomUUID(),
+                                  'literal',
+                                  value
+                                );
+                                addExpressionElement(element, 'left');
+                                input.value = '';
+                              }
+                            }}
+                            disabled={isRunning}
+                            className="text-xs px-2"
+                          >
+                            ← Left
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const input = document.getElementById('conditional-float-literal-input') as HTMLInputElement;
+                              if (input && input.value) {
+                                const value = parseFloat(input.value).toString();
+                                const element = new ExpressionElement(
+                                  crypto.randomUUID(),
+                                  'literal',
+                                  value
+                                );
+                                addExpressionElement(element, 'right');
+                                input.value = '';
+                              }
+                            }}
+                            disabled={isRunning}
+                            className="text-xs px-2"
+                          >
+                            Right →
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </TabsContent>
+                </Tabs>
               </CardContent>
             </Card>
             
-            {/* Operators section */}
+            {/* Right column: Operators */}
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm">Operators</CardTitle>
@@ -1479,199 +1749,6 @@ const DetailsTab = () => {
                     disabled={isRunning}
                   />
                 ))}
-              </CardContent>
-            </Card>
-            
-            {/* Literals section */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Literals</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* String literal */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">String</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      type="text"
-                      placeholder="String value"
-                      id="conditional-string-literal-input"
-                      className="flex-1"
-                      disabled={isRunning}
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const input = document.getElementById('conditional-string-literal-input') as HTMLInputElement;
-                        if (input && input.value) {
-                          const value = input.value;
-                          const element = new ExpressionElement(
-                            crypto.randomUUID(),
-                            'literal',
-                            `"${value}"`
-                          );
-                          addExpressionElement(element, 'left');
-                          input.value = '';
-                        }
-                      }}
-                      disabled={isRunning}
-                    >
-                      ← Left
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const input = document.getElementById('conditional-string-literal-input') as HTMLInputElement;
-                        if (input && input.value) {
-                          const value = input.value;
-                          const element = new ExpressionElement(
-                            crypto.randomUUID(),
-                            'literal',
-                            `"${value}"`
-                          );
-                          addExpressionElement(element, 'right');
-                          input.value = '';
-                        }
-                      }}
-                      disabled={isRunning}
-                    >
-                      Right →
-                    </Button>
-                  </div>
-                </div>
-                
-                {/* Integer literal */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Integer</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      type="number"
-                      step="1"
-                      placeholder="Integer value" 
-                      id="conditional-integer-literal-input"
-                      className="flex-1"
-                      disabled={isRunning}
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const input = document.getElementById('conditional-integer-literal-input') as HTMLInputElement;
-                        if (input && input.value) {
-                          const value = parseInt(input.value).toString(); // Ensure it's an integer
-                          const element = new ExpressionElement(
-                            crypto.randomUUID(),
-                            'literal',
-                            value
-                          );
-                          addExpressionElement(element, 'left');
-                          input.value = '';
-                        }
-                      }}
-                      disabled={isRunning}
-                    >
-                      ← Left
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const input = document.getElementById('conditional-integer-literal-input') as HTMLInputElement;
-                        if (input && input.value) {
-                          const value = parseInt(input.value).toString(); // Ensure it's an integer
-                          const element = new ExpressionElement(
-                            crypto.randomUUID(),
-                            'literal',
-                            value
-                          );
-                          addExpressionElement(element, 'right');
-                          input.value = '';
-                        }
-                      }}
-                      disabled={isRunning}
-                    >
-                      Right →
-                    </Button>
-                  </div>
-                </div>
-                
-                {/* Float literal */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Float</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      type="number"
-                      step="0.1"
-                      placeholder="Float value"
-                      id="conditional-float-literal-input"
-                      className="flex-1"
-                      disabled={isRunning}
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const input = document.getElementById('conditional-float-literal-input') as HTMLInputElement;
-                        if (input && input.value) {
-                          const value = parseFloat(input.value).toString();
-                          const element = new ExpressionElement(
-                            crypto.randomUUID(),
-                            'literal',
-                            value
-                          );
-                          addExpressionElement(element, 'left');
-                          input.value = '';
-                        }
-                      }}
-                      disabled={isRunning}
-                    >
-                      ← Left
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const input = document.getElementById('conditional-float-literal-input') as HTMLInputElement;
-                        if (input && input.value) {
-                          const value = parseFloat(input.value).toString();
-                          const element = new ExpressionElement(
-                            crypto.randomUUID(),
-                            'literal',
-                            value
-                          );
-                          addExpressionElement(element, 'right');
-                          input.value = '';
-                        }
-                      }}
-                      disabled={isRunning}
-                    >
-                      Right →
-                    </Button>
-                  </div>
-                </div>
-                
-                {/* Boolean literals */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Boolean</Label>
-                  <div className="flex gap-2">
-                    <DraggablePaletteItem
-                      id="lit-boolean-true"
-                      type="literal"
-                      value="true"
-                      backgroundColor="#d1ffd1"
-                      disabled={isRunning}
-                    />
-                    <DraggablePaletteItem
-                      id="lit-boolean-false"
-                      type="literal"
-                      value="false"
-                      backgroundColor="#d1ffd1"
-                      disabled={isRunning}
-                    />
-                  </div>
-                </div>
               </CardContent>
             </Card>
           </div>
@@ -1710,13 +1787,14 @@ const DetailsTab = () => {
           <CardContent className="space-y-4">
             <Select
               value={leftSideVariable}
-              onValueChange={setLeftSideVariable}
+              onValueChange={(value) => setLeftSideVariable(value === '__CLEAR__' ? '' : value)}
               disabled={isRunning}
             >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="-- Select Variable --" />
+                <SelectValue placeholder="No variable" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="__CLEAR__">No variable</SelectItem>
                 {allVariables.map(variable => (
                   <SelectItem key={variable.id} value={variable.id}>
                     {variable.name} ({variable.type})
