@@ -20,7 +20,6 @@ import {
   arrayMove
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { restrictToHorizontalAxis } from '@dnd-kit/modifiers';  
 import { variableTypes } from '../../../models';
 import { useFlowExecutorContext } from '../../../context/FlowExecutorContext';
 import { operators as expressionOperators, equalities, IEquality } from '../../../models/Expression';
@@ -870,8 +869,6 @@ const DetailsTab = () => {
         collisionDetection={rectIntersection}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
-        // TODO: horizontal restriction does not work properly with vertical scrolling
-        modifiers={isReordering ? [restrictToHorizontalAxis] : undefined}
       >
         <div key={selectedNode.id}>
           <h4>Variable Assignment</h4>
@@ -1171,8 +1168,6 @@ const DetailsTab = () => {
         collisionDetection={rectIntersection}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
-        // TODO: horizontal restriction does not work properly with vertical scrolling
-        modifiers={isReordering ? [restrictToHorizontalAxis] : undefined}
       >
         <div key={selectedNode.id}>
           <h4>Output Expression</h4>
@@ -1408,8 +1403,6 @@ const DetailsTab = () => {
         collisionDetection={rectIntersection}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
-        // TODO: horizontal restriction does not work properly with vertical scrolling
-        modifiers={isReordering ? [restrictToHorizontalAxis] : undefined}
       >
         <div key={selectedNode.id}>
           <h4>Conditional Expression</h4>
