@@ -126,7 +126,7 @@ export interface FlowExecutionInterface {
     processed: Set<string>;
   };
   callbacks: {
-    processNodeCallback: (node: Node) => { targetNodeId: string | null, valuedVariables: ValuedVariable<VariableType>[] };
+    processNodeCallback: (node: Node) => Promise<{ targetNodeId: string | null, valuedVariables: ValuedVariable<VariableType>[] }>;
     stopExecutionCallback: () => void;
   };
 }
@@ -134,7 +134,7 @@ export interface FlowExecutionInterface {
 /**
  * Processes the current node in the flow
  */
-const processCurrentNode = (executionContext: FlowExecutionInterface) => {
+const processCurrentNode = async (executionContext: FlowExecutionInterface) => {
   const { reactFlow } = executionContext;
   const { queue, inQueue, processed } = executionContext.lists!;
   const { processNodeCallback } = executionContext.callbacks;
@@ -153,7 +153,7 @@ const processCurrentNode = (executionContext: FlowExecutionInterface) => {
   // Reset pause counter (it is a counter for pauses in the same edge, so it should be reset every time a new node is processed)
   pauseCounterRef.current = 0;
 
-  const { targetNodeId, valuedVariables } = processNodeCallback(currentNode);
+  const { targetNodeId, valuedVariables } = await processNodeCallback(currentNode);
 
   if (!targetNodeId) {
     console.log(`Target node not found for node ${currentNode.id}`);
@@ -184,30 +184,12 @@ const processCurrentNode = (executionContext: FlowExecutionInterface) => {
 
   queue.push(targetNode.id);
   inQueue.add(targetNode.id);
-
-  if (processed.has(targetNode.id)) {
-    // console.log("Loop detected for node:", targetNode.id);
-  }
-
-
-  /* Get outgoers and add to queue
-  const outgoingNodes = getOutgoers(currentNode, reactFlow.getNodes(), reactFlow.getEdges());
-  outgoingNodes.forEach(node => {
-    if (!inQueue.has(node.id)) { // to prevent duplicates
-      queue.push(node);
-      inQueue.add(node.id);
-      
-      if (processed.has(node.id)) {
-          // console.log("Loop detected for node:", node.id);
-      }
-    }
-  });*/
-}
+};
 
 /**
  * Processes the next node in the flow by polling
  */
-const processNextNode = (executionContext: FlowExecutionInterface, executionCounter: number) => {
+const processNextNode = async (executionContext: FlowExecutionInterface, executionCounter: number) => {
     // NOTE: This function is going to be called even after pausing because of the setTimeout in here
 
     const { queue } = executionContext.lists!;
@@ -259,7 +241,7 @@ const processNextNode = (executionContext: FlowExecutionInterface, executionCoun
         return;
     }
 
-    processCurrentNode(executionContext);
+    await processCurrentNode(executionContext);
 
     // Schedule next node processing with delay
     setTimeout(() => processNextNode(executionContext, executionCounter), executionSpeed.current);

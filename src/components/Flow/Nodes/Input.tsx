@@ -6,15 +6,20 @@ import { IVariable, VariableType, Variable } from '../../../models/Variable';
 import { IValuedVariable } from '../../../models/ValuedVariable';
 import { ValuedVariable } from '../../../models/ValuedVariable';
 import { Badge } from '@/components/ui/badge';
+import { useInputDialog } from '../../../context/InputDialogContext';
 
 interface InputNode extends BaseNode {
   variable?: IVariable;
 }
 
 class InputProcessor implements NodeProcessor {
-  constructor(private reactFlow: ReactFlowInstance, private nodeId: string) {}
+  constructor(
+    private reactFlow: ReactFlowInstance, 
+    private nodeId: string,
+    private showInputDialog: (title: string, description?: string, placeholder?: string) => Promise<string | null>
+  ) {}
   
-  process(): ValuedVariable<VariableType>[] {
+  async process(): Promise<ValuedVariable<VariableType>[]> {
     const node = this.reactFlow.getNode(this.nodeId)!;
     const data = node.data as InputNode;
     console.log(`Processing Input node ${this.nodeId} with variable:`, data.variable);
@@ -31,19 +36,26 @@ class InputProcessor implements NodeProcessor {
 
     // TODO: input sanitization for XSS attacks
 
-    // Get basic input from user with prompt (TODO: how to handle user input?)
-    const input = prompt(data.variable?.name);
-    if (input && data.variable) {
-      // Convert IVariable to Variable before passing to fromVariable
-      const variableObj = Variable.fromObject(data.variable);
-      const newValuedVariable = ValuedVariable.fromVariable(variableObj, input);
+    // Get input from user with dialog
+    if (data.variable) {
+      const input = await this.showInputDialog(
+        `Enter value for ${data.variable.name}`,
+        `Please enter a ${data.variable.type} value for the variable "${data.variable.name}" (Block ID: ${data.visualId}).`,
+        `Enter ${data.variable.type} value...`
+      );
       
-      // Overwrite the existing variable
-      const existingIndex = currentValuedVariables.findIndex(v => v.id === newValuedVariable.id);
-      if (existingIndex !== -1) {
-        currentValuedVariables[existingIndex] = newValuedVariable;
-      } else {
-        currentValuedVariables.push(newValuedVariable);
+      if (input !== null && data.variable) {
+        // Convert IVariable to Variable before passing to fromVariable
+        const variableObj = Variable.fromObject(data.variable);
+        const newValuedVariable = ValuedVariable.fromVariable(variableObj, input);
+        
+        // Overwrite the existing variable
+        const existingIndex = currentValuedVariables.findIndex(v => v.id === newValuedVariable.id);
+        if (existingIndex !== -1) {
+          currentValuedVariables[existingIndex] = newValuedVariable;
+        } else {
+          currentValuedVariables.push(newValuedVariable);
+        }
       }
     }
 
@@ -55,10 +67,11 @@ const Input = memo(function InputComponent({ data, id: nodeId }: { data: InputNo
   const { isHovered, isSelected, isHighlighted, isCodeHighlighted, variable, width, height, visualId } = data;
 
   const reactFlow = useReactFlow();
+  const { showInputDialog } = useInputDialog();
 
   // Update processor only on mount/unmount to prevent infinite loops
   useEffect(() => {
-    const processor = new InputProcessor(reactFlow, nodeId);
+    const processor = new InputProcessor(reactFlow, nodeId, showInputDialog);
 
     // Set the processor to the node data to make it available for the flow executor to use 
     reactFlow.updateNodeData(nodeId, {
@@ -71,7 +84,7 @@ const Input = memo(function InputComponent({ data, id: nodeId }: { data: InputNo
         processor: null
       });
     };
-  }, [nodeId, reactFlow]);
+  }, [nodeId, reactFlow, showInputDialog]);
 
   return (
     <div className="input-node" style={getNodeStyles({

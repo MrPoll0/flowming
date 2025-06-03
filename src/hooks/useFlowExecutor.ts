@@ -66,7 +66,7 @@ export function useFlowExecutor(): IExecutor {
         toggleLockFlow(reactFlow, false);
     }, [reactFlow]);
 
-    const processNode = useCallback((node: Node): { targetNodeId: string | null, valuedVariables: ValuedVariable<VariableType>[] } => {
+    const processNode = useCallback(async (node: Node): Promise<{ targetNodeId: string | null, valuedVariables: ValuedVariable<VariableType>[] }> => {
         if (!isRunningRef.current || isPausedRef.current) {
             return { targetNodeId: null, valuedVariables: [] };
         }
@@ -91,7 +91,7 @@ export function useFlowExecutor(): IExecutor {
         if (node.data && node.data.processor) {
             try {
                 const processor = node.data.processor as NodeProcessor;
-                processorResult = processor.process();
+                processorResult = await processor.process();
 
                 if (node.type === "Conditional") {
                     // For condition nodes, extract the valuedVariables
@@ -123,6 +123,7 @@ export function useFlowExecutor(): IExecutor {
             const targetLabel = conditionResult ? decisionEdgeLabels[1] : decisionEdgeLabels[0];
 
             // TODO: if both outgoing connections go to the same node, then we are not exactly choosing the correct one (Yes/No), but the first one
+            // (should be already fixed)
             
             // Find the edge with matching label
             const matchingConnection = outgoingConnections.find(connection => {
@@ -277,7 +278,10 @@ export function useFlowExecutor(): IExecutor {
 
     const reset = useCallback(() => {
         stopExecution();
-    }, [reactFlow, stopExecution]);
+        setTimeout(() => {
+            start();
+        }, 100);
+    }, [reactFlow, stopExecution, start]);
 
     const stepBackward = useCallback(() => {
         
