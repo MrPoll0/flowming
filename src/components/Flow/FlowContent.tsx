@@ -25,6 +25,7 @@ import { useDnD } from '../../context/DnDContext';
 import { useFlowExecutorContext } from '../../context/FlowExecutorContext';
 import { Expression } from '../../models';
 import { decisionEdgeLabels } from './Nodes/Conditional';
+import FilenameEditor from '../FilenameEditor';
 
 const FlowContent: React.FC = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -59,7 +60,7 @@ const FlowContent: React.FC = () => {
   const { isRunning } = useFlowExecutorContext();
 
   // TODO: possible problems when modifying node data from multiple places at the same time?
-
+  
   // Assign sequential visual IDs to nodes
   useEffect(() => {
     setNodes((currentNodes) =>
@@ -850,7 +851,7 @@ const FlowContent: React.FC = () => {
         <Controls />
         <Background variant={BackgroundVariant.Lines} gap={12} size={1} />
         <Panel style={{ userSelect: 'none' }}> {/* prevent text selection when double clicking on edge */}
-          File/diagram name (TODO)
+          <FilenameEditor />
         </Panel>
       </ReactFlow>
       <ContextMenu onDelete={onDelete} />
