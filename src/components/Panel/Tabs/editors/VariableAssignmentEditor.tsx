@@ -490,42 +490,7 @@ const VariableAssignmentEditor = () => {
                             />
                           </div>
                         </div>
-                        
-                        {/* String literal */}
-                        <div className="space-y-1">
-                          <Label className="text-xs font-medium">String</Label>
-                          <div className="flex gap-1">
-                            <Input
-                              type="text"
-                              placeholder="String value"
-                              id="string-literal-input"
-                              className="flex-1 text-sm"
-                              disabled={isRunning}
-                            />
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                const input = document.getElementById('string-literal-input') as HTMLInputElement;
-                                if (input && input.value) {
-                                  const value = input.value;
-                                  const element = new ExpressionElement(
-                                    crypto.randomUUID(),
-                                    'literal',
-                                    `"${value}"`
-                                  );
-                                  addExpressionElement(element);
-                                  input.value = '';
-                                }
-                              }}
-                              disabled={isRunning}
-                              className="text-xs px-2"
-                            >
-                              Add
-                            </Button>
-                          </div>
-                        </div>
-                        
+
                         {/* Integer literal */}
                         <div className="space-y-1">
                           <Label className="text-xs font-medium">Integer</Label>
@@ -549,6 +514,41 @@ const VariableAssignmentEditor = () => {
                                     crypto.randomUUID(),
                                     'literal',
                                     value
+                                  );
+                                  addExpressionElement(element);
+                                  input.value = '';
+                                }
+                              }}
+                              disabled={isRunning}
+                              className="text-xs px-2"
+                            >
+                              Add
+                            </Button>
+                          </div>
+                        </div>
+                        
+                        {/* String literal */}
+                        <div className="space-y-1">
+                          <Label className="text-xs font-medium">String</Label>
+                          <div className="flex gap-1">
+                            <Input
+                              type="text"
+                              placeholder="String value"
+                              id="string-literal-input"
+                              className="flex-1 text-sm"
+                              disabled={isRunning}
+                            />
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                const input = document.getElementById('string-literal-input') as HTMLInputElement;
+                                if (input && input.value) {
+                                  const value = input.value;
+                                  const element = new ExpressionElement(
+                                    crypto.randomUUID(),
+                                    'literal',
+                                    `"${value}"`
                                   );
                                   addExpressionElement(element);
                                   input.value = '';

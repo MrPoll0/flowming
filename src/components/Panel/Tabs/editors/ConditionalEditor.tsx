@@ -501,63 +501,7 @@ const ConditionalEditor = () => {
                         />
                       </div>
                     </div>
-                    
-                    {/* String literal */}
-                    <div className="space-y-1">
-                      <Label className="text-xs font-medium">String</Label>
-                      <div className="flex gap-1">
-                        <Input
-                          type="text"
-                          placeholder="String value"
-                          id="conditional-string-literal-input"
-                          className="flex-1 text-sm"
-                          disabled={isRunning}
-                        />
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const input = document.getElementById('conditional-string-literal-input') as HTMLInputElement;
-                            if (input && input.value) {
-                              const value = input.value;
-                              const element = new ExpressionElement(
-                                crypto.randomUUID(),
-                                'literal',
-                                `"${value}"`
-                              );
-                              addExpressionElement(element, 'left');
-                              input.value = '';
-                            }
-                          }}
-                          disabled={isRunning}
-                          className="text-xs px-2"
-                        >
-                          ← Left
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const input = document.getElementById('conditional-string-literal-input') as HTMLInputElement;
-                            if (input && input.value) {
-                              const value = input.value;
-                              const element = new ExpressionElement(
-                                crypto.randomUUID(),
-                                'literal',
-                                `"${value}"`
-                              );
-                              addExpressionElement(element, 'right');
-                              input.value = '';
-                            }
-                          }}
-                          disabled={isRunning}
-                          className="text-xs px-2"
-                        >
-                          Right →
-                        </Button>
-                      </div>
-                    </div>
-                    
+
                     {/* Integer literal */}
                     <div className="space-y-1">
                       <Label className="text-xs font-medium">Integer</Label>
@@ -602,6 +546,62 @@ const ConditionalEditor = () => {
                                 crypto.randomUUID(),
                                 'literal',
                                 value
+                              );
+                              addExpressionElement(element, 'right');
+                              input.value = '';
+                            }
+                          }}
+                          disabled={isRunning}
+                          className="text-xs px-2"
+                        >
+                          Right →
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    {/* String literal */}
+                    <div className="space-y-1">
+                      <Label className="text-xs font-medium">String</Label>
+                      <div className="flex gap-1">
+                        <Input
+                          type="text"
+                          placeholder="String value"
+                          id="conditional-string-literal-input"
+                          className="flex-1 text-sm"
+                          disabled={isRunning}
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const input = document.getElementById('conditional-string-literal-input') as HTMLInputElement;
+                            if (input && input.value) {
+                              const value = input.value;
+                              const element = new ExpressionElement(
+                                crypto.randomUUID(),
+                                'literal',
+                                `"${value}"`
+                              );
+                              addExpressionElement(element, 'left');
+                              input.value = '';
+                            }
+                          }}
+                          disabled={isRunning}
+                          className="text-xs px-2"
+                        >
+                          ← Left
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const input = document.getElementById('conditional-string-literal-input') as HTMLInputElement;
+                            if (input && input.value) {
+                              const value = input.value;
+                              const element = new ExpressionElement(
+                                crypto.randomUUID(),
+                                'literal',
+                                `"${value}"`
                               );
                               addExpressionElement(element, 'right');
                               input.value = '';

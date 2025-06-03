@@ -59,7 +59,7 @@ const VariableDeclarationEditor = () => {
           setVariables(nodeVars);
         } else {
           // Initialize with one empty variable if none exist
-          const newVar = new Variable(crypto.randomUUID(), 'string', '', selectedNode.id);
+          const newVar = new Variable(crypto.randomUUID(), 'integer', '', selectedNode.id);
           setVariables([newVar]);
         }
       }
@@ -101,7 +101,7 @@ const VariableDeclarationEditor = () => {
     if (selectedNode && selectedNode.type === 'DeclareVariable') {
       const newVar = new Variable(
         crypto.randomUUID(), 
-        'string', 
+        'integer', 
         '', 
         selectedNode.id
       );
