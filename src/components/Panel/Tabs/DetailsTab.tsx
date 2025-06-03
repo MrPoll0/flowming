@@ -12,6 +12,7 @@ import VariableAssignmentEditor from './editors/VariableAssignmentEditor';
 import OutputEditor from './editors/OutputEditor';
 import ConditionalEditor from './editors/ConditionalEditor';
 import InputEditor from './editors/InputEditor';
+import SystemSettings from '../../SystemSettings';
 
 // TODO: if cannot select element while running, then also hide its editor in DetailsTab for consistency (i prefer being able to select elements while running and see their values but not modify them)
 
@@ -114,7 +115,9 @@ const DetailsTab = () => {
           </div>
         </div>
       ) : (
-        <p>No node selected</p>
+        <div className="h-full overflow-y-auto overflow-x-hidden">
+          <SystemSettings />
+        </div>
       )}
     </>
   );

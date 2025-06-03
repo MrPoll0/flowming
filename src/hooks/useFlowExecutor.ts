@@ -12,6 +12,7 @@ import { NodeProcessor } from "../components/Flow/Nodes/NodeTypes";
 import { ValuedVariable } from "../models/ValuedVariable";
 import { VariableType } from "../models/Variable";
 import { decisionEdgeLabels } from "../components/Flow/Nodes/Conditional";
+import { useSystemSettings } from "../context/SystemSettingsContext";
 
 export interface IExecutor {
     isRunning: boolean;
@@ -30,6 +31,7 @@ export interface IExecutor {
 
 export function useFlowExecutor(): IExecutor {
     const reactFlow = useReactFlow();
+    const { settings } = useSystemSettings();
     
     // State for UI purposes
     const [isRunningState, setIsRunningState] = useState(false);
@@ -41,8 +43,11 @@ export function useFlowExecutor(): IExecutor {
     const isPausedRef = useRef(false);
     const currentNodeRef = useRef<Node | null>(null);
 
-    // Execution speed (TODO: make this configurable)
-    const executionSpeedRef = useRef(2000);
+    // Get execution speed from settings
+    const executionSpeedRef = useRef(settings.executionSpeed);
+    
+    // Update execution speed ref when settings change
+    executionSpeedRef.current = settings.executionSpeed;
 
     const remainingTimeRef = useRef(0); // track remaining time for the current edge to reach the next node
     const lastResumingTimeRef = useRef(0); // track last time the execution was resumed
