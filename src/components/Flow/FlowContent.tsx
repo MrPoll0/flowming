@@ -172,9 +172,9 @@ const FlowContent: React.FC = () => {
     event.stopPropagation();
     
     // Don't change selection when flow is running (TODO: this is done to avoid a maximum depth setState when right-clicking AssignVariable with 2 variables in right side)
-    if (isRunning) {
+    /*if (isRunning) {
       return;
-    }
+    }*/
     
     setSelectedNode(node as FlowNode);
     setSelectedElement({ id: node.id, type: 'node' });
