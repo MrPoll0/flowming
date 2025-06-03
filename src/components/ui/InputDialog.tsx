@@ -10,6 +10,7 @@ import {
 import { Button } from './button';
 import { Input } from './input';
 import { Label } from './label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './select';
 
 interface InputDialogProps {
   open: boolean;
@@ -17,6 +18,7 @@ interface InputDialogProps {
   title: string;
   description?: string;
   placeholder?: string;
+  variableType: 'string' | 'integer' | 'float' | 'boolean'; // TODO: array
   onSubmit: (value: string) => void;
   onCancel: () => void;
 }
@@ -27,6 +29,7 @@ export function InputDialog({
   title,
   description,
   placeholder,
+  variableType,
   onSubmit,
   onCancel,
 }: InputDialogProps) {
@@ -46,6 +49,66 @@ export function InputDialog({
     onOpenChange(newOpen);
   };
 
+  const renderInput = () => {
+    switch (variableType) {
+        // TODO: array
+      case 'boolean':
+        return (
+          <Select value={value} onValueChange={setValue}>
+            <SelectTrigger className="w-full h-11">
+              <SelectValue placeholder="Select a boolean value" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="true">true</SelectItem>
+              <SelectItem value="false">false</SelectItem>
+            </SelectContent>
+          </Select>
+        );
+      
+      case 'integer':
+        return (
+          <Input
+            id="input-value"
+            type="number"
+            step="1"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder={placeholder || "Enter an integer"}
+            className="w-full h-11 text-base"
+            autoFocus
+          />
+        );
+      
+      case 'float':
+        return (
+          <Input
+            id="input-value"
+            type="number"
+            step="any"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder={placeholder || "Enter a decimal number"}
+            className="w-full h-11 text-base"
+            autoFocus
+          />
+        );
+      
+      case 'string':
+      default:
+        return (
+          <Input
+            id="input-value"
+            type="text"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder={placeholder || "Enter text"}
+            className="w-full h-11 text-base"
+            autoFocus
+          />
+        );
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -61,16 +124,9 @@ export function InputDialog({
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-3">
             <Label htmlFor="input-value" className="text-sm font-medium">
-              Value
+              Value ({variableType})
             </Label>
-            <Input
-              id="input-value"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              placeholder={placeholder}
-              className="w-full h-11 text-base"
-              autoFocus
-            />
+            {renderInput()}
           </div>
           
           <DialogFooter className="pt-2">

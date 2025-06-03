@@ -16,7 +16,7 @@ class InputProcessor implements NodeProcessor {
   constructor(
     private reactFlow: ReactFlowInstance, 
     private nodeId: string,
-    private showInputDialog: (title: string, description?: string, placeholder?: string) => Promise<string | null>
+    private showInputDialog: (title: string, variableType: 'string' | 'integer' | 'float' | 'boolean', description?: string, placeholder?: string) => Promise<string | null>
   ) {}
   
   async process(): Promise<ValuedVariable<VariableType>[]> {
@@ -40,6 +40,7 @@ class InputProcessor implements NodeProcessor {
     if (data.variable) {
       const input = await this.showInputDialog(
         `Enter value for ${data.variable.name}`,
+        data.variable.type as 'string' | 'integer' | 'float' | 'boolean', // TODO: array
         `Please enter a ${data.variable.type} value for the variable "${data.variable.name}" (Block ID: ${data.visualId}).`,
         `Enter ${data.variable.type} value...`
       );

@@ -6,11 +6,12 @@ interface InputDialogState {
   title: string;
   description?: string;
   placeholder?: string;
+  variableType: 'string' | 'integer' | 'float' | 'boolean'; // TODO: array
   resolve?: (value: string | null) => void;
 }
 
 interface InputDialogContextType {
-  showInputDialog: (title: string, description?: string, placeholder?: string) => Promise<string | null>;
+  showInputDialog: (title: string, variableType: 'string' | 'integer' | 'float' | 'boolean', description?: string, placeholder?: string) => Promise<string | null>;
 }
 
 const InputDialogContext = createContext<InputDialogContextType | undefined>(undefined);
@@ -31,10 +32,12 @@ export function InputDialogProvider({ children }: InputDialogProviderProps) {
   const [dialogState, setDialogState] = useState<InputDialogState>({
     open: false,
     title: '',
+    variableType: 'string',
   });
 
   const showInputDialog = (
     title: string,
+    variableType: 'string' | 'integer' | 'float' | 'boolean',
     description?: string,
     placeholder?: string
   ): Promise<string | null> => {
@@ -44,6 +47,7 @@ export function InputDialogProvider({ children }: InputDialogProviderProps) {
         title,
         description,
         placeholder,
+        variableType,
         resolve,
       });
     });
@@ -79,6 +83,7 @@ export function InputDialogProvider({ children }: InputDialogProviderProps) {
         title={dialogState.title}
         description={dialogState.description}
         placeholder={dialogState.placeholder}
+        variableType={dialogState.variableType}
         onSubmit={handleSubmit}
         onCancel={handleCancel}
       />
