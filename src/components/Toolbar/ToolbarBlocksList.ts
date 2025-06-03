@@ -61,8 +61,8 @@ const conditionalNodeBlock: NodeBlock = {
   nodeType: 'Conditional',
   description: 'Conditional node',
   defaultData: {
-    width: 70,
-    height: 70,
+    width: 100,
+    height: 100,
   }
 };
 
