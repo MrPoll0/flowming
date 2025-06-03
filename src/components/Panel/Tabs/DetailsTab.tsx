@@ -1,5 +1,6 @@
 import { useContext, useRef } from 'react';
 import { SelectedNodeContext } from '../../../context/SelectedNodeContext';
+import { useReactFlow } from '@xyflow/react';
 import {
   Accordion,
   AccordionContent,
@@ -18,6 +19,7 @@ import InputEditor from './editors/InputEditor';
 
 const DetailsTab = () => {
   const { selectedNode } = useContext(SelectedNodeContext);
+  const reactFlowInstance = useReactFlow();
   const scrollableContainerRef = useRef<HTMLDivElement>(null); // Ref for the scrollable container
   const additionalInfoRef = useRef<HTMLDivElement>(null); // Ref for auto-scrolling to additional info
 
@@ -30,11 +32,37 @@ const DetailsTab = () => {
             ref={scrollableContainerRef} 
             className="flex-1 overflow-y-auto overflow-x-hidden mt-5"
           >
+
             <VariableDeclarationEditor />
             <VariableAssignmentEditor />
             <OutputEditor />
             <ConditionalEditor />
             <InputEditor />
+            
+            {/* Start Node Information */}
+            {selectedNode.type === 'Start' && (
+              <div className="p-4 mx-4 mt-4 bg-blue-50 border border-blue-200 rounded-md">
+                <h3 className="text-blue-800 font-medium mb-2">Start Block</h3>
+                <ul className="text-blue-700 text-sm space-y-1 list-disc list-inside">
+                  <li>This block is the starting point of the diagram flow.</li>
+                  <li>There can only be one Start block in the diagram.</li>
+                  <li>This block only admits outgoing connections.</li>
+                  <li>This block must exist for the execution to be able to start, and it will do so from here.</li>
+                </ul>
+              </div>
+            )}
+            
+            {/* End Node Information */}
+            {selectedNode.type === 'End' && (
+              <div className="p-4 mx-4 mt-4 bg-gray-50 border border-gray-200 rounded-md">
+                <h3 className="text-gray-800 font-medium mb-2">End Block</h3>
+                <ul className="text-gray-700 text-sm space-y-1 list-disc list-inside">
+                  <li>This block indicates an ending point of the diagram flow.</li>
+                  <li>This is an optional block: you can have zero or multiple End blocks.</li>
+                  <li>This block only admits incoming connections.</li>
+                </ul>
+              </div>
+            )}
             
             {/* Additional information accordion - shown for any selected node */}
             {selectedNode && (
@@ -68,9 +96,15 @@ const DetailsTab = () => {
                     <AccordionContent>
                       <div className="space-y-2 text-sm break-words overflow-hidden">
                         <p className="break-all"><span className="font-medium">Node ID:</span> {selectedNode.data.visualId}</p>
-                        <p><span className="font-medium">Type:</span> {selectedNode.type || 'default'}</p>
-                        <p className="break-words"><span className="font-medium">Label:</span> {selectedNode.data.label}</p>
                         <p><span className="font-medium">Position:</span> x={selectedNode.position.x.toFixed(2)}, y={selectedNode.position.y.toFixed(2)}</p>
+                        
+                        {/* Connection information */}
+                        <p><span className="font-medium">Connections:</span> {(() => {
+                          const connections = reactFlowInstance.getNodeConnections({ nodeId: selectedNode.id });
+                          const incoming = connections.filter((c: any) => c.target === selectedNode.id).length;
+                          const outgoing = connections.filter((c: any) => c.source === selectedNode.id).length;
+                          return `${incoming} incoming, ${outgoing} outgoing`;
+                        })()}</p>
                       </div>
                     </AccordionContent>
                   </AccordionItem>

@@ -1,15 +1,17 @@
+import React from 'react';
+
 // Base Block interface with common properties
 export interface BlockBase {
   id: string;
   type: string;
   label: string;
-  icon?: string;
+  icon?: React.ReactElement;
   description?: string;
 }
 
 // Specific block types
 export interface NodeBlock extends BlockBase {
-  type: 'node';
+  type: 'input' | 'output' | 'process' | 'control' | 'default';
   nodeType: string;
   defaultData?: Record<string, any>;
 }

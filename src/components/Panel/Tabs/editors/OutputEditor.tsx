@@ -309,7 +309,6 @@ const OutputEditor = () => {
       onDragEnd={handleDragEnd}
     >
       <div key={selectedNode.id}>
-        <h4>Output Expression</h4>
 
         {/* Expression display box */}
         <Card className="mb-4">

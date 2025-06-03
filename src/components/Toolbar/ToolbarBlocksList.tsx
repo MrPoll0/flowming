@@ -1,11 +1,47 @@
 import { Block, NodeBlock } from './ToolbarTypes';
 
+// Flowchart shape components
+const StartShape = () => (
+  <svg width="32" height="20" viewBox="0 0 32 20" className="text-current">
+    <rect x="2" y="2" width="28" height="16" rx="8" ry="8" 
+          fill="transparent" stroke="black" strokeWidth="1.5"/>
+  </svg>
+);
+
+const EndShape = () => (
+  <svg width="32" height="20" viewBox="0 0 32 20" className="text-current">
+    <rect x="2" y="2" width="28" height="16" rx="8" ry="8" 
+          fill="transparent" stroke="black" strokeWidth="1.5"/>
+  </svg>
+);
+
+const ProcessShape = () => (
+  <svg width="32" height="20" viewBox="0 0 32 20" className="text-current">
+    <rect x="2" y="2" width="28" height="16" 
+          fill="transparent" stroke="black" strokeWidth="1.5"/>
+  </svg>
+);
+
+const ConditionalShape = () => (
+  <svg width="32" height="32" viewBox="0 0 32 32" className="text-current">
+    <polygon points="16,2 30,16 16,30 2,16" 
+             fill="transparent" stroke="black" strokeWidth="1.5"/>
+  </svg>
+);
+
+const InputOutputShape = () => (
+  <svg width="32" height="20" viewBox="0 0 32 20" className="text-current">
+    <polygon points="8,2 30,2 24,18 2,18" 
+             fill="transparent" stroke="black" strokeWidth="1.5"/>
+  </svg>
+);
+
 // Node blocks
 const startNodeBlock: NodeBlock = {
   id: 'start-node',
-  type: 'node',
+  type: 'control',
   label: 'Start',
-  icon: '◻️',
+  icon: <StartShape />,
   nodeType: 'Start',
   description: 'Start node',
   defaultData: {
@@ -16,9 +52,9 @@ const startNodeBlock: NodeBlock = {
 
 const endNodeBlock: NodeBlock = {
   id: 'end-node',
-  type: 'node',
+  type: 'control',
   label: 'End',
-  icon: '◼️',
+  icon: <EndShape />,
   nodeType: 'End',
   description: 'End node',
   defaultData: {
@@ -29,9 +65,9 @@ const endNodeBlock: NodeBlock = {
 
 const declareVariableNodeBlock: NodeBlock = {
   id: 'declare-variable-node',
-  type: 'node',
+  type: 'process',
   label: 'Declare variable',
-  icon: '📝',
+  icon: <ProcessShape />,
   nodeType: 'DeclareVariable',
   description: 'Declare a new variable',
   defaultData: {
@@ -42,9 +78,9 @@ const declareVariableNodeBlock: NodeBlock = {
 
 const assignVariableNodeBlock: NodeBlock = {
   id: 'assign-variable-node',
-  type: 'node',
+  type: 'process',
   label: 'Assign variable',
-  icon: '✏️',
+  icon: <ProcessShape />,
   nodeType: 'AssignVariable',
   description: 'Assign a value to a variable',
   defaultData: {
@@ -55,9 +91,9 @@ const assignVariableNodeBlock: NodeBlock = {
 
 const conditionalNodeBlock: NodeBlock = {
   id: 'conditional-node',
-  type: 'node',
+  type: 'control',
   label: 'Conditional',
-  icon: '🔍',
+  icon: <ConditionalShape />,
   nodeType: 'Conditional',
   description: 'Conditional node',
   defaultData: {
@@ -68,9 +104,9 @@ const conditionalNodeBlock: NodeBlock = {
 
 const inputNodeBlock: NodeBlock = {
   id: 'input-node',
-  type: 'node',
+  type: 'input',
   label: 'Input',
-  icon: '📥',
+  icon: <InputOutputShape />,
   nodeType: 'Input',
   description: 'Input node',
   defaultData: {
@@ -81,9 +117,9 @@ const inputNodeBlock: NodeBlock = {
 
 const outputNodeBlock: NodeBlock = {
   id: 'output-node',
-  type: 'node',
+  type: 'output',
   label: 'Output',
-  icon: '📤',
+  icon: <InputOutputShape />,
   nodeType: 'Output',
   description: 'Output node',
   defaultData: {
@@ -103,4 +139,4 @@ export const toolbarBlocksList: Block[] = [
   outputNodeBlock
 ];
 
-export default toolbarBlocksList;
+export default toolbarBlocksList; 

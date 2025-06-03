@@ -172,9 +172,9 @@ const FlowContent: React.FC = () => {
     event.stopPropagation();
     
     // Don't change selection when flow is running (TODO: this is done to avoid a maximum depth setState when right-clicking AssignVariable with 2 variables in right side)
-    if (isRunning) {
+    /*if (isRunning) {
       return;
-    }
+    }*/
     
     setSelectedNode(node as FlowNode);
     setSelectedElement({ id: node.id, type: 'node' });
@@ -394,6 +394,12 @@ const FlowContent: React.FC = () => {
       return;
     }
 
+    // Don't allow creating new blocks when flow is running
+    if (isRunning) {
+      console.warn('Cannot create new blocks while the flow is running');
+      return;
+    }
+
     event.preventDefault();
     
     setIsDraggingOver(false);
@@ -456,7 +462,7 @@ const FlowContent: React.FC = () => {
       // Clear the DnDData after dropping
       setDnDData(null);
     }
-  }, [reactFlowInstance, nodes, setNodes, setIsDraggingOver, DnDData]);
+  }, [reactFlowInstance, nodes, setNodes, setIsDraggingOver, DnDData, isRunning]);
 
   const onConnect = (params: any) => {    
     setEdges((eds: Edge[]) => {
