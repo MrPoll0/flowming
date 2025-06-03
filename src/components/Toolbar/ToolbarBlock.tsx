@@ -26,10 +26,10 @@ const ToolbarBlock: React.FC<{
     };
 
     const blockTypeColors = {
-      input: 'border-blue-200 bg-blue-50 hover:bg-blue-100',
-      output: 'border-green-200 bg-green-50 hover:bg-green-100', 
-      process: 'border-purple-200 bg-purple-50 hover:bg-purple-100',
-      control: 'border-orange-200 bg-orange-50 hover:bg-orange-100',
+      input: 'border-green-200 bg-green-50 hover:bg-green-100',
+      output: 'border-green-200 bg-green-50 hover:bg-green-100',
+      process: 'border-orange-200 bg-orange-50 hover:bg-orange-100',
+      control: 'border-blue-200 bg-blue-50 hover:bg-blue-100',
       default: 'border-gray-200 bg-gray-50 hover:bg-gray-100'
     };
   
@@ -46,9 +46,9 @@ const ToolbarBlock: React.FC<{
       >
         <div className="flex items-center gap-2">
           {block.icon && (
-            <span className="text-lg flex-shrink-0">
+            <div className="flex-shrink-0">
               {block.icon}
-            </span>
+            </div>
           )}
           <span className="text-sm font-medium text-gray-700 leading-tight">
             {block.label}
