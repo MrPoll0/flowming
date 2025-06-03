@@ -41,7 +41,7 @@ const FilenameEditor: React.FC = () => {
   };
 
   return (
-    <>
+    <div className="flex items-center gap-1">
       {isEditingFilename ? (
         <input
           type="text"
@@ -95,7 +95,17 @@ const FilenameEditor: React.FC = () => {
           {filename || 'Untitled'}
         </div>
       )}
-    </>
+      <span 
+        style={{
+          fontSize: '14px',
+          color: 'rgba(100,100,100,0.8)',
+          fontWeight: '500',
+          userSelect: 'none'
+        }}
+      >
+        .flowming
+      </span>
+    </div>
   );
 };
 
