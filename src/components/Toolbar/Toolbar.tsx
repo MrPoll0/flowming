@@ -3,10 +3,12 @@ import toolbarBlocksList from './ToolbarBlocksList';
 import ToolbarBlock from './ToolbarBlock';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useFlowExecutorContext } from '../../context/FlowExecutorContext';
 
 // Main Toolbar component
 const Toolbar: React.FC = () => {
   const blocks = toolbarBlocksList;
+  const { isRunning } = useFlowExecutorContext();
 
   return (
     <Card className="h-full">
@@ -20,6 +22,7 @@ const Toolbar: React.FC = () => {
               <ToolbarBlock
                 key={block.id}
                 block={block}
+                disabled={isRunning}
               />
             ))}
           </div>
