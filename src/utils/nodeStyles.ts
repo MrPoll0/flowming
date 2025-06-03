@@ -49,7 +49,6 @@ export function getNodeActionsStyles({
     border: borderStyle,
     boxShadow: boxShadow,
     backgroundColor: '#fff',
-    transition: 'all 0.2s ease',
     ...additionalStyles
   };
 }
