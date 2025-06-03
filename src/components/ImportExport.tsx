@@ -1,8 +1,9 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useContext } from 'react';
 import { useReactFlow } from '@xyflow/react';
 import { useVariables } from '../context/VariablesContext';
 import { useFilename } from '../context/FilenameContext';
 import { useFlowExecutorContext } from '../context/FlowExecutorContext';
+import { SelectedNodeContext } from '../context/SelectedNodeContext';
 import { Variable } from '../models';
 import { Button } from './ui/button';
 import { Download, Upload, FileX } from 'lucide-react';
@@ -21,6 +22,7 @@ const ImportExport: React.FC = () => {
   const { variables, updateNodeVariables, deleteNodeVariables } = useVariables();
   const { filename, setFilename } = useFilename();
   const { stop } = useFlowExecutorContext();
+  const { setSelectedNode } = useContext(SelectedNodeContext);
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
@@ -38,6 +40,9 @@ const ImportExport: React.FC = () => {
       deleteNodeVariables(node.id);
     });
     
+    // Clear selected node (this will clear the Details tab)
+    setSelectedNode(null);
+    
     // Reset filename
     setFilename('Untitled');
     
@@ -45,7 +50,7 @@ const ImportExport: React.FC = () => {
     setTimeout(() => {
       setViewport({ x: 0, y: 0, zoom: 2 });
     }, 100);
-  }, [setNodes, setEdges, getNodes, deleteNodeVariables, setFilename, setViewport, stop]);
+  }, [setNodes, setEdges, getNodes, deleteNodeVariables, setFilename, setViewport, stop, setSelectedNode]);
 
   const onExport = useCallback(() => {
     // Stop execution before exporting to avoid exporting unexpected node/edge data
