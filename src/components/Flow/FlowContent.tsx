@@ -53,6 +53,9 @@ const FlowContent: React.FC = () => {
   // Add state to track code highlighting
   const [codeHighlightedVisualId, setCodeHighlightedVisualId] = useState<string | null>(null);
 
+  // Add state to track alternating pattern for conditional edge labels
+  const [nextConditionalLabel, setNextConditionalLabel] = useState<number>(1); // Start with "Yes" (index 1)
+
   const { isRunning } = useFlowExecutorContext();
 
   // TODO: possible problems when modifying node data from multiple places at the same time?
@@ -479,8 +482,11 @@ const FlowContent: React.FC = () => {
 
         let newEdgeLabel = '';
         if (!hasYesEdge && !hasNoEdge) {
-          // If no yes nor no edge, set the label randomly (TODO: think this through, user experience?)
-          newEdgeLabel = decisionEdgeLabels[Math.floor(Math.random() * decisionEdgeLabels.length)];
+          // If no yes nor no edge, set the label as the next in an alternating pattern (yes, no, yes, no...)
+          // TODO: this toggling affects all the conditional nodes, not just the one that is being created (but its not critical)
+          newEdgeLabel = decisionEdgeLabels[nextConditionalLabel];
+          // Toggle for next time: 0 <-> 1 (No <-> Yes).
+          setNextConditionalLabel(newEdgeLabel === decisionEdgeLabels[0] ? 1 : 0);
         } else {
           newEdgeLabel = hasYesEdge ? decisionEdgeLabels[0] : decisionEdgeLabels[1];
         }
