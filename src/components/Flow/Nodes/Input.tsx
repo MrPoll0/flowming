@@ -5,6 +5,7 @@ import { BaseNode, NodeProcessor } from './NodeTypes';
 import { IVariable, VariableType, Variable } from '../../../models/Variable';
 import { IValuedVariable } from '../../../models/ValuedVariable';
 import { ValuedVariable } from '../../../models/ValuedVariable';
+import { Badge } from '@/components/ui/badge';
 
 interface InputNode extends BaseNode {
   variable?: IVariable;
@@ -51,7 +52,7 @@ class InputProcessor implements NodeProcessor {
 }
 
 const Input = memo(function InputComponent({ data, id: nodeId }: { data: InputNode; id: string }) {
-  const { isHovered, isSelected, isHighlighted, variable, width, height } = data;
+  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, variable, width, height, visualId } = data;
 
   const reactFlow = useReactFlow();
 
@@ -77,34 +78,45 @@ const Input = memo(function InputComponent({ data, id: nodeId }: { data: InputNo
       isHovered,
       isSelected,
       isHighlighted,
+      isCodeHighlighted,
       minWidth: width ? `${width}px` : '150px',
       minHeight: height ? `${height}px` : '50px',
       additionalStyles: { transform: 'skewX(-20deg)', transformOrigin: '0 0' }
     })}>
+
+      {visualId && (
+        <div 
+          style={{
+            position: 'absolute',
+            top: '4px',
+            right: '8px',
+            fontSize: '0.65rem',
+            color: 'rgb(119, 119, 119)',
+            fontWeight: 'bold',
+            userSelect: 'none',
+            zIndex: 1,
+            transform: 'skewX(20deg)',
+            backgroundColor: 'rgba(255, 255, 255, 0.8)',
+            borderRadius: '3px',
+            padding: '1px 3px',
+            lineHeight: '1',
+          }}
+        >
+          {visualId}
+        </div>
+      )}
+      
       <div style={{ transform: 'skewX(20deg)', transformOrigin: '50% 50%' }}>
-        <div style={{ fontWeight: 'bold', textAlign: 'center', marginBottom: '10px' }}>Input</div>
+        <div className="font-bold text-center mb-2.5">Input</div>
 
         {variable ? (
-          <div style={{
-            textAlign: 'center',
-            padding: '5px 10px',
-            backgroundColor: '#f5f5f5',
-            borderRadius: '4px',
-            fontSize: '14px',
-            fontFamily: 'monospace',
-            marginBottom: '4px'
-          }}>
-            <code>{variable.name}</code>
+          <div className="text-center mb-1">
+            <Badge variant="outline" className="font-mono text-sm">
+              {variable.name} = {variable.type}(👤)
+            </Badge>
           </div>
         ) : (
-          <div style={{
-            textAlign: 'center', 
-            color: '#888', 
-            padding: '5px 10px',
-            fontStyle: 'italic',
-            fontSize: '14px',
-            marginBottom: '4px'
-          }}>
+          <div className="text-center text-muted-foreground px-2.5 py-1 italic text-sm mb-1">
             No variable defined
           </div>
         )}

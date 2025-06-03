@@ -1,7 +1,7 @@
 // Available variable types
 export const variableTypes = [
-  'string',
   'integer',
+  'string',
   'float',
   'boolean',
   //'array'

@@ -25,6 +25,7 @@ import { useDnD } from '../../context/DnDContext';
 import { useFlowExecutorContext } from '../../context/FlowExecutorContext';
 import { Expression } from '../../models';
 import { decisionEdgeLabels } from './Nodes/Conditional';
+import FilenameEditor from '../FilenameEditor';
 
 const FlowContent: React.FC = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -49,21 +50,84 @@ const FlowContent: React.FC = () => {
 
   // Add state to track edge being edited
   const [editingEdge, setEditingEdge] = useState<string | null>(null);
+  
+  // Add state to track code highlighting
+  const [codeHighlightedVisualId, setCodeHighlightedVisualId] = useState<string | null>(null);
+
+  // Add state to track alternating pattern for conditional edge labels
+  const [nextConditionalLabel, setNextConditionalLabel] = useState<number>(1); // Start with "Yes" (index 1)
 
   const { isRunning } = useFlowExecutorContext();
 
   // TODO: possible problems when modifying node data from multiple places at the same time?
-
-  // Apply visual styles based on hover and selection states
+  
+  // Assign sequential visual IDs to nodes
   useEffect(() => {
-    // Apply styles to nodes
+    setNodes((currentNodes) =>
+      currentNodes.map((node, index) => {
+        const visualId = `B${index + 1}`;
+        if (node.data.visualId === visualId) {
+          return node; // Avoid re-render if ID is already correct
+        }
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            visualId,
+          },
+        };
+      })
+    );
+  }, [nodes.length, setNodes]); // Re-run if the number of nodes changes
+
+  // TODO: conditional edges cannot be created after being created, runned, etc
+
+  useEffect(() => {
+    // Handle code-to-diagram highlighting events
+
+    const handleHighlightDiagramNode = (event: CustomEvent) => {
+      const { visualId } = event.detail;
+      setCodeHighlightedVisualId(visualId);
+    };
+
+    const handleClearDiagramHighlight = () => {
+      setCodeHighlightedVisualId(null);
+    };
+
+    const handleSelectDiagramNode = (event: CustomEvent) => {
+      const { visualId } = event.detail;
+      // Find node by visualId and select it
+      const targetNode = nodes.find(n => n.data.visualId === visualId);
+      if (targetNode) {
+        // Set selected node in context
+        setSelectedNode(targetNode as FlowNode);
+        setSelectedElement({ id: targetNode.id, type: 'node' });
+      }
+    };
+
+    window.addEventListener('highlightDiagramNode', handleHighlightDiagramNode as EventListener);
+    window.addEventListener('clearDiagramHighlight', handleClearDiagramHighlight);
+    window.addEventListener('selectDiagramNode', handleSelectDiagramNode as EventListener);
+
+    return () => {
+      window.removeEventListener('highlightDiagramNode', handleHighlightDiagramNode as EventListener);
+      window.removeEventListener('clearDiagramHighlight', handleClearDiagramHighlight);
+      window.removeEventListener('selectDiagramNode', handleSelectDiagramNode as EventListener);
+    };
+  }, [nodes]);
+
+  useEffect(() => {
+    // Apply visual styles based on hover, selection, and code highlighting states
     setNodes((prevNodes) => 
       prevNodes.map((node) => {
         const isHovered = hoveredElement?.id === node.id && hoveredElement?.type === 'node';
         const isSelected = selectedElement?.id === node.id && selectedElement?.type === 'node';
+        const isCodeHighlighted = codeHighlightedVisualId === node.data.visualId;
         
-        // Only create a new node object if the hover/selection state changed
-        if (node.data.isHovered === isHovered && node.data.isSelected === isSelected) {
+        // Only create a new node object if any state changed
+        if (node.data.isHovered === isHovered && 
+            node.data.isSelected === isSelected && 
+            node.data.isCodeHighlighted === isCodeHighlighted) {
           return node; // Return the existing node if no changes
         }
         
@@ -73,6 +137,7 @@ const FlowContent: React.FC = () => {
             ...node.data,
             isHovered,
             isSelected,
+            isCodeHighlighted,
           },
         };
       })
@@ -99,7 +164,7 @@ const FlowContent: React.FC = () => {
         };
       })
     );
-  }, [hoveredElement, selectedElement]);
+  }, [hoveredElement, selectedElement, codeHighlightedVisualId]);
 
   // Handle node selection
   const onNodeClick = (event: React.MouseEvent, node: Node) => {
@@ -156,10 +221,9 @@ const FlowContent: React.FC = () => {
       return;
     }
 
-    // Calculate cursor position relative to the ReactFlow wrapper
-    const reactFlowBounds = reactFlowWrapper.current?.getBoundingClientRect();
-    const x = event.clientX - (reactFlowBounds?.left || 0);
-    const y = event.clientY - (reactFlowBounds?.top || 0);
+    // Use viewport coordinates directly since ContextMenu is fixed positioned
+    const x = event.clientX;
+    const y = event.clientY;
 
     showContextMenu(x, y, nodes.map(node => ({ id: node.id, type: 'node' })));
   };
@@ -179,10 +243,9 @@ const FlowContent: React.FC = () => {
     setSelectedNode(node as FlowNode);
     setSelectedElement({ id: node.id, type: 'node' });
     
-    // Calculate cursor position relative to the ReactFlow wrapper
-    const reactFlowBounds = reactFlowWrapper.current?.getBoundingClientRect();
-    const x = event.clientX - (reactFlowBounds?.left || 0);
-    const y = event.clientY - (reactFlowBounds?.top || 0);
+    // Use viewport coordinates directly since ContextMenu is fixed positioned
+    const x = event.clientX;
+    const y = event.clientY;
     
     showContextMenu(x, y, [{ id: node.id, type: 'node' }]);
   };
@@ -200,10 +263,9 @@ const FlowContent: React.FC = () => {
     // Select the edge (same as in onEdgeClick)
     setSelectedElement({ id: edge.id, type: 'edge' });
     
-    // Calculate cursor position relative to the ReactFlow wrapper
-    const reactFlowBounds = reactFlowWrapper.current?.getBoundingClientRect();
-    const x = event.clientX - (reactFlowBounds?.left || 0);
-    const y = event.clientY - (reactFlowBounds?.top || 0);
+    // Use viewport coordinates directly since ContextMenu is fixed positioned
+    const x = event.clientX;
+    const y = event.clientY;
     
     showContextMenu(x, y, [{ id: edge.id, type: 'edge' }]);
   };
@@ -421,8 +483,11 @@ const FlowContent: React.FC = () => {
 
         let newEdgeLabel = '';
         if (!hasYesEdge && !hasNoEdge) {
-          // If no yes nor no edge, set the label randomly (TODO: think this through, user experience?)
-          newEdgeLabel = decisionEdgeLabels[Math.floor(Math.random() * decisionEdgeLabels.length)];
+          // If no yes nor no edge, set the label as the next in an alternating pattern (yes, no, yes, no...)
+          // TODO: this toggling affects all the conditional nodes, not just the one that is being created (but its not critical)
+          newEdgeLabel = decisionEdgeLabels[nextConditionalLabel];
+          // Toggle for next time: 0 <-> 1 (No <-> Yes).
+          setNextConditionalLabel(newEdgeLabel === decisionEdgeLabels[0] ? 1 : 0);
         } else {
           newEdgeLabel = hasYesEdge ? decisionEdgeLabels[0] : decisionEdgeLabels[1];
         }
@@ -606,13 +671,31 @@ const FlowContent: React.FC = () => {
     );
   }, [variables, setNodes]);
 
-  // Prevent self-connections (a node connecting to itself)
   const isValidConnection: IsValidConnection = useCallback(
     (connection: Connection | Edge) => {
-      // If source and target are the same node, it's an invalid connection
-      return connection.source !== connection.target;
+      // TODO: allow self-connections for while True on the same
+      // careful with which type, e.g. conditional (then not?)
+      // Prevent self-connections (a node connecting to itself)
+      if (connection.source === connection.target) {
+        return false;
+      }
+
+      const sourceNode = nodes.find(node => node.id === connection.source);
+
+      // Get the existing edges from the source handle
+      const existingEdgesFromHandle = edges.filter(
+        edge => edge.source === connection.source && edge.sourceHandle === connection.sourceHandle
+      );
+
+      // Only for the case of Conditional nodes (as dragging a new edge from a handle if there are already Yes/No wont create a new edge, per onConnect)
+      // If there's already an edge from this specific handle, prevent another one (1 outgoing edge per handle Yes/No to prevent label confusion and follow standard)
+      if (sourceNode?.type === 'Conditional' && existingEdgesFromHandle.length > 0) {
+        return false;
+      }
+
+      return true;
     },
-    []
+    [edges]
   );
 
   return (
@@ -743,7 +826,24 @@ const FlowContent: React.FC = () => {
               at HTMLDivElement.handleDirectDrop (FlowContent.tsx:268:28)
 
           */
+
+
+
+          // TODO: Yes/No labels in arrows are in the contrary side (Conditional, get 2 arrows from below to each side; same with from side to up and down)
+          // ===> NO! it is correct. but Yes/No labels must come from DIFFERENT handles
+          // cannot use the same handle for both (this should apply also for other nodes connections)
+
+
+
+          // TODO: BUG with Conditional edges -> add both, remove one, cannot get a new one?
+
+          // TODO: refactor flowline Yes/No to have 0-1 data instead of relying on a label which may change with language
+
+          // TODO: change Yes/No labels in Conditional edges for one-one instead of random 50%
           
+          // TODO: cannot move draggable elements in expression builder if its >= 2 lines height (only horizontally)
+
+          // Timer: https://www.timeanddate.com/countdown/generic?iso=20250616T12&p0=%3A&font=cursive
 
           type: 'Flowline',
         }}
@@ -751,7 +851,7 @@ const FlowContent: React.FC = () => {
         <Controls />
         <Background variant={BackgroundVariant.Lines} gap={12} size={1} />
         <Panel style={{ userSelect: 'none' }}> {/* prevent text selection when double clicking on edge */}
-          Nombre del archivo/diagrama (TODO)
+          <FilenameEditor />
         </Panel>
       </ReactFlow>
       <ContextMenu onDelete={onDelete} />

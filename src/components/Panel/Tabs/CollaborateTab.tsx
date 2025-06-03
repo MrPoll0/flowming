@@ -1,7 +1,7 @@
 const CollaborateTab = () => {
     return (
         <div>
-            <h3>Colaborar con el diagrama</h3>
+            <h3>Online collaboration</h3>
         </div>
     );
 };  

@@ -52,7 +52,7 @@ class ConditionalProcessor implements NodeProcessor {
 }
 
 const Conditional = memo(function ConditionalComponent({ data, id: nodeId }: { data: ConditionalNode; id: string }) {
-  const { isHovered, isSelected, isHighlighted, width, height } = data;
+  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, width, height, visualId } = data;
   
   const reactFlow = useReactFlow();
 
@@ -85,13 +85,15 @@ const Conditional = memo(function ConditionalComponent({ data, id: nodeId }: { d
       isHovered,
       isSelected,
       isHighlighted,
+      isCodeHighlighted,
     }),
   } as React.CSSProperties;
   
   const labelStyle = {
     zIndex: 10,
     position: "relative",
-    fontSize: 12,
+    fontSize: "0.75rem",
+    fontFamily: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
@@ -131,7 +133,31 @@ const Conditional = memo(function ConditionalComponent({ data, id: nodeId }: { d
 
   return (
     <div className="conditional-node" style={diamondStyle}>
-      <div style={labelStyle}><code>{label}</code></div>
+      <div style={labelStyle}>{label}</div>
+
+      {visualId && (
+        <div 
+          style={{
+            position: 'absolute',
+            top: '-12px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            fontSize: '0.65rem',
+            color: 'rgb(119, 119, 119)',
+            fontWeight: 'bold',
+            userSelect: 'none',
+            zIndex: 10,
+            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+            borderRadius: '3px',
+            padding: '1px 4px',
+            lineHeight: '1',
+            border: '1px solid #ddd',
+          }}
+        >
+          {visualId}
+        </div>
+      )}
+
       <Handle style={topHandleStyle} type="target" id="top-target" position={Position.Top} />
       <Handle style={topHandleStyle} type="source" id="top-source" position={Position.Top} />
       <Handle style={bottomHandleStyle} type="target" id="bottom-target" position={Position.Bottom} />

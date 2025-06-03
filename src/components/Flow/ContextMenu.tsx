@@ -1,6 +1,9 @@
 import React, { useContext, useRef, useEffect, memo } from 'react';
 import { FlowInteractionContext } from '../../context/FlowInteractionContext';
 import { SelectedNodeContext } from '../../context/SelectedNodeContext';
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Trash2 } from "lucide-react";
 
 interface ContextMenuProps {
   onDelete: (element: { id: string; type: 'node' | 'edge' }) => void;
@@ -44,37 +47,25 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ onDelete }) => {
   };
 
   return (
-    <div 
+    <Card 
       ref={menuRef}
-      className="context-menu" 
+      className="fixed z-[1000] p-1 shadow-lg border"
       style={{ 
-        position: 'absolute',
         top: y,
         left: x,
-        backgroundColor: 'white',
-        border: '1px solid #ccc',
-        borderRadius: '4px',
-        padding: '5px 0',
-        boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-        zIndex: 1000,
       }}
       onClick={(e) => e.stopPropagation()}
     >
-      <div 
-        className="context-menu-item delete" 
+      <Button
+        variant="ghost"
+        size="sm"
         onClick={handleDelete}
-        style={{
-          padding: '8px 12px',
-          cursor: 'pointer',
-          color: 'red',
-          fontWeight: 'bold',
-        }}
-        onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.05)'}
-        onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+        className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10"
       >
+        <Trash2 className="h-4 w-4 mr-2" />
         Delete
-      </div>
-    </div>
+      </Button>
+    </Card>
   );
 };
 
