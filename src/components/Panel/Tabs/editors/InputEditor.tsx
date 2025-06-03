@@ -75,12 +75,11 @@ const InputEditor = () => {
   
   return (
     <div key={selectedNode.id}>
-      <h4>Input Configuration</h4>
       
       {/* Variable selection */}
       <Card className="mb-4">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Select Input Variable</CardTitle>
+          <CardTitle className="text-base">Input Variable</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <Select

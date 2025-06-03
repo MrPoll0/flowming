@@ -355,9 +355,7 @@ const VariableAssignmentEditor = () => {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div key={selectedNode.id}>
-        <h4>Variable Assignment</h4>
-        
+      <div key={selectedNode.id}>        
         {/* Assignment expression display box */}
         <Card className="mb-4">
           <CardHeader className="pb-2">
