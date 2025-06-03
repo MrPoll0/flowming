@@ -362,6 +362,15 @@ const OutputEditor = () => {
                         value={variable.name}
                         backgroundColor="#d1e7ff"
                         disabled={isRunning}
+                        onClick={() => {
+                          const element = new ExpressionElement(
+                            crypto.randomUUID(),
+                            'variable',
+                            variable.name,
+                            variable
+                          );
+                          addExpressionElement(element);
+                        }}
                       />
                     ))}
                     {allVariables.length === 0 && (
@@ -382,6 +391,14 @@ const OutputEditor = () => {
                           value="true"
                           backgroundColor="#d1ffd1"
                           disabled={isRunning}
+                          onClick={() => {
+                            const element = new ExpressionElement(
+                              crypto.randomUUID(),
+                              'literal',
+                              'true'
+                            );
+                            addExpressionElement(element);
+                          }}
                         />
                         <DraggablePaletteItem
                           id="lit-boolean-false"
@@ -389,6 +406,14 @@ const OutputEditor = () => {
                           value="false"
                           backgroundColor="#d1ffd1"
                           disabled={isRunning}
+                          onClick={() => {
+                            const element = new ExpressionElement(
+                              crypto.randomUUID(),
+                              'literal',
+                              'false'
+                            );
+                            addExpressionElement(element);
+                          }}
                         />
                       </div>
                     </div>
@@ -504,6 +529,14 @@ const OutputEditor = () => {
                   value={op}
                   backgroundColor="#ffd1d1"
                   disabled={isRunning}
+                  onClick={() => {
+                    const element = new ExpressionElement(
+                      crypto.randomUUID(),
+                      'operator',
+                      op
+                    );
+                    addExpressionElement(element);
+                  }}
                 />
               ))}
             </CardContent>

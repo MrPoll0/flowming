@@ -72,10 +72,12 @@ export interface DraggablePaletteItemProps {
   value: string;
   backgroundColor: string;
   disabled: boolean;
+  onClick?: () => void;
+  onRightClick?: () => void;
 }
 
 // Draggable palette item component (non-sortable)
-export const DraggablePaletteItem = ({ id, value, backgroundColor, disabled }: DraggablePaletteItemProps) => {
+export const DraggablePaletteItem = ({ id, value, backgroundColor, disabled, onClick, onRightClick }: DraggablePaletteItemProps) => {
   const { attributes, listeners, setNodeRef } = useDraggable({
     id: id,
     disabled
@@ -87,16 +89,45 @@ export const DraggablePaletteItem = ({ id, value, backgroundColor, disabled }: D
     backgroundColor === '#ffd1d1' ? 'bg-red-100' :
     backgroundColor === '#d1ffd1' ? 'bg-green-100' : 'bg-gray-200';
 
+  const handleClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!disabled && onClick) {
+      onClick();
+    }
+  };
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!disabled && onRightClick) {
+      onRightClick();
+    }
+  };
+
+  const getTooltipText = () => {
+    if (onClick && onRightClick) {
+      return `Left-click: add "${value}" to left side, Right-click: add to right side`;
+    } else if (onClick) {
+      return `Drag or click to add "${value}" to expression`;
+    }
+    return `Drag "${value}" to expression`;
+  };
+
   return (
     <div
       ref={setNodeRef}
       {...attributes}
       {...listeners}
+      onClick={handleClick}
+      onContextMenu={handleContextMenu}
       className={`
         inline-block px-2 py-1 m-1 rounded text-sm
         ${bgColorClass}
-        ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-grab'}
+        ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-grab hover:cursor-pointer'}
+        ${!disabled ? 'hover:opacity-80 transition-opacity' : ''}
       `}
+      title={getTooltipText()}
     >
       {value}
     </div>

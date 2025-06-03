@@ -149,6 +149,16 @@ const ConditionalEditor = () => {
     }
   };
   
+  // Helper function for left click - adds to left side
+  const addElementOnLeftClick = (element: ExpressionElement) => {
+    addExpressionElement(element, 'left');
+  };
+  
+  // Helper function for right click - adds to right side
+  const addElementOnRightClick = (element: ExpressionElement) => {
+    addExpressionElement(element, 'right');
+  };
+  
   const removeExpressionElement = (id: string) => {
     if (selectedNode?.type === 'Conditional' && expression && !isRunning) {
       setExpression(prev => {
@@ -471,6 +481,24 @@ const ConditionalEditor = () => {
                         value={variable.name}
                         backgroundColor="#d1e7ff"
                         disabled={isRunning}
+                        onClick={() => {
+                          const element = new ExpressionElement(
+                            crypto.randomUUID(),
+                            'variable',
+                            variable.name,
+                            variable
+                          );
+                          addElementOnLeftClick(element);
+                        }}
+                        onRightClick={() => {
+                          const element = new ExpressionElement(
+                            crypto.randomUUID(),
+                            'variable',
+                            variable.name,
+                            variable
+                          );
+                          addElementOnRightClick(element);
+                        }}
                       />
                     ))}
                     {getAllVariables().length === 0 && (
@@ -491,6 +519,22 @@ const ConditionalEditor = () => {
                           value="true"
                           backgroundColor="#d1ffd1"
                           disabled={isRunning}
+                          onClick={() => {
+                            const element = new ExpressionElement(
+                              crypto.randomUUID(),
+                              'literal',
+                              'true'
+                            );
+                            addElementOnLeftClick(element);
+                          }}
+                          onRightClick={() => {
+                            const element = new ExpressionElement(
+                              crypto.randomUUID(),
+                              'literal',
+                              'true'
+                            );
+                            addElementOnRightClick(element);
+                          }}
                         />
                         <DraggablePaletteItem
                           id="lit-boolean-false"
@@ -498,6 +542,22 @@ const ConditionalEditor = () => {
                           value="false"
                           backgroundColor="#d1ffd1"
                           disabled={isRunning}
+                          onClick={() => {
+                            const element = new ExpressionElement(
+                              crypto.randomUUID(),
+                              'literal',
+                              'false'
+                            );
+                            addElementOnLeftClick(element);
+                          }}
+                          onRightClick={() => {
+                            const element = new ExpressionElement(
+                              crypto.randomUUID(),
+                              'literal',
+                              'false'
+                            );
+                            addElementOnRightClick(element);
+                          }}
                         />
                       </div>
                     </div>
@@ -691,6 +751,22 @@ const ConditionalEditor = () => {
                   value={op}
                   backgroundColor="#ffd1d1"
                   disabled={isRunning}
+                  onClick={() => {
+                    const element = new ExpressionElement(
+                      crypto.randomUUID(),
+                      'operator',
+                      op
+                    );
+                    addElementOnLeftClick(element);
+                  }}
+                  onRightClick={() => {
+                    const element = new ExpressionElement(
+                      crypto.randomUUID(),
+                      'operator',
+                      op
+                    );
+                    addElementOnRightClick(element);
+                  }}
                 />
               ))}
             </CardContent>
