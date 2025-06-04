@@ -7,6 +7,7 @@ import { SelectedNodeContext } from '../context/SelectedNodeContext';
 import { Variable } from '../models';
 import { Button } from './ui/button';
 import { Download, Upload, FileX } from 'lucide-react';
+import { useDebugger } from '../context/DebuggerContext';
 
 interface FlowData {
   nodes: any[];
@@ -25,10 +26,12 @@ const ImportExport: React.FC = () => {
   const { setSelectedNode } = useContext(SelectedNodeContext);
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const { clearHistory } = useDebugger();
 
   const onNew = useCallback(() => {
     // Stop execution before creating new diagram
     stop();
+    clearHistory();
 
     // Clear all nodes and edges
     setNodes([]);
@@ -50,7 +53,7 @@ const ImportExport: React.FC = () => {
     setTimeout(() => {
       setViewport({ x: 0, y: 0, zoom: 2 });
     }, 100);
-  }, [setNodes, setEdges, getNodes, deleteNodeVariables, setFilename, setViewport, stop, setSelectedNode]);
+  }, [setNodes, setEdges, getNodes, deleteNodeVariables, setFilename, setViewport, stop, setSelectedNode, clearHistory]);
 
   const onExport = useCallback(() => {
     // Stop execution before exporting to avoid exporting unexpected node/edge data
@@ -107,6 +110,7 @@ const ImportExport: React.FC = () => {
     input.accept = '.flowming';
     
     input.onchange = async (event) => {
+      clearHistory(); // Clear debugger history
       setIsImporting(true);
       try {
         const file = (event.target as HTMLInputElement).files?.[0];

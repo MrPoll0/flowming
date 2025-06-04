@@ -13,6 +13,7 @@ import { ValuedVariable } from "../models/ValuedVariable";
 import { VariableType } from "../models/Variable";
 import { decisionEdgeLabels } from "../components/Flow/Nodes/Conditional";
 import { useSystemSettings } from "../context/SystemSettingsContext";
+import { useDebugger } from "../context/DebuggerContext";
 
 export interface IExecutor {
     isRunning: boolean;
@@ -26,12 +27,12 @@ export interface IExecutor {
     reset(): void;
     stepBackward(): void;
     stepForward(): void;
-    stepTo(nodeId: string): void;
 }
 
 export function useFlowExecutor(): IExecutor {
     const reactFlow = useReactFlow();
     const { settings } = useSystemSettings();
+    const { addExecutionStep, updateVariables, startRecording, stopRecording } = useDebugger();
     
     // State for UI purposes
     const [isRunningState, setIsRunningState] = useState(false);
@@ -69,7 +70,10 @@ export function useFlowExecutor(): IExecutor {
         pauseCounterRef.current = 0;
 
         toggleLockFlow(reactFlow, false);
-    }, [reactFlow]);
+        
+        // Stop debugger recording
+        stopRecording();
+    }, [reactFlow, stopRecording]);
 
     const processNode = useCallback(async (node: Node): Promise<{ targetNodeId: string | null, valuedVariables: ValuedVariable<VariableType>[] }> => {
         if (!isRunningRef.current || isPausedRef.current) {
@@ -89,6 +93,9 @@ export function useFlowExecutor(): IExecutor {
         currentNodeRef.current = node;
         setCurrentNode(node);
 
+        // Track execution step for debugger
+        addExecutionStep(node);
+
         // Process the node using its processor if available
         let valuedVariables: ValuedVariable<VariableType>[] = [];
         let processorResult: any = null;
@@ -106,6 +113,11 @@ export function useFlowExecutor(): IExecutor {
                 } else if (Array.isArray(processorResult)) {
                     // For other nodes, use the array result directly (currentValuedVariables)
                     valuedVariables = processorResult;
+                }
+                
+                // Track variable changes for debugger
+                if (valuedVariables.length > 0) {
+                    updateVariables(node, valuedVariables);
                 }
             } catch (error) {
                 console.error(`Error processing node ${node.id}:`, error);
@@ -163,7 +175,7 @@ export function useFlowExecutor(): IExecutor {
         toggleNodeAnimations(reactFlow, node, targetNodeId, true, executionSpeedRef.current);
         
         return { targetNodeId, valuedVariables };
-    }, [reactFlow]);
+    }, [reactFlow, addExecutionStep, updateVariables]);
 
     const start = useCallback(() => {
         const startNode = findStartNode(reactFlow.getNodes());
@@ -188,6 +200,9 @@ export function useFlowExecutor(): IExecutor {
 
         executionCounterRef.current++;
 
+        // Start debugger recording
+        startRecording();
+
         const executionContext: FlowExecutionInterface = {
             reactFlow,
             refs: {
@@ -209,7 +224,7 @@ export function useFlowExecutor(): IExecutor {
             executionContext,
             startNode
         );
-    }, [reactFlow, processNode, stopExecution]);
+    }, [reactFlow, processNode, stopExecution, startRecording]);
 
     const stop = useCallback(() => {
         if (!isRunningRef.current) {
@@ -217,7 +232,7 @@ export function useFlowExecutor(): IExecutor {
         }
 
         stopExecution();
-    }, [reactFlow, stopExecution]);
+    }, [stopExecution]);
 
     const pause = useCallback(() => {
         if (!isRunningRef.current) {
@@ -279,24 +294,20 @@ export function useFlowExecutor(): IExecutor {
         setIsPausedState(false);
         isPausedRef.current = false;
         
-    }, [reactFlow, processNode, stopExecution]);
+    }, []);
 
     const reset = useCallback(() => {
         stopExecution();
         setTimeout(() => {
             start();
         }, 100);
-    }, [reactFlow, stopExecution, start]);
+    }, [stopExecution, start]);
 
     const stepBackward = useCallback(() => {
         
     }, []);
 
     const stepForward = useCallback(() => {
-        
-    }, []);
-
-    const stepTo = useCallback(() => {
         
     }, []);
 
@@ -311,7 +322,6 @@ export function useFlowExecutor(): IExecutor {
         resume,
         reset,
         stepBackward,
-        stepForward,
-        stepTo,
+        stepForward
     };
 }
