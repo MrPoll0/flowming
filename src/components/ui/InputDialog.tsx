@@ -111,7 +111,12 @@ export function InputDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent
+        hideCloseButton
+        className="sm:max-w-md"
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        onPointerDownOutside={(e) => e.preventDefault()}
+      >
         <DialogHeader className="space-y-3">
           <DialogTitle className="text-xl font-semibold">{title}</DialogTitle>
           {description && (
