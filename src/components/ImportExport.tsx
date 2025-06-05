@@ -1,5 +1,5 @@
 import React, { useCallback, useState, useContext } from 'react';
-import { useReactFlow } from '@xyflow/react';
+import { Edge, Node, useReactFlow, Viewport } from '@xyflow/react';
 import { useVariables } from '../context/VariablesContext';
 import { useFilename } from '../context/FilenameContext';
 import { useFlowExecutorContext } from '../context/FlowExecutorContext';
@@ -8,6 +8,7 @@ import { Variable } from '../models';
 import { Button } from './ui/button';
 import { Download, Upload, FileX } from 'lucide-react';
 import { useDebugger } from '../context/DebuggerContext';
+import { FlowNode } from './Flow/FlowTypes';
 
 interface FlowData {
   nodes: any[];
@@ -16,6 +17,28 @@ interface FlowData {
   timestamp: string;
   version: string;
   filename?: string;
+}
+
+export const clearDiagram = (setNodes: (nodes: FlowNode[]) => void, setEdges: (edges: Edge[]) => void, getNodes: () => Node[], deleteNodeVariables: (nodeId: string) => void, setSelectedNode: (node: FlowNode | null) => void, setFilename: (filename: string) => void, setViewport: (viewport: Viewport) => void, stop: () => void, clearHistory: () => void) => {
+  // Stop execution before creating new diagram
+  stop();
+  clearHistory();
+
+  // Clear all nodes and edges
+  setNodes([]);
+  setEdges([]);
+  
+  // Clear all variables
+  const existingNodes = getNodes();
+  existingNodes.forEach(node => {
+    deleteNodeVariables(node.id);
+  });
+  
+  // Clear selected node (this will clear the Details tab)
+  setSelectedNode(null);
+  
+  // Reset filename
+  setFilename('Untitled');
 }
 
 const ImportExport: React.FC = () => {
@@ -29,25 +52,7 @@ const ImportExport: React.FC = () => {
   const { clearHistory } = useDebugger();
 
   const onNew = useCallback(() => {
-    // Stop execution before creating new diagram
-    stop();
-    clearHistory();
-
-    // Clear all nodes and edges
-    setNodes([]);
-    setEdges([]);
-    
-    // Clear all variables
-    const existingNodes = getNodes();
-    existingNodes.forEach(node => {
-      deleteNodeVariables(node.id);
-    });
-    
-    // Clear selected node (this will clear the Details tab)
-    setSelectedNode(null);
-    
-    // Reset filename
-    setFilename('Untitled');
+    clearDiagram(setNodes, setEdges, getNodes, deleteNodeVariables, setSelectedNode, setFilename, setViewport, stop, clearHistory);
     
     // Fit view to center
     setTimeout(() => {

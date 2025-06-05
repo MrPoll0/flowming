@@ -1,17 +1,105 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useFilename } from '../context/FilenameContext';
 import { useFlowExecutorContext } from '../context/FlowExecutorContext';
+import { useCollaboration } from '../context/CollaborationContext';
+
+const SYNC_ORIGIN_FILENAME = 'local_filename_sync';
 
 const FilenameEditor: React.FC = () => {
   const { filename, setFilename } = useFilename();
   const { isRunning } = useFlowExecutorContext();
+  const { ydoc, ySharedFilename, awareness } = useCollaboration();
   const [isEditingFilename, setIsEditingFilename] = useState(false);
   const [tempFilename, setTempFilename] = useState(filename);
+  const awarenessInitialized = useRef(false);
 
-  // Update tempFilename when filename changes from context
+  // Reset initialization state when collaboration context changes
+  useEffect(() => {
+    if (!ydoc || !awareness) {
+      awarenessInitialized.current = false;
+    }
+  }, [ydoc, awareness]);
+
+  // Update tempFilename when filename changes from context (local or remote)
   useEffect(() => {
     setTempFilename(filename);
+    if(awareness) awareness.setLocalStateField('filename', filename);
   }, [filename]);
+
+  // NOTE: if only 1 client in the room, we dont really care about suscribing or pushing changes to Y.Text for filename
+  // since the updated filename will be pushed to the awareness
+  // NOTE2: when connecting to a room, we want to get its filename. Due to sync issues, the gotten values might be empty
+  // so we wait for the awareness to be retrieved with the filename on it. This filename will be reliable
+  // once we have this, then we sync both the client already in the room and the joining client through Y.Text
+  // the client with the earliest joinedAt is the one that will be used to sync the filename (the host ideally, contrary to the joining client)
+
+  // Handle awareness-based filename synchronization on join
+  useEffect(() => {
+    if (!awareness || awarenessInitialized.current) return;
+
+    const handleAwarenessChange = () => {
+      // Only run initial synchronization once
+      if (awarenessInitialized.current) return;
+      // Gather all client states (clientID and state)
+      const states = Array.from(awareness.getStates().entries()) as [number, any][];
+      // Only proceed once there's at least one other peer
+      if (states.length < 2) return;
+
+      // Find the earliest client by earlist joinedAt 
+      let [firstID, firstState] = states[0];
+      for (const [id, state] of states) {
+        if (state.user.joinedAt < firstState.user.joinedAt) {
+          firstID = id;
+          firstState = state;
+        }
+      }
+
+      // If the earliest isn't us and has a filename, adopt it
+      if (firstID !== awareness.clientID && firstState.filename) {
+        setFilename(firstState.filename);
+      }
+      // Mark synchronization as done
+      awarenessInitialized.current = true;
+    };
+
+    awareness.on('change', handleAwarenessChange);
+    // Trigger immediately in case states already include peers
+    handleAwarenessChange();
+
+    return () => {
+      awareness.off('change', handleAwarenessChange);
+    };
+  }, [awareness, setFilename]);
+
+  // Subscribe to ongoing Y.Text filename changes
+  useEffect(() => {
+    if (!ySharedFilename || !awarenessInitialized.current) return;
+
+    const observer = (event: any) => {
+      if (event.transaction.origin !== SYNC_ORIGIN_FILENAME) {
+        const updated = ySharedFilename.toString();
+        setFilename(updated || 'Untitled');
+      }
+    };
+
+    ySharedFilename.observe(observer);
+    return () => {
+      ySharedFilename.unobserve(observer);
+    };
+  }, [ySharedFilename, awarenessInitialized.current]);
+
+  // Push local filename changes to remote and awareness
+  useEffect(() => {
+    if (!awarenessInitialized.current || !ySharedFilename || !ydoc) return;
+
+    const remote = ySharedFilename.toString();
+    if (filename !== remote) {
+      ydoc.transact(() => {
+        ySharedFilename.delete(0, ySharedFilename.length);
+        ySharedFilename.insert(0, filename);
+      }, SYNC_ORIGIN_FILENAME);
+    }
+  }, [filename, ySharedFilename, ydoc]);
 
   // Handle filename editing
   const handleFilenameClick = () => {

@@ -1,0 +1,131 @@
+import React, { createContext, ReactNode, useContext, useState, useEffect } from 'react';
+import * as Y from 'yjs';
+import { WebrtcProvider } from 'y-webrtc';
+
+// Define user type
+interface User {
+  clientID: number;
+  name: string;
+  color: string;
+  colorLight: string;
+  cursor?: { x: number; y: number };
+  joinedAt: number;
+}
+
+interface CollaborationContextType {
+  ydoc: Y.Doc | null;
+  provider: WebrtcProvider | null;
+  awareness: any;
+  users: User[];
+  joinRoom: (room: string, userName: string, currentFilename?: string) => void;
+  leaveRoom: () => void;
+  ySharedNodes: Y.Map<any> | null;
+  ySharedEdges: Y.Map<any> | null;
+  ySharedFilename: Y.Text | null;
+}
+
+const CollaborationContext = createContext<CollaborationContextType>({
+  ydoc: null,
+  provider: null,
+  awareness: null,
+  users: [],
+  joinRoom: () => {},
+  leaveRoom: () => {},
+  ySharedNodes: null,
+  ySharedEdges: null,
+  ySharedFilename: null,
+});
+
+export const useCollaboration = () => useContext(CollaborationContext);
+
+// Predefined colors for users
+const userColors = [
+  { color: '#30bced', light: '#30bced33' },
+  { color: '#6eeb83', light: '#6eeb8333' },
+  { color: '#ffbc42', light: '#ffbc4233' },
+  { color: '#ecd444', light: '#ecd44433' },
+  { color: '#ee6352', light: '#ee635233' },
+  { color: '#9ac2c9', light: '#9ac2c933' },
+  { color: '#8acb88', light: '#8acb8833' },
+  { color: '#1be7ff', light: '#1be7ff33' },
+];
+
+export const CollaborationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [ydoc, setYdoc] = useState<Y.Doc | null>(null);
+  const [provider, setProvider] = useState<WebrtcProvider | null>(null);
+  const [awareness, setAwareness] = useState<any>(null);
+  const [users, setUsers] = useState<User[]>([]);
+  const [ySharedNodes, setYSharedNodes] = useState<Y.Map<any> | null>(null);
+  const [ySharedEdges, setYSharedEdges] = useState<Y.Map<any> | null>(null);
+  const [ySharedFilename, setYSharedFilename] = useState<Y.Text | null>(null);
+
+  const joinRoom = (room: string, userName: string, currentFilename?: string) => {
+    const doc = new Y.Doc();
+    const prov = new WebrtcProvider(room, doc);
+
+    const sharedNodes = doc.getMap<any>('nodes');
+    const sharedEdges = doc.getMap<any>('edges');
+    const sharedFilename = doc.getText('filename');
+
+    // Assign random color to user
+    const idx = Math.floor(Math.random() * userColors.length);
+    const { color, light } = userColors[idx];
+    prov.awareness.setLocalStateField('user', { clientID: prov.awareness.clientID, name: userName, color, colorLight: light, joinedAt: Date.now() });
+    prov.awareness.setLocalStateField('filename', currentFilename || 'Untitled');
+
+    setYdoc(doc);
+    setProvider(prov);
+    setAwareness(prov.awareness);
+    setYSharedNodes(sharedNodes);
+    setYSharedEdges(sharedEdges);
+    setYSharedFilename(sharedFilename);
+  };
+
+  const leaveRoom = () => {
+    if (provider) {
+      provider.disconnect();
+      provider.destroy();
+    }
+
+    if (ydoc) {
+      ydoc.destroy();
+    }
+
+    setYdoc(null);
+    setProvider(null);
+    setAwareness(null);
+    setUsers([]);
+    setYSharedNodes(null);
+    setYSharedEdges(null);
+    setYSharedFilename(null);
+  };
+
+  useEffect(() => {
+    if (!awareness) return;
+    
+    const onChange = () => {
+      // Cast entries to known tuple type
+      const entries = Array.from(awareness.getStates().entries()) as [number, any][];
+      const states = entries.map(([clientID, state]) => ({
+        clientID,
+        ...state.user,
+        cursor: state.cursor,
+      }));
+
+      setUsers(states);
+    };
+
+    awareness.on('change', onChange);
+    onChange();
+    
+    return () => {
+      awareness.off('change', onChange);
+    };
+  }, [awareness]);
+
+  return (
+    <CollaborationContext.Provider value={{ ydoc, provider, awareness, users, joinRoom, leaveRoom, ySharedNodes, ySharedEdges, ySharedFilename }}>
+      {children}
+    </CollaborationContext.Provider>
+  );
+}; 
