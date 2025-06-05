@@ -180,29 +180,32 @@ const DebuggerTab = () => {
                                 </CardHeader>
                                 <CardContent>
                                     <div className="space-y-3">
-                                        {executionHistory.map((step, index) => (
-                                            <div key={step.stepNumber} className="flex items-center gap-3">
-                                                <Badge variant="outline" className="w-12 justify-center">
-                                                    #{step.stepNumber}
-                                                </Badge>
-                                                
-                                                <div className="flex items-center gap-2 flex-1">
-                                                    <span className="font-medium">
-                                                        {step.visualId}
-                                                    </span>
-                                                    <span className="text-muted-foreground">
-                                                        ({step.nodeLabel})
-                                                    </span>
-                                                    <Badge variant="secondary" className="text-xs ml-auto">
-                                                        {step.nodeType}
+                                        {executionHistory
+                                            .slice()
+                                            .reverse()
+                                            .map((step, index) => (
+                                                <div key={step.stepNumber} className="flex items-center gap-3">
+                                                    <Badge variant="outline" className="w-12 justify-center">
+                                                        #{step.stepNumber}
                                                     </Badge>
+                                                    
+                                                    <div className="flex items-center gap-2 flex-1">
+                                                        <span className="font-medium">
+                                                            {step.visualId}
+                                                        </span>
+                                                        <span className="text-muted-foreground">
+                                                            ({step.nodeLabel})
+                                                        </span>
+                                                        <Badge variant="secondary" className="text-xs ml-auto">
+                                                            {step.nodeType}
+                                                        </Badge>
+                                                    </div>
+                                                    
+                                                    {index < executionHistory.length - 1 && (
+                                                        <span className="text-muted-foreground text-sm">→</span>
+                                                    )}
                                                 </div>
-                                                
-                                                {index < executionHistory.length - 1 && (
-                                                    <span className="text-muted-foreground text-sm">→</span>
-                                                )}
-                                            </div>
-                                        ))}
+                                            ))}
                                     </div>
                                 </CardContent>
                             </Card>
