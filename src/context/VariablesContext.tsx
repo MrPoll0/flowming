@@ -1,4 +1,4 @@
-import React, { createContext, useState, ReactNode, useContext } from 'react';
+import React, { createContext, useState, ReactNode, useContext, useCallback } from 'react';
 import { Variable } from '../models';
 
 // Define the context type
@@ -11,6 +11,7 @@ interface VariablesContextType {
   getAllVariables: () => Variable[];
   updateNodeVariables: (nodeId: string, variables: Variable[]) => void;
   deleteNodeVariables: (nodeId: string) => void;
+  setVariables: (variables: Variable[]) => void;
 }
 
 // Create the context
@@ -23,6 +24,7 @@ export const VariablesContext = createContext<VariablesContextType>({
   getAllVariables: () => [],
   updateNodeVariables: () => {},
   deleteNodeVariables: () => {},
+  setVariables: () => {},
 });
 
 // Custom hook for using the context
@@ -36,41 +38,41 @@ interface VariablesProviderProps {
 export const VariablesProvider: React.FC<VariablesProviderProps> = ({ children }) => {
   const [variables, setVariables] = useState<Variable[]>([]);
 
-  const addVariable = (variable: Variable) => {
+  const addVariable = useCallback((variable: Variable) => {
     setVariables(prev => [...prev, variable]);
-  };
+  }, []);
 
-  const updateVariable = (id: string, updates: Partial<Variable>) => {
+  const updateVariable = useCallback((id: string, updates: Partial<Variable>) => {
     setVariables(prev => 
       prev.map(variable => 
         variable.id === id ? variable.update(updates) : variable
       )
     );
-  };
+  }, []);
 
-  const deleteVariable = (id: string) => {
+  const deleteVariable = useCallback((id: string) => {
     setVariables(prev => prev.filter(variable => variable.id !== id));
-  };
+  }, []);
 
-  const getNodeVariables = (nodeId: string) => {
+  const getNodeVariables = useCallback((nodeId: string) => {
     return variables.filter(variable => variable.nodeId === nodeId);
-  };
+  }, [variables]);
 
-  const getAllVariables = () => {
+  const getAllVariables = useCallback(() => {
     return variables;
-  };
+  }, [variables]);
 
-  const updateNodeVariables = (nodeId: string, nodeVariables: Variable[]): void => {
+  const updateNodeVariables = useCallback((nodeId: string, nodeVariables: Variable[]): void => {
     setVariables(prevVariables => [
       ...prevVariables.filter(v => v.nodeId !== nodeId),
       ...nodeVariables.map(v => new Variable(v.id, v.type, v.name, nodeId))
     ]);
-  };
+  }, []);
 
   // Delete all variables associated with a specific node
-  const deleteNodeVariables = (nodeId: string) => {
+  const deleteNodeVariables = useCallback((nodeId: string) => {
     setVariables(prev => prev.filter(variable => variable.nodeId !== nodeId));
-  };
+  }, []);
 
   return (
     <VariablesContext.Provider
@@ -83,6 +85,7 @@ export const VariablesProvider: React.FC<VariablesProviderProps> = ({ children }
         getAllVariables,
         updateNodeVariables,
         deleteNodeVariables,
+        setVariables,
       }}
     >
       {children}

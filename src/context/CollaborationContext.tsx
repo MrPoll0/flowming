@@ -22,6 +22,7 @@ interface CollaborationContextType {
   ySharedNodes: Y.Map<any> | null;
   ySharedEdges: Y.Map<any> | null;
   ySharedFilename: Y.Text | null;
+  ySharedVariables: Y.Map<any> | null;
 }
 
 const CollaborationContext = createContext<CollaborationContextType>({
@@ -34,6 +35,7 @@ const CollaborationContext = createContext<CollaborationContextType>({
   ySharedNodes: null,
   ySharedEdges: null,
   ySharedFilename: null,
+  ySharedVariables: null,
 });
 
 export const useCollaboration = () => useContext(CollaborationContext);
@@ -58,6 +60,7 @@ export const CollaborationProvider: React.FC<{ children: ReactNode }> = ({ child
   const [ySharedNodes, setYSharedNodes] = useState<Y.Map<any> | null>(null);
   const [ySharedEdges, setYSharedEdges] = useState<Y.Map<any> | null>(null);
   const [ySharedFilename, setYSharedFilename] = useState<Y.Text | null>(null);
+  const [ySharedVariables, setYSharedVariables] = useState<Y.Map<any> | null>(null);
 
   const joinRoom = (room: string, userName: string, currentFilename?: string) => {
     const doc = new Y.Doc();
@@ -66,6 +69,7 @@ export const CollaborationProvider: React.FC<{ children: ReactNode }> = ({ child
     const sharedNodes = doc.getMap<any>('nodes');
     const sharedEdges = doc.getMap<any>('edges');
     const sharedFilename = doc.getText('filename');
+    const sharedVariables = doc.getMap<any>('variables');
 
     // Assign random color to user
     const idx = Math.floor(Math.random() * userColors.length);
@@ -79,6 +83,7 @@ export const CollaborationProvider: React.FC<{ children: ReactNode }> = ({ child
     setYSharedNodes(sharedNodes);
     setYSharedEdges(sharedEdges);
     setYSharedFilename(sharedFilename);
+    setYSharedVariables(sharedVariables);
   };
 
   const leaveRoom = () => {
@@ -98,6 +103,7 @@ export const CollaborationProvider: React.FC<{ children: ReactNode }> = ({ child
     setYSharedNodes(null);
     setYSharedEdges(null);
     setYSharedFilename(null);
+    setYSharedVariables(null);
   };
 
   useEffect(() => {
@@ -124,7 +130,7 @@ export const CollaborationProvider: React.FC<{ children: ReactNode }> = ({ child
   }, [awareness]);
 
   return (
-    <CollaborationContext.Provider value={{ ydoc, provider, awareness, users, joinRoom, leaveRoom, ySharedNodes, ySharedEdges, ySharedFilename }}>
+    <CollaborationContext.Provider value={{ ydoc, provider, awareness, users, joinRoom, leaveRoom, ySharedNodes, ySharedEdges, ySharedFilename, ySharedVariables }}>
       {children}
     </CollaborationContext.Provider>
   );

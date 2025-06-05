@@ -42,14 +42,14 @@ export default function App() {
       <ReactFlowProvider>
         <SystemSettingsProvider>
           <DebuggerProvider>
-            <FlowExecutorProvider>
-              <DnDProvider>
-                <FilenameProvider>
-                  <SelectedNodeProvider>
-                    <FlowInteractionProvider>
-                      <VariablesProvider>
-                        <InputDialogProvider>
-                          <CollaborationProvider>
+            <CollaborationProvider>
+              <FlowExecutorProvider>
+                <DnDProvider>
+                  <FilenameProvider>
+                    <SelectedNodeProvider>
+                      <FlowInteractionProvider>
+                        <VariablesProvider>
+                          <InputDialogProvider>
                             <div className="h-full w-full flex flex-col">
                               {/* Header */}
                               <AppHeader />
@@ -98,14 +98,14 @@ export default function App() {
                                 </ResizablePanelGroup>
                               </div>
                             </div>
-                          </CollaborationProvider>
-                        </InputDialogProvider>
-                      </VariablesProvider>
-                    </FlowInteractionProvider>
-                  </SelectedNodeProvider>
-                </FilenameProvider>
-              </DnDProvider>
-            </FlowExecutorProvider>
+                          </InputDialogProvider>
+                        </VariablesProvider>
+                      </FlowInteractionProvider>
+                    </SelectedNodeProvider>
+                  </FilenameProvider>
+                </DnDProvider>
+              </FlowExecutorProvider>
+            </CollaborationProvider>
           </DebuggerProvider>
         </SystemSettingsProvider>
       </ReactFlowProvider>

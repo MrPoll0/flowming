@@ -25,7 +25,7 @@ import { NodeBlock } from '../Toolbar/ToolbarTypes';
 import ContextMenu from './ContextMenu';
 import { useDnD } from '../../context/DnDContext';
 import { useFlowExecutorContext } from '../../context/FlowExecutorContext';
-import { Expression } from '../../models';
+import { Expression, Variable } from '../../models';
 import { decisionEdgeLabels } from './Nodes/Conditional';
 import FilenameEditor from '../FilenameEditor';
 import { useCollaboration } from '../../context/CollaborationContext';
@@ -36,13 +36,15 @@ const SYNC_ORIGIN_NODES = 'local_nodes_sync';
 const SYNC_ORIGIN_EDGES = 'local_edges_sync';
 const SYNC_ORIGIN_INIT_NODES = 'local_init_nodes';
 const SYNC_ORIGIN_INIT_EDGES = 'local_init_edges';
+const SYNC_ORIGIN_VARIABLES = 'local_variables_sync';
+const SYNC_ORIGIN_INIT_VARIABLES = 'local_init_variables';
 
 const FlowContent: React.FC = () => {
   const [nodes, setNodes, onNodesChangeOriginal] = useNodesState<FlowNode>(initialNodes);
   const [edges, setEdges, onEdgesChangeOriginal] = useEdgesState<Edge>(initialEdges);
-  const { ydoc, ySharedNodes, ySharedEdges, awareness, users } = useCollaboration();
+  const { ydoc, ySharedNodes, ySharedEdges, ySharedVariables, awareness, users } = useCollaboration();
   const { setSelectedNode } = useContext(SelectedNodeContext);
-  const { variables, deleteNodeVariables } = useVariables();
+  const { variables, setVariables, updateNodeVariables, deleteNodeVariables } = useVariables();
   const { 
     hoveredElement, 
     selectedElement, 
@@ -461,6 +463,30 @@ const FlowContent: React.FC = () => {
     return () => ySharedEdges.unobserveDeep(observer);
   }, [ySharedEdges, ydoc, setEdges]);
 
+  // Yjs -> Local state (Variables)
+  useEffect(() => {
+    if (!ySharedVariables || !ydoc) return;
+
+    const handleRemoteVariableChanges = () => {
+      const yVariablesArray = Array.from(ySharedVariables.values());
+      const newVariables = yVariablesArray.map(varData => Variable.fromObject(varData));
+      setVariables(newVariables);
+    };
+
+    const observer = (_events: any[], transaction: Y.Transaction) => {
+      if (transaction.origin === SYNC_ORIGIN_VARIABLES || transaction.origin === SYNC_ORIGIN_INIT_VARIABLES) return;
+      handleRemoteVariableChanges();
+    };
+
+    ySharedVariables.observeDeep(observer);
+    
+    if (ySharedVariables.size > 0) {
+      handleRemoteVariableChanges();
+    }
+
+    return () => ySharedVariables.unobserveDeep(observer);
+  }, [ySharedVariables, ydoc, setVariables]);
+
   // Local `nodes` state -> Yjs
   const isNodesInitialized = useRef(false);
   useEffect(() => {
@@ -522,6 +548,35 @@ const FlowContent: React.FC = () => {
       });
     }, SYNC_ORIGIN_EDGES);
   }, [edges, ydoc, ySharedEdges, initialEdges]);
+
+  // Local `variables` state -> Yjs
+  const isVariablesInitialized = useRef(false);
+  useEffect(() => {
+    if (!ydoc || !ySharedVariables) return;
+
+    if (!isVariablesInitialized.current) {
+      if(ySharedVariables.size > 0 || variables.length > 0) {
+        isVariablesInitialized.current = true;
+      }
+    }
+
+    if (!isVariablesInitialized.current) return;
+    
+    ydoc.transact(() => {
+      const localVariableIds = new Set(variables.map(v => v.id));
+      Array.from(ySharedVariables.keys()).forEach(yjsVarId => {
+        if (!localVariableIds.has(yjsVarId as string)) ySharedVariables.delete(yjsVarId as string);
+      });
+
+      variables.forEach(variable => {
+        const variableToSync = variable.toObject();
+        const yVar = ySharedVariables.get(variable.id);
+        if (!yVar || JSON.stringify(yVar) !== JSON.stringify(variableToSync)) {
+          ySharedVariables.set(variable.id, variableToSync);
+        }
+      });
+    }, SYNC_ORIGIN_VARIABLES);
+  }, [variables, ydoc, ySharedVariables]);
 
   // Update expressions when variables change
   useEffect(() => {
