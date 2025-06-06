@@ -3,7 +3,7 @@ import { useCollaboration } from '../../../context/CollaborationContext';
 import { useReactFlow } from '@xyflow/react';
 import { clearDiagram } from '../../ImportExport';
 import { useVariables } from '../../../context/VariablesContext';
-import { useFlowExecutorActions } from '../../../context/FlowExecutorContext';
+import { useFlowExecutorActions, useFlowExecutorState } from '../../../context/FlowExecutorContext';
 import { useDebugger } from '../../../context/DebuggerContext';
 import { useFilename } from '../../../context/FilenameContext';
 import { SelectedNodeContext } from '../../../context/SelectedNodeContext';
@@ -19,6 +19,7 @@ const CollaborateTab: React.FC = () => {
   const { filename, setFilename } = useFilename();
   const { stop } = useFlowExecutorActions();
   const { clearHistory } = useDebugger();
+  const { isRunning } = useFlowExecutorState();
 
   const hostUser = useMemo(() => {
     if (!users.length) return null;
@@ -66,7 +67,11 @@ const CollaborateTab: React.FC = () => {
               className="mt-1 block w-full border border-gray-300 rounded-md p-1"
             />
           </div>
-          <button onClick={handleJoin} className="px-4 py-2 bg-blue-600 text-white rounded">
+          <button 
+            onClick={handleJoin} 
+            className={`px-4 py-2 text-white rounded ${isRunning ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600'}`}
+            disabled={isRunning}
+          >
             Join Room
           </button>
         </div>
