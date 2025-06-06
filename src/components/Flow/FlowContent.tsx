@@ -24,11 +24,12 @@ import { FlowNode, initialNodes, initialEdges, nodeTypes, edgeTypes } from './Fl
 import { NodeBlock } from '../Toolbar/ToolbarTypes';
 import ContextMenu from './ContextMenu';
 import { useDnD } from '../../context/DnDContext';
-import { useFlowExecutorContext } from '../../context/FlowExecutorContext';
+import { useFlowExecutorState } from '../../context/FlowExecutorContext';
 import { Expression, Variable } from '../../models';
 import { decisionEdgeLabels } from './Nodes/Conditional';
 import FilenameEditor from '../FilenameEditor';
 import { useCollaboration } from '../../context/CollaborationContext';
+import RemoteCursorsOverlay from './RemoteCursorsOverlay';
 import * as Y from 'yjs';
 
 // Define transaction origins
@@ -812,57 +813,8 @@ const FlowContent: React.FC = () => {
           <FilenameEditor />
         </Panel>
 
-        {/* Render remote cursors inside a Panel */}
-        {users.map(user => {
-          if (!user.cursor || !awareness || user.clientID === awareness.clientID || !reactFlowInstance || !reactFlowWrapper.current) return null;
-          const screenPosition = reactFlowInstance.flowToScreenPosition(user.cursor);
-          const rect = reactFlowWrapper.current.getBoundingClientRect();
-
-          return (
-            // Cursor Anchor: Positioned at the target center of the dot
-            <div
-              key={user.clientID}
-              style={{
-                position: 'absolute',
-                left: screenPosition.x - rect.left,
-                top: screenPosition.y - rect.top,
-                pointerEvents: 'none',
-                zIndex: 100
-              }}
-            >
-              {/* Dot: Centered around the anchor point */}
-              <div
-                style={{
-                  position: 'absolute',
-                  left: '-4px', // Offset by half dot's width to the left
-                  top: '-4px',  // Offset by half dot's height upwards
-                  width: 8,
-                  height: 8,
-                  borderRadius: '50%',
-                  backgroundColor: user.color,
-                }}
-              />
-              {/* Name: Positioned to the right of the dot */}
-              <span
-                style={{
-                  position: 'absolute',
-                  left: '8px', // Start after the dot (dot is 8px wide, centered at 0,0 of parent, so starts at 4px + gap)
-                  top: '0px', // Align top of span with center of dot
-                  transform: 'translateY(-50%)', // Then shift span up by half its own height
-                  color: user.color,
-                  fontSize: '12px',
-                  fontWeight: 500,
-                  backgroundColor: user.colorLight,
-                  padding: '2px 4px',
-                  borderRadius: '4px',
-                  whiteSpace: 'nowrap'
-                }}
-              >
-                {user.name}
-              </span>
-            </div>
-          );
-        })}
+        {/* Render remote cursors overlay */}
+        <RemoteCursorsOverlay reactFlowWrapper={reactFlowWrapper} />
       </ReactFlow>
       <ContextMenu onDelete={onDelete} />
     </div>

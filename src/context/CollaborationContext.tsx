@@ -108,22 +108,33 @@ export const CollaborationProvider: React.FC<{ children: ReactNode }> = ({ child
 
   useEffect(() => {
     if (!awareness) return;
-    
-    const onChange = () => {
-      // Cast entries to known tuple type
+    // Update user metadata list on any join/leave events
+    const onChange = (changes: { added: number[]; updated: number[]; removed: number[] }) => {
+      // Only proceed on join or leave
+      if (changes.added.length === 0 && changes.removed.length === 0) return;
+      // Rebuild metadata list for all participants including self
       const entries = Array.from(awareness.getStates().entries()) as [number, any][];
-      const states = entries.map(([clientID, state]) => ({
-        clientID,
-        ...state.user,
-        cursor: state.cursor,
-      }));
-
+      const states = entries
+        .map(([clientID, state]) => ({
+          clientID,
+          name: state.user.name,
+          color: state.user.color,
+          colorLight: state.user.colorLight,
+          joinedAt: state.user.joinedAt,
+        }));
       setUsers(states);
     };
-
     awareness.on('change', onChange);
-    onChange();
-    
+    // Initial metadata load for all participants including self
+    const initEntries = Array.from(awareness.getStates().entries()) as [number, any][];
+    const initStates = initEntries.map(([clientID, state]) => ({
+      clientID,
+      name: state.user.name,
+      color: state.user.color,
+      colorLight: state.user.colorLight,
+      joinedAt: state.user.joinedAt,
+    }));
+    setUsers(initStates);
     return () => {
       awareness.off('change', onChange);
     };
