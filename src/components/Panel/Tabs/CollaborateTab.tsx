@@ -3,7 +3,7 @@ import { useCollaboration } from '../../../context/CollaborationContext';
 import { useReactFlow } from '@xyflow/react';
 import { clearDiagram } from '../../ImportExport';
 import { useVariables } from '../../../context/VariablesContext';
-import { useFlowExecutorContext } from '../../../context/FlowExecutorContext';
+import { useFlowExecutorActions } from '../../../context/FlowExecutorContext';
 import { useDebugger } from '../../../context/DebuggerContext';
 import { useFilename } from '../../../context/FilenameContext';
 import { SelectedNodeContext } from '../../../context/SelectedNodeContext';

@@ -41,8 +41,8 @@ export default function App() {
     <div className="h-screen w-screen m-0 p-0 overflow-hidden bg-background text-foreground">
       <ReactFlowProvider>
         <SystemSettingsProvider>
-          <DebuggerProvider>
-            <CollaborationProvider>
+          <CollaborationProvider>
+            <DebuggerProvider>
               <InputDialogProvider>
                 <FlowExecutorProvider>
                   <DnDProvider>
@@ -105,8 +105,8 @@ export default function App() {
                   </DnDProvider>
                 </FlowExecutorProvider>
               </InputDialogProvider>
-            </CollaborationProvider>
-          </DebuggerProvider>
+            </DebuggerProvider>
+          </CollaborationProvider>
         </SystemSettingsProvider>
       </ReactFlowProvider>
     </div>

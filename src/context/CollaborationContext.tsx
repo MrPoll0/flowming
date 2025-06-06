@@ -23,6 +23,10 @@ interface CollaborationContextType {
   ySharedEdges: Y.Map<any> | null;
   ySharedFilename: Y.Text | null;
   ySharedVariables: Y.Map<any> | null;
+  ySharedExecutionHistory: Y.Array<any> | null;
+  ySharedVariableHistories: Y.Map<any> | null;
+  ySharedCurrentVariables: Y.Map<any> | null;
+  ySharedIsRecording: Y.Map<any> | null;
 }
 
 const CollaborationContext = createContext<CollaborationContextType>({
@@ -36,6 +40,10 @@ const CollaborationContext = createContext<CollaborationContextType>({
   ySharedEdges: null,
   ySharedFilename: null,
   ySharedVariables: null,
+  ySharedExecutionHistory: null,
+  ySharedVariableHistories: null,
+  ySharedCurrentVariables: null,
+  ySharedIsRecording: null,
 });
 
 export const useCollaboration = () => useContext(CollaborationContext);
@@ -61,6 +69,10 @@ export const CollaborationProvider: React.FC<{ children: ReactNode }> = ({ child
   const [ySharedEdges, setYSharedEdges] = useState<Y.Map<any> | null>(null);
   const [ySharedFilename, setYSharedFilename] = useState<Y.Text | null>(null);
   const [ySharedVariables, setYSharedVariables] = useState<Y.Map<any> | null>(null);
+  const [ySharedExecutionHistory, setYSharedExecutionHistory] = useState<Y.Array<any> | null>(null);
+  const [ySharedVariableHistories, setYSharedVariableHistories] = useState<Y.Map<any> | null>(null);
+  const [ySharedCurrentVariables, setYSharedCurrentVariables] = useState<Y.Map<any> | null>(null);
+  const [ySharedIsRecording, setYSharedIsRecording] = useState<Y.Map<any> | null>(null);
 
   const joinRoom = (room: string, userName: string, currentFilename?: string) => {
     const doc = new Y.Doc();
@@ -70,6 +82,12 @@ export const CollaborationProvider: React.FC<{ children: ReactNode }> = ({ child
     const sharedEdges = doc.getMap<any>('edges');
     const sharedFilename = doc.getText('filename');
     const sharedVariables = doc.getMap<any>('variables');
+    const sharedExecutionHistory = doc.getArray<any>('executionHistory');
+    const sharedVariableHistories = doc.getMap<any>('variableHistories');
+    const sharedCurrentVariables = doc.getMap<any>('currentVariables');
+    const sharedDebuggerMap = doc.getMap<any>('debugger');
+    // initialize recording flag
+    sharedDebuggerMap.set('isRecording', false);
 
     // Assign random color to user
     const idx = Math.floor(Math.random() * userColors.length);
@@ -84,6 +102,10 @@ export const CollaborationProvider: React.FC<{ children: ReactNode }> = ({ child
     setYSharedEdges(sharedEdges);
     setYSharedFilename(sharedFilename);
     setYSharedVariables(sharedVariables);
+    setYSharedExecutionHistory(sharedExecutionHistory);
+    setYSharedVariableHistories(sharedVariableHistories);
+    setYSharedCurrentVariables(sharedCurrentVariables);
+    setYSharedIsRecording(sharedDebuggerMap);
   };
 
   const leaveRoom = () => {
@@ -104,6 +126,10 @@ export const CollaborationProvider: React.FC<{ children: ReactNode }> = ({ child
     setYSharedEdges(null);
     setYSharedFilename(null);
     setYSharedVariables(null);
+    setYSharedExecutionHistory(null);
+    setYSharedVariableHistories(null);
+    setYSharedCurrentVariables(null);
+    setYSharedIsRecording(null);
   };
 
   useEffect(() => {
@@ -141,7 +167,7 @@ export const CollaborationProvider: React.FC<{ children: ReactNode }> = ({ child
   }, [awareness]);
 
   return (
-    <CollaborationContext.Provider value={{ ydoc, provider, awareness, users, joinRoom, leaveRoom, ySharedNodes, ySharedEdges, ySharedFilename, ySharedVariables }}>
+    <CollaborationContext.Provider value={{ ydoc, provider, awareness, users, joinRoom, leaveRoom, ySharedNodes, ySharedEdges, ySharedFilename, ySharedVariables, ySharedExecutionHistory, ySharedVariableHistories, ySharedCurrentVariables, ySharedIsRecording }}>
       {children}
     </CollaborationContext.Provider>
   );

@@ -109,6 +109,7 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
     }, [isHost, awareness, isRunningState, isPausedState]);
 
     // Read execution state from awareness when not host
+    // TODO: awareness or doc?
     useEffect(() => {
         if (!isHost && awareness) {
             const onChange = () => {
