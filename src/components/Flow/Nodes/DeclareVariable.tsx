@@ -1,5 +1,5 @@
-import { Handle, Position, useReactFlow, ReactFlowInstance } from '@xyflow/react';
-import { memo, useEffect } from 'react';
+import { Handle, Position, ReactFlowInstance } from '@xyflow/react';
+import { memo } from 'react';
 import { useVariables } from '../../../context/VariablesContext';
 import { getNodeStyles } from '../../../utils/nodeStyles';
 import { BaseNode, NodeProcessor } from './NodeTypes';
@@ -7,13 +7,13 @@ import { Variable, VariableType } from '../../../models/Variable';
 import { IValuedVariable, ValuedVariable } from '../../../models/ValuedVariable';
 import { Badge } from '@/components/ui/badge';
 
-class DeclareVariableProcessor implements NodeProcessor {
+export class DeclareVariableProcessor implements NodeProcessor {
   // @ts-ignore - _reactFlow is intentionally saved for future use (TODO)
-  constructor(private reactFlow: ReactFlowInstance, private nodeId: string, private currentValuedVariables: ValuedVariable<VariableType>[], private variables: any) {} // TODO: proper typing for variables methods
+  constructor(private reactFlow: ReactFlowInstance, private nodeId: string, private currentValuedVariables: ValuedVariable<VariableType>[], private getNodeVariables: any) {} // TODO: proper typing for variables methods
   
   process(): ValuedVariable<VariableType>[] {
     // Get variables associated with this node
-    const nodeVariables = this.variables.getNodeVariables(this.nodeId);
+    const nodeVariables = this.getNodeVariables(this.nodeId);
     
     // Process the variable declarations (e.g., initialize variables in a runtime)
     // console.log(`Processing DeclareVariable node ${this.nodeId} with variables:`, nodeVariables);
@@ -86,31 +86,10 @@ class DeclareVariableProcessor implements NodeProcessor {
 }
 
 const DeclareVariable = memo(function DeclareVariableComponent({ data, id: nodeId }: { data: BaseNode; id: string }) {
-  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, currentValuedVariables, width, height, visualId } = data;
+  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, width, height, visualId } = data;
   const { getNodeVariables } = useVariables();
-  const reactFlow = useReactFlow();
-  
   const nodeVariables = getNodeVariables(nodeId);
   
-  // Create the processor when the component mounts and update it when dependencies change
-  useEffect(() => {
-    const processor = new DeclareVariableProcessor(reactFlow, nodeId, currentValuedVariables || [], {
-      getNodeVariables
-    });
-    
-    // Set the processor to the node data to make it available for the flow executor to use 
-    reactFlow.updateNodeData(nodeId, {
-      processor: processor
-    });
-    
-    // Clean up on unmount
-    return () => {
-      reactFlow.updateNodeData(nodeId, {
-        processor: null
-      });
-    };
-  }, [nodeId, reactFlow, currentValuedVariables, getNodeVariables]); // NOTE: getNodeVariables is needed for the processor to get the variables
-
   return (
     <div className="declare-variable-node" style={getNodeStyles({
       isHovered,

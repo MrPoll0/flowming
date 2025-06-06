@@ -1,5 +1,5 @@
 import React, { useCallback, useState, useContext } from 'react';
-import { Edge, Node, useReactFlow, Viewport } from '@xyflow/react';
+import { Edge, Node, useReactFlow } from '@xyflow/react';
 import { useVariables } from '../context/VariablesContext';
 import { useFilename } from '../context/FilenameContext';
 import { useFlowExecutorContext } from '../context/FlowExecutorContext';
@@ -19,7 +19,7 @@ interface FlowData {
   filename?: string;
 }
 
-export const clearDiagram = (setNodes: (nodes: FlowNode[]) => void, setEdges: (edges: Edge[]) => void, getNodes: () => Node[], deleteNodeVariables: (nodeId: string) => void, setSelectedNode: (node: FlowNode | null) => void, setFilename: (filename: string) => void, setViewport: (viewport: Viewport) => void, stop: () => void, clearHistory: () => void) => {
+export const clearDiagram = (setNodes: (nodes: FlowNode[]) => void, setEdges: (edges: Edge[]) => void, getNodes: () => Node[], deleteNodeVariables: (nodeId: string) => void, setSelectedNode: (node: FlowNode | null) => void, setFilename: (filename: string) => void, stop: () => void, clearHistory: () => void) => {
   // Stop execution before creating new diagram
   stop();
   clearHistory();
@@ -52,7 +52,7 @@ const ImportExport: React.FC = () => {
   const { clearHistory } = useDebugger();
 
   const onNew = useCallback(() => {
-    clearDiagram(setNodes, setEdges, getNodes, deleteNodeVariables, setSelectedNode, setFilename, setViewport, stop, clearHistory);
+    clearDiagram(setNodes, setEdges, getNodes, deleteNodeVariables, setSelectedNode, setFilename, stop, clearHistory);
     
     // Fit view to center
     setTimeout(() => {
@@ -165,17 +165,13 @@ const ImportExport: React.FC = () => {
           });
         }
 
-        // Use setTimeout to ensure the clearing happens first, then restore nodes and edges
-        // This ensures that node components will properly re-mount and initialize their processors
-        setTimeout(() => {
-          setNodes(flowData.nodes || []);
-          setEdges(flowData.edges || []);
+        setNodes(flowData.nodes || []);
+        setEdges(flowData.edges || []);
 
-          // Fit and center the view for the imported diagram
-          setTimeout(() => {
-            fitView({ padding: 0.2, duration: 800 });
-          }, 100);
-        }, 50);
+        // Fit and center the view for the imported diagram
+        setTimeout(() => {
+          fitView({ padding: 0.2, duration: 800 });
+        }, 100);
 
       } catch (error) {
         console.error('Error importing:', error);

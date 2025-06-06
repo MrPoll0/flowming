@@ -1,5 +1,5 @@
-import { Handle, Position, ReactFlowInstance, useReactFlow } from '@xyflow/react';
-import { memo, useEffect } from 'react';
+import { Handle, Position, ReactFlowInstance } from '@xyflow/react';
+import { memo } from 'react';
 import { getNodeStyles } from '../../../utils/nodeStyles';
 import { BaseNode, NodeProcessor, } from './NodeTypes';
 import { Expression, VariableType } from '../../../models';
@@ -11,7 +11,7 @@ interface OutputNode extends BaseNode {
   expression?: Expression;
 }
 
-class OutputProcessor implements NodeProcessor {
+export class OutputProcessor implements NodeProcessor {
   constructor(private reactFlow: ReactFlowInstance, private nodeId: string) {}
   
   process(): ValuedVariable<VariableType>[] {
@@ -43,31 +43,8 @@ class OutputProcessor implements NodeProcessor {
   }
 }
 
-const Output = memo(function OutputComponent({ data, id: nodeId }: { data: OutputNode; id: string }) {
+const Output = memo(function OutputComponent({ data, id: _nodeId }: { data: OutputNode; id: string }) {
   const { isHovered, isSelected, isHighlighted, isCodeHighlighted, expression, width, height, visualId } = data;
-
-  // TODO: expression is not Expression but ExpressionElement[]
-  // or just Expression without leftSide? (setup in constructor)
-  // but it may be an extension of Expression or somewhat because it can also have string concatenation, commas, etc (e.g. variable1, variable2?)
-
-  const reactFlow = useReactFlow();
-
-  // Update processor only on mount/unmount to prevent infinite loops
-  useEffect(() => {
-    const processor = new OutputProcessor(reactFlow, nodeId);
-
-    // Set the processor to the node data to make it available for the flow executor to use 
-    reactFlow.updateNodeData(nodeId, {
-      processor: processor
-    });
-
-    // Clean up on unmount
-    return () => {
-      reactFlow.updateNodeData(nodeId, {
-        processor: null
-      });
-    };
-  }, [nodeId, reactFlow]);
 
   const expr = expression && !(expression instanceof Expression) ? Expression.fromObject(expression) : null;
 

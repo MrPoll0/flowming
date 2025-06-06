@@ -1,5 +1,5 @@
-import { Handle, Position, useReactFlow, ReactFlowInstance } from '@xyflow/react';
-import { memo, useEffect } from 'react';
+import { Handle, Position, ReactFlowInstance } from '@xyflow/react';
+import { memo } from 'react';
 import { getNodeStyles } from '../../../utils/nodeStyles';
 import { BaseNode, NodeProcessor } from './NodeTypes';
 import { Expression, Variable } from '../../../models';
@@ -11,18 +11,18 @@ interface AssignVariableNode extends BaseNode {
   expression?: Expression;
 }
 
-class AssignVariableProcessor implements NodeProcessor {
+export class AssignVariableProcessor implements NodeProcessor {
   // @ts-ignore - _reactFlow is intentionally saved for future use (TODO)
   constructor(private reactFlow: ReactFlowInstance, private nodeId: string, private currentValuedVariables: ValuedVariable<VariableType>[], private expression: Expression | null) {}
   
   process(): ValuedVariable<VariableType>[] {
-    // Process the variable declarations (e.g., initialize variables in a runtime)
-    console.log(`Processing AssignVariable node ${this.nodeId} with expression:`, this.expression?.toString());
     if (!this.expression) {
       return []; // NOTE: returning [] will cause the currentValuedVariables to be returned unchanged
                  // do not return this.currentValuedVariables as its an array of objects and not class instances
     }
 
+    const expressionInstance = this.expression instanceof Expression ? this.expression : Expression.fromObject(this.expression);
+    console.log(`Processing AssignVariable node ${this.nodeId} with expression:`, expressionInstance.toString());
 
     // TODO: get all the data with getNode(nodeId) directly?
     
@@ -46,7 +46,7 @@ class AssignVariableProcessor implements NodeProcessor {
     }
 
     // Get the value of the expression as a new valued variables
-    const valuedVariable = this.expression.assignValue(currentValuedVariables);
+    const valuedVariable = expressionInstance.assignValue(currentValuedVariables);
     console.log(`Assigned variable: ${valuedVariable.toString()}`);
     
     // Overwrite the existing variable
@@ -61,29 +61,9 @@ class AssignVariableProcessor implements NodeProcessor {
   }
 }
 
-const AssignVariable = memo(function AssignVariableComponent({ data, id: nodeId }: { data: AssignVariableNode; id: string }) {
-  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, currentValuedVariables, expression, width, height, visualId } = data;
+const AssignVariable = memo(function AssignVariableComponent({ data, id: _nodeId }: { data: AssignVariableNode; id: string }) {
+  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, expression, width, height, visualId } = data;
 
-  const reactFlow = useReactFlow();
-  
-  // Create the processor when the component mounts and update it when dependencies change
-  useEffect(() => {
-    const processor = new AssignVariableProcessor(reactFlow, nodeId, currentValuedVariables || [], expression ? Expression.fromObject(expression) : null);
-
-    // Set the processor to the node data to make it available for the flow executor to use 
-    reactFlow.updateNodeData(nodeId, {
-      processor: processor
-    });
-
-    // Clean up on unmount
-    return () => {
-      reactFlow.updateNodeData(nodeId, {
-        processor: null
-      });
-    };
-  }, [nodeId, reactFlow, currentValuedVariables, expression]); // NOTE: assigning getNodeVariables here will cause the node to not be dynamically updated when variables change
-
-  
   return (
     <div className="assign-variable-node" style={getNodeStyles({
       isHovered,

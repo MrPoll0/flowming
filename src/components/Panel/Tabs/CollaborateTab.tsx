@@ -13,7 +13,7 @@ const CollaborateTab: React.FC = () => {
   const [room, setRoom] = useState('');
   const [username, setUsername] = useState('');
   const [joined, setJoined] = useState(false);
-  const { setNodes, setEdges, getNodes, setViewport, fitView } = useReactFlow();
+  const { setNodes, setEdges, getNodes, fitView } = useReactFlow();
   const { deleteNodeVariables } = useVariables();
   const { setSelectedNode } = useContext(SelectedNodeContext);
   const { filename, setFilename } = useFilename();
@@ -23,7 +23,7 @@ const CollaborateTab: React.FC = () => {
   const handleJoin = () => {
     if (room && username) {
       // Clear current diagram
-      clearDiagram(setNodes, setEdges, getNodes, deleteNodeVariables, setSelectedNode, setFilename, setViewport, stop, clearHistory);
+      clearDiagram(setNodes, setEdges, getNodes, deleteNodeVariables, setSelectedNode, setFilename, stop, clearHistory);
 
       joinRoom(room, username, filename);
       setJoined(true);

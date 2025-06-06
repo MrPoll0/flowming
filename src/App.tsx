@@ -43,68 +43,68 @@ export default function App() {
         <SystemSettingsProvider>
           <DebuggerProvider>
             <CollaborationProvider>
-              <FlowExecutorProvider>
-                <DnDProvider>
-                  <FilenameProvider>
-                    <SelectedNodeProvider>
-                      <FlowInteractionProvider>
-                        <VariablesProvider>
-                          <InputDialogProvider>
-                            <div className="h-full w-full flex flex-col">
-                              {/* Header */}
-                              <AppHeader />
-                              
-                              {/* Main content area with resizable panels */}
-                              <div className="flex-1">
-                                <ResizablePanelGroup direction="horizontal" className="h-full">
-                                  {/* Left panel - Toolbar */}
-                                  <ResizablePanel defaultSize={10} minSize={0} maxSize={25}>
-                                    <Toolbar />
-                                  </ResizablePanel>
-                                  
-                                  <ResizableHandle withHandle/>
-                                  
-                                  {/* Middle section - Flow + Execution Control */}
-                                  <ResizablePanel defaultSize={65} minSize={30}>
-                                    <ResizablePanelGroup direction="vertical">
-                                      <ResizablePanel defaultSize={85} minSize={60}>
-                                        <FlowContent />
-                                      </ResizablePanel>
-                                      
-                                      <ResizableHandle withHandle />
-                                      
-                                      <ResizablePanel defaultSize={15} minSize={0} maxSize={40}>
-                                        <ExecutionControl />
-                                      </ResizablePanel>
-                                    </ResizablePanelGroup>
-                                  </ResizablePanel>
-                                  
-                                  <ResizableHandle withHandle />
-                                  
-                                  {/* Right section - Panels */}
-                                  <ResizablePanel defaultSize={35} minSize={0} maxSize={75}> {/* TODO: minSize={25} ? */}
-                                    <ResizablePanelGroup direction="vertical">
-                                      <ResizablePanel defaultSize={65} minSize={5}>
-                                        <Panel type="top" />
-                                      </ResizablePanel>
-                                      
-                                      <ResizableHandle withHandle />
-                                      
-                                      <ResizablePanel defaultSize={50} minSize={5}>
-                                        <Panel type="bottom" />
-                                      </ResizablePanel>
-                                    </ResizablePanelGroup>
-                                  </ResizablePanel>
-                                </ResizablePanelGroup>
+              <InputDialogProvider>
+                <FlowExecutorProvider>
+                  <DnDProvider>
+                    <FilenameProvider>
+                      <SelectedNodeProvider>
+                        <FlowInteractionProvider>
+                          <VariablesProvider>
+                              <div className="h-full w-full flex flex-col">
+                                {/* Header */}
+                                <AppHeader />
+                                
+                                {/* Main content area with resizable panels */}
+                                <div className="flex-1">
+                                  <ResizablePanelGroup direction="horizontal" className="h-full">
+                                    {/* Left panel - Toolbar */}
+                                    <ResizablePanel defaultSize={10} minSize={0} maxSize={25}>
+                                      <Toolbar />
+                                    </ResizablePanel>
+                                    
+                                    <ResizableHandle withHandle/>
+                                    
+                                    {/* Middle section - Flow + Execution Control */}
+                                    <ResizablePanel defaultSize={65} minSize={30}>
+                                      <ResizablePanelGroup direction="vertical">
+                                        <ResizablePanel defaultSize={85} minSize={60}>
+                                          <FlowContent />
+                                        </ResizablePanel>
+                                        
+                                        <ResizableHandle withHandle />
+                                        
+                                        <ResizablePanel defaultSize={15} minSize={0} maxSize={40}>
+                                          <ExecutionControl />
+                                        </ResizablePanel>
+                                      </ResizablePanelGroup>
+                                    </ResizablePanel>
+                                    
+                                    <ResizableHandle withHandle />
+                                    
+                                    {/* Right section - Panels */}
+                                    <ResizablePanel defaultSize={35} minSize={0} maxSize={75}> {/* TODO: minSize={25} ? */}
+                                      <ResizablePanelGroup direction="vertical">
+                                        <ResizablePanel defaultSize={65} minSize={5}>
+                                          <Panel type="top" />
+                                        </ResizablePanel>
+                                        
+                                        <ResizableHandle withHandle />
+                                        
+                                        <ResizablePanel defaultSize={50} minSize={5}>
+                                          <Panel type="bottom" />
+                                        </ResizablePanel>
+                                      </ResizablePanelGroup>
+                                    </ResizablePanel>
+                                  </ResizablePanelGroup>
+                                </div>
                               </div>
-                            </div>
-                          </InputDialogProvider>
-                        </VariablesProvider>
-                      </FlowInteractionProvider>
-                    </SelectedNodeProvider>
-                  </FilenameProvider>
-                </DnDProvider>
-              </FlowExecutorProvider>
+                          </VariablesProvider>
+                        </FlowInteractionProvider>
+                      </SelectedNodeProvider>
+                    </FilenameProvider>
+                  </DnDProvider>
+                </FlowExecutorProvider>
+              </InputDialogProvider>
             </CollaborationProvider>
           </DebuggerProvider>
         </SystemSettingsProvider>

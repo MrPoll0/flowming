@@ -1,18 +1,17 @@
-import { Handle, Position, ReactFlowInstance, useReactFlow } from '@xyflow/react';
-import { memo, useEffect } from 'react';
+import { Handle, Position, ReactFlowInstance } from '@xyflow/react';
+import { memo } from 'react';
 import { getNodeStyles } from '../../../utils/nodeStyles';
 import { BaseNode, NodeProcessor } from './NodeTypes';
 import { IVariable, VariableType, Variable } from '../../../models/Variable';
 import { IValuedVariable } from '../../../models/ValuedVariable';
 import { ValuedVariable } from '../../../models/ValuedVariable';
 import { Badge } from '@/components/ui/badge';
-import { useInputDialog } from '../../../context/InputDialogContext';
 
 interface InputNode extends BaseNode {
   variable?: IVariable;
 }
 
-class InputProcessor implements NodeProcessor {
+export class InputProcessor implements NodeProcessor {
   constructor(
     private reactFlow: ReactFlowInstance, 
     private nodeId: string,
@@ -64,28 +63,8 @@ class InputProcessor implements NodeProcessor {
   }
 }
 
-const Input = memo(function InputComponent({ data, id: nodeId }: { data: InputNode; id: string }) {
+const Input = memo(function InputComponent({ data, id: _nodeId }: { data: InputNode; id: string }) {
   const { isHovered, isSelected, isHighlighted, isCodeHighlighted, variable, width, height, visualId } = data;
-
-  const reactFlow = useReactFlow();
-  const { showInputDialog } = useInputDialog();
-
-  // Update processor only on mount/unmount to prevent infinite loops
-  useEffect(() => {
-    const processor = new InputProcessor(reactFlow, nodeId, showInputDialog);
-
-    // Set the processor to the node data to make it available for the flow executor to use 
-    reactFlow.updateNodeData(nodeId, {
-      processor: processor
-    });
-
-    // Clean up on unmount
-    return () => {
-      reactFlow.updateNodeData(nodeId, {
-        processor: null
-      });
-    };
-  }, [nodeId, reactFlow, showInputDialog]);
 
   return (
     <div className="input-node" style={getNodeStyles({

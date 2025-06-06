@@ -44,7 +44,7 @@ const FlowContent: React.FC = () => {
   const [edges, setEdges, onEdgesChangeOriginal] = useEdgesState<Edge>(initialEdges);
   const { ydoc, ySharedNodes, ySharedEdges, ySharedVariables, awareness, users } = useCollaboration();
   const { setSelectedNode } = useContext(SelectedNodeContext);
-  const { variables, setVariables, updateNodeVariables, deleteNodeVariables } = useVariables();
+  const { variables, setVariables, deleteNodeVariables } = useVariables();
   const { 
     hoveredElement, 
     selectedElement, 

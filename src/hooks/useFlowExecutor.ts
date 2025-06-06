@@ -1,4 +1,4 @@
-import { useReactFlow, Node } from "@xyflow/react";
+import { useReactFlow, Node, ReactFlowInstance } from "@xyflow/react";
 import { useState, useCallback, useRef } from "react";
 import { 
   toggleLockFlow,
@@ -9,11 +9,19 @@ import {
   FlowExecutionInterface
 } from "../utils/flowExecutorUtils";
 import { NodeProcessor } from "../components/Flow/Nodes/NodeTypes";
-import { ValuedVariable } from "../models/ValuedVariable";
+import { ValuedVariable, IValuedVariable } from "../models/ValuedVariable";
 import { VariableType } from "../models/Variable";
 import { decisionEdgeLabels } from "../components/Flow/Nodes/Conditional";
 import { useSystemSettings } from "../context/SystemSettingsContext";
 import { useDebugger } from "../context/DebuggerContext";
+import { DeclareVariableProcessor } from "@/components/Flow/Nodes/DeclareVariable";
+import { useVariables } from "@/context/VariablesContext";
+import { FlowNode } from "@/components/Flow/FlowTypes";
+import { InputProcessor } from "@/components/Flow/Nodes/Input";
+import { OutputProcessor } from "@/components/Flow/Nodes/Output";
+import { AssignVariableProcessor } from "@/components/Flow/Nodes/AssignVariable";
+import { ConditionalProcessor } from "@/components/Flow/Nodes/Conditional";
+import { useInputDialog } from "@/context/InputDialogContext";
 
 export interface IExecutor {
     isRunning: boolean;
@@ -29,11 +37,29 @@ export interface IExecutor {
     stepForward(): void;
 }
 
+function getNodeProcessor(reactFlow: ReactFlowInstance, valuedVariables: ValuedVariable<VariableType>[], node: FlowNode, showInputDialog: (title: string, variableType: 'string' | 'integer' | 'float' | 'boolean', description?: string, placeholder?: string) => Promise<string | null>, getNodeVariables: any): NodeProcessor | null {
+    switch (node.type) {
+        case "DeclareVariable":
+            return new DeclareVariableProcessor(reactFlow, node.id, valuedVariables, getNodeVariables);
+        case "AssignVariable":
+            return new AssignVariableProcessor(reactFlow, node.id, valuedVariables, node.data.expression);
+        case "Conditional":
+            return new ConditionalProcessor(reactFlow, node.id);
+        case "Input":
+            return new InputProcessor(reactFlow, node.id, showInputDialog);
+        case "Output":
+            return new OutputProcessor(reactFlow, node.id);
+        default:
+            return null;
+    }
+}
+
 export function useFlowExecutor(): IExecutor {
     const reactFlow = useReactFlow();
     const { settings } = useSystemSettings();
     const { addExecutionStep, updateVariables, startRecording, stopRecording } = useDebugger();
-    
+    const { showInputDialog } = useInputDialog();
+    const { getNodeVariables } = useVariables();
     // State for UI purposes
     const [isRunningState, setIsRunningState] = useState(false);
     const [isPausedState, setIsPausedState] = useState(false);
@@ -100,24 +126,36 @@ export function useFlowExecutor(): IExecutor {
         let valuedVariables: ValuedVariable<VariableType>[] = [];
         let processorResult: any = null;
         
-        if (node.data && node.data.processor) {
+        if (node.data) {
             try {
-                const processor = node.data.processor as NodeProcessor;
-                processorResult = await processor.process();
-
-                if (node.type === "Conditional") {
-                    // For condition nodes, extract the valuedVariables
-                    if (processorResult && typeof processorResult === 'object' && 'valuedVariables' in processorResult) {
-                        valuedVariables = processorResult.valuedVariables;
-                    }
-                } else if (Array.isArray(processorResult)) {
-                    // For other nodes, use the array result directly (currentValuedVariables)
-                    valuedVariables = processorResult;
-                }
+                // Retrieve existing valued variables from node data, ensuring it's an array of IValuedVariable objects
+                const existingValuedVariables: IValuedVariable<VariableType>[] = Array.isArray(node.data.currentValuedVariables)
+                    ? node.data.currentValuedVariables
+                    : [];
                 
-                // Track variable changes for debugger
-                if (valuedVariables.length > 0) {
-                    updateVariables(node, valuedVariables);
+                // Convert existing plain objects to ValuedVariable instances for the processor
+                const existingValuedVariableInstances = existingValuedVariables.map(v => ValuedVariable.fromObject(v));
+
+                // TODO: in processors, directly use this existingValuedVariableInstances instead of the node.data.currentValuedVariables? (optimization)
+                
+                const processor = getNodeProcessor(reactFlow, existingValuedVariableInstances, node as FlowNode, showInputDialog, getNodeVariables);
+                if (processor) {
+                    processorResult = await processor.process();
+
+                    if (node.type === "Conditional") {
+                        // For condition nodes, extract the valuedVariables
+                        if (processorResult && typeof processorResult === 'object' && 'valuedVariables' in processorResult) {
+                            valuedVariables = processorResult.valuedVariables;
+                        }
+                    } else if (Array.isArray(processorResult)) {
+                        // For other nodes, use the array result directly (currentValuedVariables)
+                        valuedVariables = processorResult;
+                    }
+                    
+                    // Track variable changes for debugger
+                    if (valuedVariables.length > 0) {
+                        updateVariables(node, valuedVariables);
+                    }
                 }
             } catch (error) {
                 console.error(`Error processing node ${node.id}:`, error);
