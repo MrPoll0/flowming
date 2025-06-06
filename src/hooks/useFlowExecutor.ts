@@ -1,5 +1,5 @@
 import { useReactFlow, Node, ReactFlowInstance } from "@xyflow/react";
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { 
   toggleLockFlow,
   findStartNode,
@@ -66,10 +66,17 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
     const { addExecutionStep, updateVariables, startRecording, stopRecording } = useDebugger();
     const { showInputDialog } = useInputDialog();
     const { getNodeVariables } = useVariables();
-    // State for UI purposes
+    const { awareness, users } = useCollaboration();
+
+    // Local state for UI purposes (only used by host)
     const [isRunningState, setIsRunningState] = useState(false);
     const [isPausedState, setIsPausedState] = useState(false);
     const [currentNode, setCurrentNode] = useState<Node | null>(null);
+    
+    // Shared state from host (only used by non-hosts)
+    const [sharedIsRunning, setSharedIsRunning] = useState(false);
+    const [sharedIsPaused, setSharedIsPaused] = useState(false);
+    const sharedIsPausedRef = useRef(false);
     
     // Use refs for immediate access in callbacks
     const isRunningRef = useRef(false);
@@ -86,6 +93,90 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
     const lastResumingTimeRef = useRef(0); // track last time the execution was resumed
     const pauseCounterRef = useRef(0); // track the number of pauses in the same edge
     const executionCounterRef = useRef(0); // track the number of execution to avoid unexpected future jumps if restarting (stop and start again before timeout finishes)
+
+    // Check if current user is host
+    const hostUser = users.reduce((prev, curr) => (prev.joinedAt <= curr.joinedAt ? prev : curr), users[0]);
+    const isHost = hostUser?.clientID === awareness?.clientID;
+
+    // Share execution state through awareness when host
+    useEffect(() => {
+        if (isHost && awareness) {
+            awareness.setLocalStateField('executionState', {
+                isRunning: isRunningState,
+                isPaused: isPausedState
+            });
+        }
+    }, [isHost, awareness, isRunningState, isPausedState]);
+
+    // Read execution state from awareness when not host
+    useEffect(() => {
+        if (!isHost && awareness) {
+            const onChange = () => {
+                if (!isHost) { // only non-hosts need to read the host's state
+                    const states = Array.from(awareness.getStates().entries()) as [number, any][];
+                    const hostState = states.find(([clientID]) => clientID === hostUser?.clientID);
+                    
+                    if (hostState) {
+                        const executionState = hostState[1].executionState;
+                        if (executionState) {
+                            setSharedIsRunning(executionState.isRunning);
+                            setSharedIsPaused(executionState.isPaused);
+                            sharedIsPausedRef.current = executionState.isPaused;
+                        }
+                    }
+                }
+            };
+
+            awareness.on('change', onChange);
+            onChange(); // Initial read
+
+            return () => {
+                awareness.off('change', onChange);
+            };
+        }
+    }, [isHost, awareness, hostUser?.clientID]);
+
+    // Pause/Resume SVG animations for collaborators based on host's state
+    useEffect(() => {
+        if (!isHost) {
+            const svgElements = document.querySelectorAll('svg[id^="edge-animation-"]');
+            
+            if (sharedIsPaused) {
+                svgElements.forEach(svg => {
+                    const svgElement = svg as SVGSVGElement;
+                    const currentTimeInMs = svgElement.getCurrentTime() * 1000;
+                    
+                    if (currentTimeInMs <= 100) {
+                        setTimeout(() => {
+                            if (sharedIsPausedRef.current) {
+                                svgElement.pauseAnimations();
+                            }
+                        }, 100 - currentTimeInMs);
+                    } else {
+                        svgElement.pauseAnimations();
+                    }
+                });
+            } else {
+                svgElements.forEach(svg => {
+                    const svgElement = svg as SVGSVGElement;
+                    svgElement.unpauseAnimations();
+                });
+            }
+        }
+    }, [isHost, sharedIsPaused]);
+
+    // Helper to get the effective running/paused state
+    const getEffectiveState = useCallback(() => {
+        if (isHost) {
+            return { isRunning: isRunningState, isPaused: isPausedState };
+        } else {
+            return { isRunning: sharedIsRunning, isPaused: sharedIsPaused };
+        }
+    }, [isHost, isRunningState, isPausedState, sharedIsRunning, sharedIsPaused]);
+    
+    const getIsRunning = useCallback(() => {
+        return isRunningRef.current;
+    }, []);
 
     const stopExecution = useCallback(() => {
         setIsRunningState(false);
@@ -290,7 +381,7 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
         pauseCounterRef.current++;
 
         // TODO: tests for execution logic + pausing and resuming
-
+        
         // Pause the SVG edge(s) animation
         const svgElements = document.querySelectorAll('svg[id^="edge-animation-"]');
         svgElements.forEach(svg => {
@@ -356,8 +447,8 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
     }, []);
 
     const state = {
-        isRunning: isRunningState,
-        isPaused: isPausedState,
+        isRunning: getEffectiveState().isRunning,
+        isPaused: getEffectiveState().isPaused,
         currentNode: currentNode
     };
 
