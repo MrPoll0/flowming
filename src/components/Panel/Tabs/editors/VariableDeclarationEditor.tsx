@@ -3,7 +3,7 @@ import { SelectedNodeContext } from '../../../../context/SelectedNodeContext';
 import { useVariables } from '../../../../context/VariablesContext';
 import { Variable } from '../../../../models';
 import { variableTypes } from '../../../../models';
-import { useFlowExecutorContext } from '../../../../context/FlowExecutorContext';
+import { useFlowExecutorState } from '../../../../context/FlowExecutorContext';
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,7 +24,7 @@ const VariableDeclarationEditor = () => {
   const updateTimeoutRef = useRef<number | null>(null);
   const previousNodeIdRef = useRef<string | null>(null);
 
-  const { isRunning } = useFlowExecutorContext();
+  const { isRunning } = useFlowExecutorState();
   const allVariables = getAllVariables();
 
   // Cleanup function for the debounce timeout

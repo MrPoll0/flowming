@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useDebugger } from '../../../context/DebuggerContext';
-import { useFlowExecutorContext } from '../../../context/FlowExecutorContext';
+import { useFlowExecutorState } from '../../../context/FlowExecutorContext';
 import { Clock, Variable, Play, Pause, Square } from 'lucide-react';
 
 const DebuggerTab = () => {
@@ -14,8 +14,8 @@ const DebuggerTab = () => {
         currentVariables, 
         isRecording 
     } = useDebugger();
-    const { isRunning, isPaused } = useFlowExecutorContext();
-    
+    const { isRunning, isPaused } = useFlowExecutorState();
+
     const [activeTab, setActiveTab] = useState("variables");
 
     const formatTimestamp = (timestamp: number): string => {
@@ -217,4 +217,4 @@ const DebuggerTab = () => {
     );
 };
 
-export default DebuggerTab;
+export default React.memo(DebuggerTab);

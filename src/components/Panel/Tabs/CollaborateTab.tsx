@@ -17,7 +17,7 @@ const CollaborateTab: React.FC = () => {
   const { deleteNodeVariables } = useVariables();
   const { setSelectedNode } = useContext(SelectedNodeContext);
   const { filename, setFilename } = useFilename();
-  const { stop } = useFlowExecutorContext();
+  const { stop } = useFlowExecutorActions();
   const { clearHistory } = useDebugger();
 
   const hostUser = useMemo(() => {
@@ -98,4 +98,4 @@ const CollaborateTab: React.FC = () => {
   );
 };
 
-export default CollaborateTab;
+export default React.memo(CollaborateTab);

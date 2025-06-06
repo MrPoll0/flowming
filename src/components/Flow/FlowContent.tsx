@@ -43,7 +43,7 @@ const SYNC_ORIGIN_INIT_VARIABLES = 'local_init_variables';
 const FlowContent: React.FC = () => {
   const [nodes, setNodes, onNodesChangeOriginal] = useNodesState<FlowNode>(initialNodes);
   const [edges, setEdges, onEdgesChangeOriginal] = useEdgesState<Edge>(initialEdges);
-  const { ydoc, ySharedNodes, ySharedEdges, ySharedVariables, awareness, users } = useCollaboration();
+  const { ydoc, ySharedNodes, ySharedEdges, ySharedVariables, awareness } = useCollaboration();
   const { selectedNode, setSelectedNode } = useContext(SelectedNodeContext);
   const { variables, setVariables, deleteNodeVariables } = useVariables();
   const { 
@@ -72,7 +72,8 @@ const FlowContent: React.FC = () => {
   const [nextConditionalLabel, setNextConditionalLabel] = useState<number>(1); // Start with "Yes" (index 1)
 
   // State to track flow execution
-  const { isRunning } = useFlowExecutorContext();
+  const { isRunning } = useFlowExecutorState();
+
 
   // Ref to always have the latest selectedNode in async callbacks
   const selectedNodeRef = useRef<FlowNode | null>(selectedNode);

@@ -1,14 +1,24 @@
 import React, { createContext, useContext, ReactNode } from 'react';
-import { useFlowExecutor, IExecutor } from '../hooks/useFlowExecutor';
+import { useFlowExecutor, IExecutorState, IExecutorActions } from '../hooks/useFlowExecutor';
 
+const FlowExecutorStateContext = createContext<IExecutorState | null>(null);
+const FlowExecutorActionsContext = createContext<IExecutorActions | null>(null);
 
-const FlowExecutorContext = createContext<IExecutor | null>(null);
-
-export const useFlowExecutorContext = () => {
-  const context = useContext(FlowExecutorContext);
+export const useFlowExecutorState = () => {
+  const context = useContext(FlowExecutorStateContext);
   if (!context) {
     throw new Error(
-      "useFlowExecutorContext must be used within a FlowExecutorProvider"
+      "useFlowExecutorState must be used within a FlowExecutorProvider"
+    );
+  }
+  return context;
+};
+
+export const useFlowExecutorActions = () => {
+  const context = useContext(FlowExecutorActionsContext);
+  if (!context) {
+    throw new Error(
+      "useFlowExecutorActions must be used within a FlowExecutorProvider"
     );
   }
   return context;
@@ -17,11 +27,13 @@ export const useFlowExecutorContext = () => {
 export const FlowExecutorProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
-  const executor = useFlowExecutor();
+  const { state, actions } = useFlowExecutor();
 
   return (
-    <FlowExecutorContext.Provider value={executor}>
-      {children}
-    </FlowExecutorContext.Provider>
+    <FlowExecutorStateContext.Provider value={state}>
+      <FlowExecutorActionsContext.Provider value={actions}>
+        {children}
+      </FlowExecutorActionsContext.Provider>
+    </FlowExecutorStateContext.Provider>
   );
 };

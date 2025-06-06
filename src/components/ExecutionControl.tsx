@@ -1,4 +1,4 @@
-import { useFlowExecutorContext } from "../context/FlowExecutorContext";
+import { useFlowExecutorState, useFlowExecutorActions } from "../context/FlowExecutorContext";
 import { useCollaboration } from "../context/CollaborationContext";
 import { useMemo } from 'react';
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,8 @@ import {
 } from "lucide-react";
 
 export default function ExecutionControl() {
-    const {start, stop, pause, resume, reset, stepBackward, stepForward, isRunning, isPaused} = useFlowExecutorContext();
+    const { isRunning, isPaused } = useFlowExecutorState();
+    const { start, stop, pause, resume, reset, stepBackward, stepForward } = useFlowExecutorActions();
     const { awareness, users } = useCollaboration();
     const hostUser = useMemo(() => {
         if (!users.length) return null;

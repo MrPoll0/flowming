@@ -2,7 +2,7 @@ import React, { useCallback, useState, useContext } from 'react';
 import { Edge, Node, useReactFlow } from '@xyflow/react';
 import { useVariables } from '../context/VariablesContext';
 import { useFilename } from '../context/FilenameContext';
-import { useFlowExecutorContext } from '../context/FlowExecutorContext';
+import { useFlowExecutorActions } from '../context/FlowExecutorContext';
 import { SelectedNodeContext } from '../context/SelectedNodeContext';
 import { Variable } from '../models';
 import { Button } from './ui/button';
@@ -45,7 +45,7 @@ const ImportExport: React.FC = () => {
   const { getNodes, getEdges, setNodes, setEdges, fitView, setViewport } = useReactFlow();
   const { variables, updateNodeVariables, deleteNodeVariables } = useVariables();
   const { filename, setFilename } = useFilename();
-  const { stop } = useFlowExecutorContext();
+  const { stop } = useFlowExecutorActions();
   const { setSelectedNode } = useContext(SelectedNodeContext);
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -221,4 +221,4 @@ const ImportExport: React.FC = () => {
   );
 };
 
-export default ImportExport; 
+export default React.memo(ImportExport); 

@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useSystemSettings } from '../context/SystemSettingsContext';
-import { useFlowExecutorContext } from '../context/FlowExecutorContext';
+import { useFlowExecutorState } from '../context/FlowExecutorContext';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -10,7 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 
 const SystemSettings: React.FC = () => {
   const { settings, updateSetting } = useSystemSettings();
-  const { isRunning } = useFlowExecutorContext();
+  const { isRunning } = useFlowExecutorState();
 
   const executionSpeedOptions = [
     { value: 500, label: 'Very Fast (0.5s)' },
@@ -238,4 +238,4 @@ const SystemSettings: React.FC = () => {
   );
 };
 
-export default SystemSettings; 
+export default React.memo(SystemSettings); 

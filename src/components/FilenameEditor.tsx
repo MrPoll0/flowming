@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useFilename } from '../context/FilenameContext';
-import { useFlowExecutorContext } from '../context/FlowExecutorContext';
+import { useFlowExecutorState } from '../context/FlowExecutorContext';
 import { useCollaboration } from '../context/CollaborationContext';
 
 const SYNC_ORIGIN_FILENAME = 'local_filename_sync';
 
 const FilenameEditor: React.FC = () => {
   const { filename, setFilename } = useFilename();
-  const { isRunning } = useFlowExecutorContext();
+  const { isRunning } = useFlowExecutorState();
   const { ydoc, ySharedFilename, awareness } = useCollaboration();
   const [isEditingFilename, setIsEditingFilename] = useState(false);
   const [tempFilename, setTempFilename] = useState(filename);
@@ -197,4 +197,4 @@ const FilenameEditor: React.FC = () => {
   );
 };
 
-export default FilenameEditor; 
+export default React.memo(FilenameEditor); 

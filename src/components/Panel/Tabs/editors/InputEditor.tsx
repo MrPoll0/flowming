@@ -2,7 +2,7 @@ import { useContext, useState, useEffect, useRef } from 'react';
 import { SelectedNodeContext } from '../../../../context/SelectedNodeContext';
 import { useVariables } from '../../../../context/VariablesContext';
 import { useReactFlow } from '@xyflow/react';
-import { useFlowExecutorContext } from '../../../../context/FlowExecutorContext';
+import { useFlowExecutorState } from '../../../../context/FlowExecutorContext';
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
@@ -21,7 +21,7 @@ const InputEditor = () => {
   const previousNodeIdRef = useRef<string | null>(null);
   
   const reactFlowInstance = useReactFlow();
-  const { isRunning } = useFlowExecutorContext();
+  const { isRunning } = useFlowExecutorState();
 
   // Update the node data when variable changes for Input node
   useEffect(() => {

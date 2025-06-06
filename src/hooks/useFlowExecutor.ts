@@ -22,11 +22,15 @@ import { OutputProcessor } from "@/components/Flow/Nodes/Output";
 import { AssignVariableProcessor } from "@/components/Flow/Nodes/AssignVariable";
 import { ConditionalProcessor } from "@/components/Flow/Nodes/Conditional";
 import { useInputDialog } from "@/context/InputDialogContext";
+import { useCollaboration } from "@/context/CollaborationContext";
 
-export interface IExecutor {
+export interface IExecutorState {
     isRunning: boolean;
     isPaused: boolean;
     currentNode: Node | null;
+}
+
+export interface IExecutorActions {
     getIsRunning(): boolean;
     start(): void;
     stop(): void;
@@ -36,6 +40,8 @@ export interface IExecutor {
     stepBackward(): void;
     stepForward(): void;
 }
+
+export interface IExecutor extends IExecutorState, IExecutorActions {}
 
 function getNodeProcessor(reactFlow: ReactFlowInstance, valuedVariables: ValuedVariable<VariableType>[], node: FlowNode, showInputDialog: (title: string, variableType: 'string' | 'integer' | 'float' | 'boolean', description?: string, placeholder?: string) => Promise<string | null>, getNodeVariables: any): NodeProcessor | null {
     switch (node.type) {
@@ -54,7 +60,7 @@ function getNodeProcessor(reactFlow: ReactFlowInstance, valuedVariables: ValuedV
     }
 }
 
-export function useFlowExecutor(): IExecutor {
+export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorActions } {
     const reactFlow = useReactFlow();
     const { settings } = useSystemSettings();
     const { addExecutionStep, updateVariables, startRecording, stopRecording } = useDebugger();
@@ -213,7 +219,7 @@ export function useFlowExecutor(): IExecutor {
         toggleNodeAnimations(reactFlow, node, targetNodeId, true, executionSpeedRef.current);
         
         return { targetNodeId, valuedVariables };
-    }, [reactFlow, addExecutionStep, updateVariables]);
+    }, [reactFlow, addExecutionStep, updateVariables, showInputDialog, getNodeVariables]);
 
     const start = useCallback(() => {
         const startNode = findStartNode(reactFlow.getNodes());
@@ -349,11 +355,14 @@ export function useFlowExecutor(): IExecutor {
         
     }, []);
 
-    return {
+    const state = {
         isRunning: isRunningState,
         isPaused: isPausedState,
-        currentNode,
-        getIsRunning: () => isRunningState,
+        currentNode: currentNode
+    };
+
+    const actions = useMemo(() => ({
+        getIsRunning,
         start,
         stop,
         pause,
@@ -361,5 +370,10 @@ export function useFlowExecutor(): IExecutor {
         reset,
         stepBackward,
         stepForward
+    }), [getIsRunning, start, stop, pause, resume, reset, stepBackward, stepForward]);
+    
+    return {
+        state,
+        actions
     };
 }

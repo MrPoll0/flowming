@@ -17,7 +17,7 @@ import {
   arrayMove
 } from '@dnd-kit/sortable';
 import { operators as expressionOperators } from '../../../../models/Expression';
-import { useFlowExecutorContext } from '../../../../context/FlowExecutorContext';
+import { useFlowExecutorState } from '../../../../context/FlowExecutorContext';
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,7 +61,7 @@ const OutputEditor = () => {
     })
   );
 
-  const { isRunning } = useFlowExecutorContext();
+  const { isRunning } = useFlowExecutorState();
 
   // Update the node data when expression changes
   useEffect(() => {
