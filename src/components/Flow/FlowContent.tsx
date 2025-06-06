@@ -628,10 +628,7 @@ const FlowContent: React.FC = () => {
   
   const onMouseMoveCollab = useCallback((event: React.MouseEvent) => {
     if (awareness && reactFlowWrapper.current && reactFlowInstance) {
-      const rect = reactFlowWrapper.current.getBoundingClientRect();
-      const screenX = event.clientX - rect.left;
-      const screenY = event.clientY - rect.top;
-      const flowPosition = reactFlowInstance.screenToFlowPosition({ x: screenX, y: screenY });
+      const flowPosition = reactFlowInstance.screenToFlowPosition({ x: event.clientX, y: event.clientY });
       awareness.setLocalStateField('cursor', flowPosition);
     }
   }, [awareness, reactFlowInstance]);
@@ -639,10 +636,7 @@ const FlowContent: React.FC = () => {
   // New handler for updating cursor during node drag
   const onNodeDragCollab = useCallback((event: React.MouseEvent, _node: Node) => {
     if (awareness && reactFlowWrapper.current && reactFlowInstance) {
-      const rect = reactFlowWrapper.current.getBoundingClientRect();
-      const screenX = event.clientX - rect.left;
-      const screenY = event.clientY - rect.top;
-      const flowPosition = reactFlowInstance.screenToFlowPosition({ x: screenX, y: screenY });
+      const flowPosition = reactFlowInstance.screenToFlowPosition({ x: event.clientX, y: event.clientY });
       awareness.setLocalStateField('cursor', flowPosition);
     }
   }, [awareness, reactFlowInstance]);
@@ -806,8 +800,9 @@ const FlowContent: React.FC = () => {
 
         {/* Render remote cursors inside a Panel */}
         {users.map(user => {
-          if (!user.cursor || !awareness || user.clientID === awareness.clientID || !reactFlowInstance) return null;
+          if (!user.cursor || !awareness || user.clientID === awareness.clientID || !reactFlowInstance || !reactFlowWrapper.current) return null;
           const screenPosition = reactFlowInstance.flowToScreenPosition(user.cursor);
+          const rect = reactFlowWrapper.current.getBoundingClientRect();
 
           return (
             // Cursor Anchor: Positioned at the target center of the dot
@@ -815,8 +810,8 @@ const FlowContent: React.FC = () => {
               key={user.clientID}
               style={{
                 position: 'absolute',
-                left: screenPosition.x,
-                top: screenPosition.y,
+                left: screenPosition.x - rect.left,
+                top: screenPosition.y - rect.top,
                 pointerEvents: 'none',
                 zIndex: 100
               }}
