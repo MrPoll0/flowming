@@ -1,4 +1,6 @@
 import { useFlowExecutorContext } from "../context/FlowExecutorContext";
+import { useCollaboration } from "../context/CollaborationContext";
+import { useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
@@ -12,6 +14,13 @@ import {
 
 export default function ExecutionControl() {
     const {start, stop, pause, resume, reset, stepBackward, stepForward, isRunning, isPaused} = useFlowExecutorContext();
+    const { awareness, users } = useCollaboration();
+    const hostUser = useMemo(() => {
+        if (!users.length) return null;
+        return users.reduce((prev, curr) => (prev.joinedAt <= curr.joinedAt ? prev : curr));
+    }, [users]);
+    const localClientID = awareness?.clientID;
+    const isHost = hostUser?.clientID === localClientID;
 
     return (
         <Card className="h-full">
@@ -22,7 +31,7 @@ export default function ExecutionControl() {
                 <div className="flex flex-wrap gap-2">
                     <Button 
                         onClick={start} 
-                        disabled={isRunning}
+                        disabled={!isHost || isRunning}
                         size="sm"
                         className="flex items-center gap-2"
                     >
@@ -31,7 +40,7 @@ export default function ExecutionControl() {
                     </Button>
                     <Button 
                         onClick={stop} 
-                        disabled={!isRunning}
+                        disabled={!isHost || !isRunning}
                         variant="destructive"
                         size="sm"
                         className="flex items-center gap-2"
@@ -41,7 +50,7 @@ export default function ExecutionControl() {
                     </Button>
                     <Button 
                         onClick={pause} 
-                        disabled={!isRunning || isPaused}
+                        disabled={!isHost || !isRunning || isPaused}
                         variant="outline"
                         size="sm"
                         className="flex items-center gap-2"
@@ -51,7 +60,7 @@ export default function ExecutionControl() {
                     </Button>
                     <Button 
                         onClick={resume} 
-                        disabled={!isPaused || !isRunning}
+                        disabled={!isHost || !isPaused || !isRunning}
                         variant="outline"
                         size="sm"
                         className="flex items-center gap-2"
@@ -61,7 +70,7 @@ export default function ExecutionControl() {
                     </Button>
                     <Button 
                         onClick={stepBackward} 
-                        disabled={!isRunning || !isPaused}
+                        disabled={!isHost || !isRunning || !isPaused}
                         variant="outline"
                         size="sm"
                         className="flex items-center gap-2"
@@ -71,7 +80,7 @@ export default function ExecutionControl() {
                     </Button>
                     <Button 
                         onClick={stepForward} 
-                        disabled={!isRunning || !isPaused}
+                        disabled={!isHost || !isRunning || !isPaused}
                         variant="outline"
                         size="sm"
                         className="flex items-center gap-2"
@@ -81,7 +90,7 @@ export default function ExecutionControl() {
                     </Button>
                     <Button 
                         onClick={reset} 
-                        disabled={!isRunning}
+                        disabled={!isHost || !isRunning}
                         variant="secondary"
                         size="sm"
                         className="flex items-center gap-2"

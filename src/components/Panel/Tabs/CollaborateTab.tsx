@@ -1,4 +1,4 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useState, useMemo } from 'react';
 import { useCollaboration } from '../../../context/CollaborationContext';
 import { useReactFlow } from '@xyflow/react';
 import { clearDiagram } from '../../ImportExport';
@@ -19,6 +19,11 @@ const CollaborateTab: React.FC = () => {
   const { filename, setFilename } = useFilename();
   const { stop } = useFlowExecutorContext();
   const { clearHistory } = useDebugger();
+
+  const hostUser = useMemo(() => {
+    if (!users.length) return null;
+    return users.reduce((prev, curr) => (prev.joinedAt <= curr.joinedAt ? prev : curr));
+  }, [users]);
 
   const handleJoin = () => {
     if (room && username) {
@@ -82,6 +87,7 @@ const CollaborateTab: React.FC = () => {
                     style={{ backgroundColor: user.color, width: 12, height: 12, borderRadius: '50%' }}
                   ></span>
                   <span>{user.name}</span>
+                  {user.clientID === hostUser?.clientID && <span title="Host" className="ml-1">👑</span>}
                 </li>
               ))}
             </ul>
