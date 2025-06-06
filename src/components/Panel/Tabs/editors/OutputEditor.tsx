@@ -2,7 +2,7 @@ import { useContext, useState, useEffect, useRef } from 'react';
 import { SelectedNodeContext } from '../../../../context/SelectedNodeContext';
 import { useVariables } from '../../../../context/VariablesContext';
 import { useReactFlow } from '@xyflow/react';
-import { Expression, ExpressionElement } from '../../../../models';
+import { Expression, ExpressionElement, Variable } from '../../../../models';
 import {
   DndContext, 
   useSensors, 
@@ -14,7 +14,7 @@ import {
 import {
   SortableContext,
   horizontalListSortingStrategy,
-  arrayMove
+  useSortable
 } from '@dnd-kit/sortable';
 import { operators as expressionOperators } from '../../../../models/Expression';
 import { useFlowExecutorState } from '../../../../context/FlowExecutorContext';
@@ -35,11 +35,102 @@ import {
   DraggablePaletteItem, 
   ExpressionDropArea 
 } from './shared/DragAndDropComponents';
+import { CSS } from '@dnd-kit/utilities';
 
 // Available operators for expression building
 const operators = [
   ...expressionOperators
 ];
+
+// Helper to generate UUID
+const uuid = () => crypto.randomUUID();
+
+// Interface to describe the location of an element for drag & drop logic
+interface ElementLocation {
+  id: string; // Original ID from the event (active.id or over.id)
+  isPaletteItem: boolean;
+  isMainDropArea: boolean;
+  isMainExpressionElement: boolean;
+  isNestedDropArea: boolean;
+  isNestedExpressionElement: boolean;
+  funcId?: string; // ID of the parent function if nested
+  funcIdPath?: string[]; // Full path of parent function IDs for deep nesting
+  elementActualId?: string; // The ID of the element itself (if not a drop area or palette)
+  item?: ExpressionElement; // The actual ExpressionElement if it's an existing one
+  index?: number; // Index in its respective list (main or nested)
+}
+
+// Props for function expression element
+interface FunctionExpressionElementProps {
+  element: ExpressionElement;
+  removeExpressionElement: (id: string) => void;
+  disabled: boolean;
+}
+
+// Function block component for nesting
+const FunctionExpressionElement: React.FC<FunctionExpressionElementProps> = ({ element, removeExpressionElement, disabled }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: element.id, disabled });
+
+  const nestedDropId = `nested-${element.id}`;
+  const nestedElements = element.nestedExpression?.rightSide || [];
+  const nestedItems = nestedElements.map(e => e.id);
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      {...attributes}
+      {...listeners}
+      className={`
+        relative inline-flex items-center p-2 m-1 rounded-lg text-sm bg-purple-100 border border-purple-200
+        ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-grab hover:bg-purple-150'}
+        ${isDragging ? 'opacity-30' : 'opacity-100'}
+        transition-all duration-200
+      `}
+    >
+      <span className="font-medium text-purple-700 mr-1">{element.value}</span>
+      <span className="text-purple-600 font-bold">(</span>
+      <div className="flex-1 min-w-[60px] mx-1">
+        <ExpressionDropArea id={nestedDropId} disabled={disabled}>
+          <SortableContext items={nestedItems} strategy={horizontalListSortingStrategy}>
+            {nestedElements.length > 0 ? (
+              nestedElements.map((nestedElem: ExpressionElement, idx: number) => (
+                nestedElem.isFunction() ? (
+                  <FunctionExpressionElement
+                    key={nestedElem.id}
+                    element={nestedElem}
+                    removeExpressionElement={removeExpressionElement}
+                    disabled={disabled}
+                  />
+                ) : (
+                  <DraggableExpressionElement
+                    key={nestedElem.id}
+                    element={nestedElem}
+                    index={idx}
+                    removeExpressionElement={removeExpressionElement}
+                    disabled={disabled}
+                  />
+                )
+              ))
+            ) : (
+              <span className="text-purple-400 text-xs italic">drop here</span>
+            )}
+          </SortableContext>
+        </ExpressionDropArea>
+      </div>
+      <span className="text-purple-600 font-bold">)</span>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={(e) => { e.stopPropagation(); removeExpressionElement(element.id); }}
+        disabled={disabled}
+        className="ml-1 h-5 w-5 p-0 text-purple-600 hover:text-red-600 hover:bg-red-50 rounded-full"
+      >
+        ×
+      </Button>
+    </div>
+  );
+};
 
 const OutputEditor = () => {
   const { selectedNode } = useContext(SelectedNodeContext);
@@ -47,9 +138,9 @@ const OutputEditor = () => {
   const isInitialLoadRef = useRef(true);
   const previousNodeIdRef = useRef<string | null>(null);
   const [expression, setExpression] = useState<Expression | null>(null);
-  const [outputTab, setOutputTab] = useState<'variables' | 'literals'>('variables');
+  const [outputTab, setOutputTab] = useState<'variables' | 'literals' | 'functions'>('variables');
   const [_activeId, setActiveId] = useState<string | null>(null);
-  const [activeItem, setActiveItem] = useState<ExpressionElement | null>(null);
+  const [activeDraggableItem, setActiveDraggableItem] = useState<ExpressionElement | null>(null);
   
   const reactFlowInstance = useReactFlow();
   
@@ -62,6 +153,22 @@ const OutputEditor = () => {
   );
 
   const { isRunning } = useFlowExecutorState();
+  
+  const findFunctionElementById = (elements: ExpressionElement[], id: string): ExpressionElement | null => {
+    if (!elements) return null;
+    for (const element of elements) {
+      if (element.id === id && element.isFunction()) {
+        return element;
+      }
+      if (element.isFunction() && element.nestedExpression) {
+        const found = findFunctionElementById(element.nestedExpression.rightSide, id);
+        if (found) {
+          return found;
+        }
+      }
+    }
+    return null;
+  };
 
   // Update the node data when expression changes
   useEffect(() => {
@@ -147,159 +254,213 @@ const OutputEditor = () => {
     const { active } = event;
     setActiveId(active.id);
     
-    // Find the active item
-    let foundItem: ExpressionElement | null = null;
-    
-    // Check if it's an existing expression element being reordered
-    const isExistingElement = expression?.rightSide.find(item => item.id === active.id);
-
-    if (isExistingElement) {
-      foundItem = isExistingElement;
-    } else if (active.id.startsWith('var-')) {
-      const varId = active.id.replace('var-', '');
-      const variable = getAllVariables().find(v => v.id === varId);
-      if (variable) {
-        foundItem = new ExpressionElement(
-          active.id, 
-          'variable', 
-          variable.name,
-          variable
-        );
+    const findActiveElementRecursive = (elements: ExpressionElement[], id: string): ExpressionElement | null => {
+      for (const element of elements) {
+        if (element.id === id) {
+          return element;
+        }
+        if (element.isFunction() && element.nestedExpression) {
+          const found = findActiveElementRecursive(element.nestedExpression.rightSide, id);
+          if (found) {
+            return found;
+          }
+        }
       }
-    } else if (active.id.startsWith('op-')) {
-      const op = active.id.replace('op-', '');
-      foundItem = new ExpressionElement(active.id, 'operator', op);
-    } else if (active.id.startsWith('lit-')) {
-      const parts = active.id.split('-');
-      if (parts.length >= 3) {
-        const value = parts.slice(2).join('-');
-        foundItem = new ExpressionElement(active.id, 'literal', value);
+      return null;
+    }
+    
+    let determinedActiveElement: ExpressionElement | null = null;
+    
+    if (expression?.rightSide) {
+      determinedActiveElement = findActiveElementRecursive(expression.rightSide, active.id);
+    }
+
+    if (!determinedActiveElement) {
+      if (active.id.startsWith('var-')) {
+        const varId = active.id.replace('var-', '');
+        const variable = getAllVariables().find(v => v.id === varId);
+        if (variable) {
+          determinedActiveElement = new ExpressionElement(active.id, 'variable', variable.name, variable);
+        }
+      } else if (active.id.startsWith('op-')) {
+        const op = active.id.replace('op-', '');
+        determinedActiveElement = new ExpressionElement(active.id, 'operator', op);
+      } else if (active.id.startsWith('lit-')) {
+        const parts = active.id.split('-');
+        if (parts.length >= 3) {
+          const value = parts.slice(2).join('-');
+          determinedActiveElement = new ExpressionElement(active.id, 'literal', value);
+        }
+      } else if (active.id.startsWith('func-')) {
+        const funcName = active.id.replace('func-', '');
+        determinedActiveElement = new ExpressionElement(active.id, 'function', funcName, new Expression(undefined, []));
       }
     }
     
-    setActiveItem(foundItem);
+    setActiveDraggableItem(determinedActiveElement);
+  };
+
+  // Helper function to create new expression element
+  const createNewElement = (activeItem: ExpressionElement, getAllVars: () => Variable[]): ExpressionElement | null => {
+    if (activeItem.type === 'variable') {
+      const varId = activeItem.variable?.id || (activeItem.id.startsWith('var-') ? activeItem.id.replace('var-', '') : null);
+      if (varId) {
+        const variable = getAllVars().find(v => v.id === varId);
+        if (variable) {
+          return new ExpressionElement(uuid(), 'variable', variable.name, variable);
+        }
+      }
+      if (activeItem.variable instanceof Variable) {
+        return new ExpressionElement(uuid(), 'variable', activeItem.variable.name, activeItem.variable.clone());
+      }
+      return null;
+    } else if (activeItem.type === 'function') {
+      const nestedExpr = activeItem.nestedExpression ? activeItem.nestedExpression.clone() : new Expression(undefined, []);
+      return new ExpressionElement(uuid(), 'function', activeItem.value, nestedExpr);
+    } else {
+      return new ExpressionElement(uuid(), activeItem.type, activeItem.value);
+    }
+  };
+
+  const findElementLocationRecursive = (
+    id: string, 
+    elements: ExpressionElement[], 
+    funcIdPath: string[]
+  ): ElementLocation | null => {
+    for (let index = 0; index < elements.length; index++) {
+      const item = elements[index];
+      if (item.id === id) {
+        if (funcIdPath.length > 0) {
+          return {
+            id, isPaletteItem: false, isMainDropArea: false, isMainExpressionElement: false, isNestedDropArea: false, isNestedExpressionElement: true,
+            funcId: funcIdPath[funcIdPath.length - 1], funcIdPath, elementActualId: id, item, index
+          };
+        } else {
+          return {
+            id, isPaletteItem: false, isMainDropArea: false, isMainExpressionElement: true, isNestedDropArea: false, isNestedExpressionElement: false,
+            elementActualId: id, item, index, funcIdPath
+          };
+        }
+      }
+      if (item.isFunction() && item.nestedExpression) {
+        const found = findElementLocationRecursive(id, item.nestedExpression.rightSide, [...funcIdPath, item.id]);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  const getElementLocationInfo = (id: string, expr: Expression | null): ElementLocation | null => {
+      if (!expr) return null;
+  
+      if (id.startsWith('var-') || id.startsWith('op-') || id.startsWith('lit-') || id.startsWith('func-')) {
+        return { id, isPaletteItem: true, isMainDropArea: false, isMainExpressionElement: false, isNestedDropArea: false, isNestedExpressionElement: false };
+      }
+      if (id === 'expression-drop-area') {
+        return { id, isPaletteItem: false, isMainDropArea: true, isMainExpressionElement: false, isNestedDropArea: false, isNestedExpressionElement: false };
+      }
+      if (id.startsWith('nested-')) {
+        const funcId = id.replace('nested-', '');
+        const funcElemPath = findElementLocationRecursive(funcId, expr.rightSide, []);
+        return { 
+            id, isPaletteItem: false, isMainDropArea: false, isMainExpressionElement: false, isNestedDropArea: true, isNestedExpressionElement: false, 
+            funcId, funcIdPath: funcElemPath ? [...(funcElemPath.funcIdPath || []), funcId] : [funcId]
+        };
+      }
+  
+      const foundOnRight = findElementLocationRecursive(id, expr.rightSide, []);
+      if (foundOnRight) return foundOnRight;
+      
+      return null;
   };
 
   // Handle drag end
   const handleDragEnd = (event: any) => {
     const { active, over } = event;
-    setActiveId(null);
-    setActiveItem(null);
 
-    // Exit if dropped outside a valid droppable area
-    if (!over) {
+    if (!over || !active || !activeDraggableItem || !expression) {
+      setActiveId(null);
+      setActiveDraggableItem(null);
       return;
     }
 
-    const activeId = active.id;
-    const overId = over.id;
+    const activeLocation = getElementLocationInfo(active.id, expression);
+    const overLocation = getElementLocationInfo(over.id, expression);
 
-    if (expression && selectedNode?.type === 'Output') {
-      // Find the index of the active element if it exists in the expression list
-      const activeElementIndex = expression.rightSide.findIndex(e => e.id === activeId);
-
-      // Check if the target ('over') is the drop area itself
-      const overIsDropArea = overId === 'expression-drop-area';
-      // Find the index of the element being dropped onto, if applicable
-      const overElementIndex = expression.rightSide.findIndex(e => e.id === overId);
-
-      // Case 1: Reordering existing expression elements
-      if (activeElementIndex > -1 && activeId !== overId) {
-        // Check if the drop target is another existing element
-        if (overElementIndex > -1) {
-          setExpression(prev => {
-            if (!prev) return null;
-            const newExpr = prev.clone();
-            newExpr.rightSide = arrayMove(newExpr.rightSide, activeElementIndex, overElementIndex);
-            return newExpr;
-          });
-        }
-      }
-      // Case 2: Adding a new element from the palette
-      else if (activeElementIndex === -1 && overIsDropArea) {
-        // This is a new element being added to the expression
-        if (!activeItem) return;
-
-        // Create a new element with a fresh UUID
-        let newElement: ExpressionElement; 
-        
-        // Create proper ExpressionElement based on the type
-        if (activeItem.type === 'variable') {
-          const element = activeItem as any;
-          const varId = element.variable?.id;
-          
-          if (varId) {
-            const variable = getAllVariables().find(v => v.id === varId);
-            if (variable) {
-              newElement = new ExpressionElement(
-                crypto.randomUUID(),
-                'variable',
-                variable.name,
-                variable
-              );
-            } else {
-              console.error(`Variable ${varId} not found`);
-              return;
-            }
-          } else {
-            console.error(`Variable ID not found`);
-            return;
-          }
-        } else {
-          newElement = new ExpressionElement(
-            crypto.randomUUID(),
-            activeItem.type,
-            activeItem.value
-          );
-        }
-        
-        // Add the element to the expression
-        addExpressionElement(newElement);
-      }
-      // Case 3: Adding an element at a specific position in the expression
-      else if (activeElementIndex === -1 && overElementIndex > -1) {
-        if (!activeItem) return;
-
-        let newElement: ExpressionElement;
-        
-        if (activeItem.type === 'variable') {
-          const element = activeItem as any;
-          const varId = element.variable?.id;
-          
-          if (varId) {
-            const variable = getAllVariables().find(v => v.id === varId);
-            if (variable) {
-              newElement = new ExpressionElement(
-                crypto.randomUUID(),
-                'variable',
-                variable.name,
-                variable
-              );
-            } else {
-              console.error(`Variable ${varId} not found`);
-              return;
-            }
-          } else {
-            console.error(`Variable ID not found`);
-            return;
-          }
-        } else {
-          newElement = new ExpressionElement(
-            crypto.randomUUID(),
-            activeItem.type,
-            activeItem.value
-          );
-        }
-        
-        // Insert at the specified position
-        setExpression(prev => {
-          if (!prev) return null;
-          const newExpr = prev.clone();
-          newExpr.insertElementAt(newElement, overElementIndex);
-          return newExpr;
-        });
-      }
+    if (!activeLocation || !overLocation) {
+      setActiveId(null);
+      setActiveDraggableItem(null);
+      return;
     }
+
+    setExpression(prevExpr => {
+      if (!prevExpr) return null;
+      const newExpr = prevExpr.clone();
+      
+      const itemToMove = activeLocation.isPaletteItem
+        ? createNewElement(activeDraggableItem, getAllVariables)
+        : activeLocation.item?.clone();
+
+      if (!itemToMove) return newExpr;
+      
+      const getList = (path: string[] = []): ExpressionElement[] | null => {
+          let currentList: ExpressionElement[] = newExpr.rightSide;
+          let currentFunc: ExpressionElement | undefined;
+          for (const funcId of path) {
+              currentFunc = currentList.find(e => e.id === funcId);
+              if (!currentFunc || !currentFunc.isFunction() || !currentFunc.nestedExpression) return null;
+              currentList = currentFunc.nestedExpression.rightSide;
+          }
+          return currentList;
+      };
+
+      if (active.id === over.id) {
+          // No change
+      } else if (
+          !activeLocation.isPaletteItem &&
+          JSON.stringify(activeLocation.funcIdPath) === JSON.stringify(overLocation.funcIdPath) &&
+          (overLocation.isNestedExpressionElement || overLocation.isMainExpressionElement)
+      ) {
+          const list = getList(activeLocation.funcIdPath);
+          if (list && activeLocation.index !== undefined && overLocation.index !== undefined) {
+              const [movedItem] = list.splice(activeLocation.index, 1);
+              list.splice(overLocation.index, 0, movedItem);
+          }
+      } else {
+          // Move between different lists
+          if (!activeLocation.isPaletteItem) {
+              const sourceList = getList(activeLocation.funcIdPath);
+              if (sourceList && activeLocation.index !== undefined) {
+                  sourceList.splice(activeLocation.index, 1);
+              }
+          }
+
+          let targetPath = overLocation.funcIdPath || [];
+          let targetIndex = overLocation.index;
+          
+          if (overLocation.isNestedDropArea) {
+              targetPath = overLocation.funcIdPath!;
+              targetIndex = undefined;
+          } else if (overLocation.isMainDropArea) {
+              targetPath = [];
+              targetIndex = undefined;
+          }
+          
+          const targetList = getList(targetPath);
+          if (targetList) {
+              if (targetIndex !== undefined) {
+                  targetList.splice(targetIndex, 0, itemToMove);
+              } else {
+                  targetList.push(itemToMove);
+              }
+          }
+      }
+      
+      return newExpr;
+    });
+
+    setActiveId(null);
+    setActiveDraggableItem(null);
   };
 
   // Don't render if not an Output node
@@ -328,15 +489,27 @@ const OutputEditor = () => {
                   items={expression.rightSide.map(e => e.id)} 
                   strategy={horizontalListSortingStrategy}
                 >
-                  {expression.rightSide.map((element, index) => (
-                    <DraggableExpressionElement
-                      key={element.id}
-                      element={element}
-                      index={index}
-                      removeExpressionElement={removeExpressionElement}
-                      disabled={isRunning}
-                    />
-                  ))}
+                  {expression.rightSide.map((element, index) => {
+                    if (element.type === 'function') {
+                      return (
+                        <FunctionExpressionElement
+                          key={element.id}
+                          element={element}
+                          removeExpressionElement={removeExpressionElement}
+                          disabled={isRunning}
+                        />
+                      );
+                    }
+                    return (
+                      <DraggableExpressionElement
+                        key={element.id}
+                        element={element}
+                        index={index}
+                        removeExpressionElement={removeExpressionElement}
+                        disabled={isRunning}
+                      />
+                    );
+                  })}
                 </SortableContext>
               </ExpressionDropArea>
             </div>
@@ -348,15 +521,16 @@ const OutputEditor = () => {
           {/* Left column: Tabbed Variables and Literals */}
           <Card>
             <CardHeader className="pb-2">
-              <Tabs value={outputTab} onValueChange={(value) => setOutputTab(value as 'variables' | 'literals')} className="w-full">
-                <TabsList className="grid grid-cols-2 w-full">
+              <Tabs value={outputTab} onValueChange={(value) => setOutputTab(value as 'variables' | 'literals' | 'functions')} className="w-full">
+                <TabsList className="grid grid-cols-3 w-full">
                   <TabsTrigger value="variables">Variables</TabsTrigger>
                   <TabsTrigger value="literals">Literals</TabsTrigger>
+                  <TabsTrigger value="functions">Functions</TabsTrigger>
                 </TabsList>
               </Tabs>
             </CardHeader>
             <CardContent>
-              <Tabs value={outputTab} onValueChange={(value) => setOutputTab(value as 'variables' | 'literals')}>
+              <Tabs value={outputTab} onValueChange={(value) => setOutputTab(value as 'variables' | 'literals' | 'functions')}>
                 <TabsContent value="variables" className="mt-0">
                   <div className="space-y-2">
                     {allVariables.map(variable => (
@@ -516,6 +690,30 @@ const OutputEditor = () => {
                     </div>
                   </div>
                 </TabsContent>
+                <TabsContent value="functions" className="mt-0">
+                  <div className="space-y-2">
+                    {/* Conversion functions */}
+                    {['integer', 'string', 'float', 'boolean'].map(func => (
+                      <DraggablePaletteItem
+                        key={`func-${func}`}
+                        id={`func-${func}`}
+                        type="function"
+                        value={`${func}()`}
+                        backgroundColor="#d1d1ff"
+                        disabled={isRunning}
+                        onClick={() => {
+                          const element = new ExpressionElement(
+                            crypto.randomUUID(),
+                            'function',
+                            func,
+                            new Expression(undefined, [])
+                          );
+                          addExpressionElement(element);
+                        }}
+                      />
+                    ))}
+                  </div>
+                </TabsContent>
               </Tabs>
             </CardContent>
           </Card>
@@ -550,13 +748,13 @@ const OutputEditor = () => {
       </div>
 
       <DragOverlay>
-        {activeItem ? (
+        {activeDraggableItem ? (
           <div className={`
             px-2 py-1 m-1 rounded text-sm shadow-lg cursor-grabbing
-            ${activeItem.type === 'variable' ? 'bg-blue-100' :
-              activeItem.type === 'operator' ? 'bg-red-100' : 'bg-green-100'}
+            ${activeDraggableItem.type === 'variable' ? 'bg-blue-100' :
+              activeDraggableItem.type === 'operator' ? 'bg-red-100' : 'bg-green-100'}
           `}>
-            {activeItem.value}
+            {activeDraggableItem.value}
           </div>
         ) : null}
       </DragOverlay>

@@ -8,7 +8,6 @@ export type IOperator = typeof operators[number];
 export const equalities = ['==', '!=', '>', '<', '>=', '<='];
 export type IEquality = typeof equalities[number];
 
-
 export interface IExpression {
   leftSide: Variable | ExpressionElement[] | undefined;
   rightSide: ExpressionElement[];
@@ -82,12 +81,9 @@ export class Expression implements IExpression {
     // TODO: validation (element, operator, element, etc)
     // test1 = + will lead test1 to be undefined (its not a valid type)
     // TODO: proper type validation too (string test1 = + 1 leads to test1 = 1)
-    // TODO: also handle correctly parentheses
+    // TODO: also handle correctly parentheses ====> RPN / AST for proper expression parsing
     // TODO: añadir operador NOT?
     // TODO: is currentValuedVariables being resetted correctly in new starts? (apparently, why?)
-
-    // TODO: now we can do the conditional node (expression parsing will be very similar)
-    // also expression editor will be very similar
 
 
 
@@ -123,6 +119,48 @@ export class Expression implements IExpression {
             break;
           default:
             elementValue = element.value;
+        }
+      } else if (element.isFunction()) {
+        // Handle function calls with nested expressions
+        if (element.nestedExpression) {
+          // Recursively evaluate the nested expression
+          const nestedValue = this.calculateValue(element.nestedExpression.rightSide, null, currentValuedVariables);
+          
+          // Apply the type conversion function
+          switch (element.value) {
+            case 'integer':
+              // Convert nested value to integer, stripping quotes from strings (TODO: does this make sense?)
+              if (typeof nestedValue === 'string') {
+                const numStr = nestedValue.replace(/^['\"]|['\"]$/g, '');
+                elementValue = Math.floor(Number(numStr));
+              } else {
+                elementValue = Math.floor(Number(nestedValue));
+              }
+              break;
+            case 'string':
+              // Convert nested value to string
+              elementValue = String(nestedValue);
+              break;
+            case 'float':
+              // Convert nested value to float, stripping quotes from strings
+              if (typeof nestedValue === 'string') {
+                const numStr = nestedValue.replace(/^['\"]|['\"]$/g, '');
+                elementValue = Number(numStr);
+              } else {
+                elementValue = Number(nestedValue);
+              }
+              break;
+            case 'boolean':
+              // Convert nested value to boolean (TODO: handle specific cases?)
+              elementValue = Boolean(nestedValue);
+              break;
+            default:
+              console.warn(`Unknown function type: ${element.value}`);
+              elementValue = nestedValue;
+          }
+        } else {
+          console.warn(`Function ${element.value} has no nested expression`);
+          elementValue = 0; // Default value
         }
       } else if (element.isOperator()) {
         // Store the operator for the next value
@@ -284,7 +322,23 @@ export class Expression implements IExpression {
    * Removes an element from the expression by id
    */
   removeElement(id: string): void {
-    this.rightSide = this.rightSide.filter(e => e.id !== id);
+    const filterRecursive = (elements: ExpressionElement[]): ExpressionElement[] => {
+      if (!elements) return [];
+      return elements.filter(e => {
+        if (e.id === id) {
+          return false;
+        }
+        if (e.isFunction() && e.nestedExpression) {
+          e.nestedExpression.removeElement(id);
+        }
+        return true;
+      });
+    };
+
+    if (Array.isArray(this.leftSide)) {
+      this.leftSide = filterRecursive(this.leftSide as ExpressionElement[]);
+    }
+    this.rightSide = filterRecursive(this.rightSide);
   }
 
   /**

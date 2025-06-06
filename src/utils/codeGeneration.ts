@@ -5,6 +5,8 @@ import {
 } from '../models/pythonAST';
 import { Expression as DiagramExpression, ExpressionElement, Variable, IOperator, IExpression as DiagramIExpression } from '../models';
 
+// TODO: check bugs images + extensive automated testing
+
 // Helper to get the visual identifier for a node (visualId if available, otherwise nodeId)
 const getNodeVisualId = (cfg: CFG, nodeId: string): string => {
   const node = cfg.nodesMap.get(nodeId);
@@ -59,6 +61,9 @@ const convertDiagramExpressionToAST = (elements: ExpressionElement[], nodeId: st
   // Shunting-yard algorithm to convert infix to RPN (Reverse Polish Notation)
   processedElements.forEach(token => {
     if (token.isLiteral() || token.isVariable()) {
+      outputQueue.push(token);
+    } else if (token.isFunction()) {
+      // Functions are treated as operands (push directly to output)
       outputQueue.push(token);
     } else if (token.isOperator()) {
       const op1Value = token.value; // op1Value can be '_UMINUS_', etc.
@@ -130,6 +135,25 @@ const convertDiagramExpressionToAST = (elements: ExpressionElement[], nodeId: st
       }
     } else if (token.isVariable() && token.variable) {
       astStack.push({ type: 'Identifier', name: token.variable.name, diagramNodeId: nodeId } as Identifier);
+    } else if (token.isFunction() && token.nestedExpression) {
+      // Handle function calls with nested expressions
+      const nestedAst = convertDiagramExpressionToAST(token.nestedExpression.rightSide, nodeId, cfg);
+      
+      const functionNameMap: { [key: string]: string } = {
+        'integer': 'int',
+        'string': 'str',
+        'float': 'float',
+        'boolean': 'bool'
+      };
+      
+      // Create function call expression
+      const funcName = functionNameMap[token.value] || token.value;
+      astStack.push({
+        type: 'CallExpression',
+        callee: { type: 'Identifier', name: funcName, diagramNodeId: nodeId },
+        arguments: nestedAst.type !== 'UnsupportedNode' ? [nestedAst] : [],
+        diagramNodeId: nodeId
+      } as CallExpression);
     } else if (token.isOperator()) {
       const operatorValue = token.value;
       if (operatorValue === '_UNOT_') { // Unary Logical NOT
