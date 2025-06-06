@@ -82,6 +82,7 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
     const isRunningRef = useRef(false);
     const isPausedRef = useRef(false);
     const currentNodeRef = useRef<Node | null>(null);
+    const executingHostRef = useRef<number | null>(null); // Track the host who started execution
 
     // Get execution speed from settings
     const executionSpeedRef = useRef(settings.executionSpeed);
@@ -95,7 +96,7 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
     const executionCounterRef = useRef(0); // track the number of execution to avoid unexpected future jumps if restarting (stop and start again before timeout finishes)
 
     // Check if current user is host
-    const hostUser = users.reduce((prev, curr) => (prev.joinedAt <= curr.joinedAt ? prev : curr), users[0]);
+    const hostUser = users.length > 0 ? users.reduce((prev, curr) => (prev.joinedAt <= curr.joinedAt ? prev : curr)) : null;
     const isHost = hostUser?.clientID === awareness?.clientID;
 
     // Share execution state through awareness when host
@@ -105,6 +106,16 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
                 isRunning: isRunningState,
                 isPaused: isPausedState
             });
+            
+            // Track the executing host when execution starts
+            if (isRunningState && !executingHostRef.current) {
+                executingHostRef.current = awareness.clientID;
+            }
+            
+            // Clear executing host when execution stops
+            if (!isRunningState && executingHostRef.current === awareness.clientID) {
+                executingHostRef.current = null;
+            }
         }
     }, [isHost, awareness, isRunningState, isPausedState]);
 
@@ -123,6 +134,16 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
                             setSharedIsRunning(executionState.isRunning);
                             setSharedIsPaused(executionState.isPaused);
                             sharedIsPausedRef.current = executionState.isPaused;
+                            
+                            // Track the executing host for cleanup purposes
+                            if (executionState.isRunning && !executingHostRef.current) {
+                                executingHostRef.current = hostUser?.clientID || null;
+                            }
+                            
+                            // Clear executing host when execution stops
+                            if (!executionState.isRunning && executingHostRef.current === hostUser?.clientID) {
+                                executingHostRef.current = null;
+                            }
                         }
                     }
                 }
@@ -136,6 +157,64 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
             };
         }
     }, [isHost, awareness, hostUser?.clientID]);
+
+    // Clean up execution state when executing host leaves
+    useEffect(() => {
+        if (!awareness) return;
+
+        const onExecutionHostLeave = (changes: { added: number[]; updated: number[]; removed: number[] }) => {
+            // Only check for removed users
+            if (changes.removed.length === 0) return;
+
+            // Check if the executing host was among the removed users
+            const wasExecutingHostRemoved = executingHostRef.current && changes.removed.includes(executingHostRef.current);
+            
+            if (wasExecutingHostRemoved && (sharedIsRunning || sharedIsPaused || isRunningState || isPausedState)) {
+                console.log('[FlowExecutor] Host left during execution, cleaning up...');
+                
+                // Reset shared execution state
+                setSharedIsRunning(false);
+                setSharedIsPaused(false);
+                sharedIsPausedRef.current = false;
+                
+                // Reset local execution state
+                setIsRunningState(false);
+                isRunningRef.current = false;
+                setIsPausedState(false);
+                isPausedRef.current = false;
+                
+                // Clean up animations and unlock flow
+                resetAllAnimations(reactFlow);
+                toggleLockFlow(reactFlow, false);
+                
+                // Stop any ongoing SVG animations
+                const svgElements = document.querySelectorAll('svg[id^="edge-animation-"]');
+                svgElements.forEach(svg => {
+                    const svgElement = svg as SVGSVGElement;
+                    svgElement.pauseAnimations();
+                });
+                
+                // Reset current node
+                setCurrentNode(null);
+                currentNodeRef.current = null;
+                
+                // Reset execution tracking refs
+                pauseCounterRef.current = 0;
+                remainingTimeRef.current = 0;
+                lastResumingTimeRef.current = 0;
+                executingHostRef.current = null;
+                
+                // Stop debugger recording if it was active
+                stopRecording();
+            }
+        };
+
+        awareness.on('change', onExecutionHostLeave);
+
+        return () => {
+            awareness.off('change', onExecutionHostLeave);
+        };
+    }, [awareness, sharedIsRunning, sharedIsPaused, isRunningState, isPausedState, reactFlow, stopRecording]);
 
     // Pause/Resume SVG animations for collaborators based on host's state
     useEffect(() => {
