@@ -87,16 +87,22 @@ const ConditionalEditor = () => {
     }
   }, [expression, reactFlowInstance, selectedNode]);
 
-  // Load conditional data when the selected node changes
+  // Load conditional data when the selected node changes or when its data changes (for collaboration)
   useEffect(() => {
     // Reset initial load flag
     isInitialLoadRef.current = true;
     
     if (selectedNode && selectedNode.type === 'Conditional') {
-      // Load conditional data if available
-      if (previousNodeIdRef.current !== selectedNode.id) {
+      // Load conditional data if available or if data has changed (collaboration)
+      const nodeChanged = previousNodeIdRef.current !== selectedNode.id;
+      const hasExpressionData = selectedNode.data.expression;
+      
+      if (nodeChanged) {
         previousNodeIdRef.current = selectedNode.id;
-        
+      }
+      
+      // Always update if node changed OR if we have expression data (to handle collaborative updates)
+      if (nodeChanged || hasExpressionData) {
         // Initialize with existing data if available
         if (selectedNode.data.expression) {
           try {
@@ -116,8 +122,8 @@ const ConditionalEditor = () => {
           } catch (error) {
             console.error('Error creating expression:', error);
           }
-        } else {
-          // For Conditional, initialize with empty expression
+        } else if (nodeChanged) {
+          // For Conditional, initialize with empty expression only when it's a new node
           setExpression(new Expression([], [], '=='));
         }
       }
@@ -127,7 +133,7 @@ const ConditionalEditor = () => {
     }
     
     isInitialLoadRef.current = false;
-  }, [selectedNode, getAllVariables]);
+  }, [selectedNode, selectedNode?.data?.expression, getAllVariables]);
 
   // Expression building functions
   const addExpressionElement = (element: ExpressionElement, side?: 'left' | 'right') => {

@@ -114,16 +114,22 @@ const VariableAssignmentEditor = () => {
     }
   }, [expression, reactFlowInstance, selectedNode]);
 
-  // Load assignment data when the selected node changes
+  // Load assignment data when the selected node changes or when its data changes (for collaboration)
   useEffect(() => {
     // Reset initial load flag
     isInitialLoadRef.current = true;
     
     if (selectedNode && selectedNode.type === 'AssignVariable') {
-      // Load assignment data if available
-      if (previousNodeIdRef.current !== selectedNode.id) {
+      // Load assignment data if available or if data has changed (collaboration)
+      const nodeChanged = previousNodeIdRef.current !== selectedNode.id;
+      const hasExpressionData = selectedNode.data.expression;
+      
+      if (nodeChanged) {
         previousNodeIdRef.current = selectedNode.id;
-        
+      }
+      
+      // Always update if node changed OR if we have expression data (to handle collaborative updates)
+      if (nodeChanged || hasExpressionData) {
         // Initialize with existing data if available
         if (selectedNode.data.expression) {
           const allVariables = getAllVariables();
@@ -145,8 +151,8 @@ const VariableAssignmentEditor = () => {
           } catch (error) {
             console.error('Error creating expression:', error);
           }
-        } else {
-          // Reset form state for a new assignment
+        } else if (nodeChanged) {
+          // Only reset form state when it's a new node (not when collaborative data is cleared)
           setLeftSideVariable('');
           setExpression(null);
         }
@@ -158,7 +164,7 @@ const VariableAssignmentEditor = () => {
     }
     
     isInitialLoadRef.current = false;
-  }, [selectedNode, getAllVariables]);
+  }, [selectedNode, selectedNode?.data?.expression, getAllVariables]);
 
   // Expression building functions
   const addExpressionElement = (element: ExpressionElement) => {

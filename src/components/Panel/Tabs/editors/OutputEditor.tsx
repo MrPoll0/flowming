@@ -80,16 +80,22 @@ const OutputEditor = () => {
     }
   }, [expression, reactFlowInstance, selectedNode]);
 
-  // Load output data when the selected node changes
+  // Load output data when the selected node changes or when its data changes (for collaboration)
   useEffect(() => {
     // Reset initial load flag
     isInitialLoadRef.current = true;
     
     if (selectedNode && selectedNode.type === 'Output') {
-      // Load output data if available
-      if (previousNodeIdRef.current !== selectedNode.id) {
+      // Load output data if available or if data has changed (collaboration)
+      const nodeChanged = previousNodeIdRef.current !== selectedNode.id;
+      const hasExpressionData = selectedNode.data.expression;
+      
+      if (nodeChanged) {
         previousNodeIdRef.current = selectedNode.id;
-        
+      }
+      
+      // Always update if node changed OR if we have expression data (to handle collaborative updates)
+      if (nodeChanged || hasExpressionData) {
         // Initialize with existing data if available
         if (selectedNode.data.expression) {
           try {
@@ -100,8 +106,8 @@ const OutputEditor = () => {
           } catch (error) {
             console.error('Error creating expression:', error);
           }
-        } else {
-          // For Output, initialize with empty expression
+        } else if (nodeChanged) {
+          // For Output, initialize with empty expression only when it's a new node
           setExpression(new Expression(undefined, []));
         }
       }
@@ -111,7 +117,7 @@ const OutputEditor = () => {
     }
     
     isInitialLoadRef.current = false;
-  }, [selectedNode]);
+  }, [selectedNode, selectedNode?.data?.expression]);
 
   // Expression building functions
   const addExpressionElement = (element: ExpressionElement) => {

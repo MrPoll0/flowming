@@ -43,20 +43,27 @@ const InputEditor = () => {
     }
   }, [leftSideVariable, reactFlowInstance, selectedNode, getAllVariables]);
 
-  // Load input data when the selected node changes
+  // Load input data when the selected node changes or when its data changes (for collaboration)
   useEffect(() => {
     // Reset initial load flag
     isInitialLoadRef.current = true;
     
     if (selectedNode && selectedNode.type === 'Input') {
-      // Load input variable data if available
-      if (previousNodeIdRef.current !== selectedNode.id) {
+      // Load input variable data if available or if data has changed (collaboration)
+      const nodeChanged = previousNodeIdRef.current !== selectedNode.id;
+      const hasVariableData = selectedNode.data.variable;
+      
+      if (nodeChanged) {
         previousNodeIdRef.current = selectedNode.id;
-        
+      }
+      
+      // Always update if node changed OR if we have variable data (to handle collaborative updates)
+      if (nodeChanged || hasVariableData) {
         // Initialize with existing variable if available
         if (selectedNode.data.variable && selectedNode.data.variable.id) {
           setLeftSideVariable(selectedNode.data.variable.id);
-        } else {
+        } else if (nodeChanged) {
+          // Only reset when it's a new node (not when collaborative data is cleared)
           setLeftSideVariable('');
         }
       }
@@ -66,7 +73,7 @@ const InputEditor = () => {
     }
     
     isInitialLoadRef.current = false;
-  }, [selectedNode]);
+  }, [selectedNode, selectedNode?.data?.variable]);
 
   // Don't render if not an Input node
   if (!selectedNode || selectedNode.type !== 'Input') return null;

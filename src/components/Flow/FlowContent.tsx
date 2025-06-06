@@ -43,7 +43,7 @@ const FlowContent: React.FC = () => {
   const [nodes, setNodes, onNodesChangeOriginal] = useNodesState<FlowNode>(initialNodes);
   const [edges, setEdges, onEdgesChangeOriginal] = useEdgesState<Edge>(initialEdges);
   const { ydoc, ySharedNodes, ySharedEdges, ySharedVariables, awareness, users } = useCollaboration();
-  const { setSelectedNode } = useContext(SelectedNodeContext);
+  const { selectedNode, setSelectedNode } = useContext(SelectedNodeContext);
   const { variables, setVariables, deleteNodeVariables } = useVariables();
   const { 
     hoveredElement, 
@@ -72,6 +72,12 @@ const FlowContent: React.FC = () => {
 
   // State to track flow execution
   const { isRunning } = useFlowExecutorContext();
+
+  // Ref to always have the latest selectedNode in async callbacks
+  const selectedNodeRef = useRef<FlowNode | null>(selectedNode);
+  useEffect(() => {
+    selectedNodeRef.current = selectedNode;
+  }, [selectedNode]);
 
   // TODO: possible problems when modifying node data from multiple places at the same time?
   
@@ -387,6 +393,7 @@ const FlowContent: React.FC = () => {
     if (!ySharedNodes || !ydoc) return;
 
     const handleRemoteNodeChanges = () => {
+      // Build array of FlowNode from Yjs shared nodes
       const yNodesArray = Array.from(ySharedNodes.values()).map(n => {
         const nodeCopy: Partial<FlowNode> = { ...n, data: { ...n.data } };
 
@@ -400,7 +407,14 @@ const FlowContent: React.FC = () => {
         delete nodeCopy.data!.isSelected; delete nodeCopy.data!.isHovered; delete nodeCopy.data!.isCodeHighlighted;
         return nodeCopy as FlowNode;
       });
+      // Update local nodes state
       setNodes(yNodesArray);
+      // If a node is currently selected, update it to reflect remote changes
+      const current = selectedNodeRef.current;
+      if (current) {
+        const remoteNode = yNodesArray.find(fn => fn.id === current.id);
+        setSelectedNode(remoteNode || null);
+      }
     };
 
     const observer = (_events: any[], transaction: Y.Transaction) => {
@@ -426,7 +440,7 @@ const FlowContent: React.FC = () => {
     }
 
     return () => ySharedNodes.unobserveDeep(observer);
-  }, [ySharedNodes, ydoc, setNodes]);
+  }, [ySharedNodes, ydoc, setNodes, setSelectedNode]);
 
   // Yjs -> Local state (Edges)
   useEffect(() => {
