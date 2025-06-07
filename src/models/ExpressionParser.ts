@@ -19,7 +19,7 @@ export interface IdentifierNode extends BaseASTNode {
 
 export interface UnaryOpNode extends BaseASTNode {
   type: 'UnaryOp';
-  operator: '!' | '-' ;
+  operator: '!' | '-' | '+';
   operand: ExpressionASTNode;
 }
 
@@ -144,6 +144,11 @@ export function buildAST(elements: ExpressionElement[]): ExpressionASTNode {
       next();
       const operand = parseUnary();
       return { type: 'UnaryOp', operator: '-', operand };
+    }
+    if (tok && tok.value === '+') {
+      next();
+      const operand = parseUnary();
+      return { type: 'UnaryOp', operator: '+', operand };
     }
     return parsePrimary();
   }

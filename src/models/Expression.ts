@@ -98,9 +98,7 @@ export class Expression implements IExpression {
     currentValuedVariables: ValuedVariable<VariableType>[]
   ): ValueTypeMap[VariableType] {
     try {
-      console.log(exprElements.length);
       if (exprElements.length === 0) {
-        console.log('Expression is empty and cannot be evaluated.');
         throw new Error('Expression is empty and cannot be evaluated.');
       }
 
@@ -117,18 +115,12 @@ export class Expression implements IExpression {
           return result.value;
         }
 
-        // Allow safe coercions, e.g. integer to float
+        // Allow safe coercions: integer to float, float to integer (anything else requires explicit conversion)
         if (exprTyping === 'float' && result.type === 'integer') {
           return Number(result.value);
         }
-        if (exprTyping === 'string') {
-          return String(result.value);
-        }
         if (exprTyping === 'integer' && result.type === 'float') {
           return Math.floor(Number(result.value));
-        }
-        if (exprTyping === 'boolean') {
-          return Boolean(result.value);
         }
         
         throw new Error(`Type mismatch: Cannot assign a value of type '${result.type}' to a variable of type '${exprTyping}'.`);
@@ -159,10 +151,29 @@ export class Expression implements IExpression {
       case 'FunctionCall':
         const arg = this.#evaluateAST(node.argument, currentValuedVariables);
         switch (node.functionName) {
-            case 'integer': return { value: Math.floor(Number(arg.value)), type: 'integer' };
-            case 'float': return { value: Number(arg.value), type: 'float' };
-            case 'string': return { value: String(arg.value), type: 'string' };
-            case 'boolean': return { value: Boolean(arg.value), type: 'boolean' };
+            case 'integer':
+                if (arg.type === 'integer') return { value: arg.value, type: 'integer' };
+                const numInt = parseFloat(arg.value);
+                if (isNaN(numInt)) throw new Error(`Cannot convert '${arg.value}' to integer.`);
+                return { value: Math.floor(numInt), type: 'integer' };
+            case 'float':
+                if (arg.type === 'float') return { value: arg.value, type: 'float' };
+                const numFloat = parseFloat(arg.value);
+                if (isNaN(numFloat)) throw new Error(`Cannot convert '${arg.value}' to float.`);
+                return { value: numFloat, type: 'float' };
+            case 'string':
+                return { value: String(arg.value), type: 'string' };
+            case 'boolean':
+                if (arg.type === 'boolean') return { value: arg.value, type: 'boolean' };
+                if (arg.type === 'string') {
+                  // Non-empty truthy/falsy
+                  return { value: arg.value !== '', type: 'boolean' };
+                }
+                if (arg.type === 'integer' || arg.type === 'float') {
+                  // 0 is false, everything else is true
+                  return { value: arg.value !== 0, type: 'boolean' };
+                }
+                throw new Error(`Cannot convert '${arg.value}' of type ${arg.type} to boolean.`);
             default: throw new Error(`Unknown function: ${node.functionName}`);
         }
 
@@ -188,8 +199,8 @@ export class Expression implements IExpression {
 
         switch (node.operator) {
           case '+':
-            if (left.type === 'string' || right.type === 'string') {
-              return { value: String(left.value) + String(right.value), type: 'string' };
+            if (left.type === 'string' && right.type === 'string') {
+              return { value: left.value + right.value, type: 'string' };
             }
             if ((left.type === 'integer' || left.type === 'float') && (right.type === 'integer' || right.type === 'float')) {
               const resultType = (left.type === 'float' || right.type === 'float') ? 'float' : 'integer';
@@ -204,6 +215,7 @@ export class Expression implements IExpression {
             if ((left.type === 'integer' || left.type === 'float') && (right.type === 'integer' || right.type === 'float')) {
               const resultType = (left.type === 'float' || right.type === 'float' || node.operator === '/') ? 'float' : 'integer';
               if (node.operator === '/' && right.value === 0) throw new Error("Division by zero.");
+              if (node.operator === '%' && right.value === 0) throw new Error("Modulo by zero.");
               let value;
               if (node.operator === '-') value = left.value - right.value;
               else if (node.operator === '*') value = left.value * right.value;
@@ -227,6 +239,20 @@ export class Expression implements IExpression {
           case '<':
           case '>=':
           case '<=':
+            if (left.type === 'boolean' && right.type === 'boolean' && node.operator !== '==' && node.operator !== '!=') {
+                throw new Error(`Cannot apply ordering operator "${node.operator}" to booleans.`);
+            }
+            if (left.type === 'string' && right.type === 'string') {
+                let strRes;
+                if (node.operator === '==') strRes = left.value == right.value;
+                // Lexicographic comparison
+                else if (node.operator === '!=') strRes = left.value != right.value;
+                else if (node.operator === '>') strRes = left.value > right.value;
+                else if (node.operator === '<') strRes = left.value < right.value;
+                else if (node.operator === '>=') strRes = left.value >= right.value;
+                else strRes = left.value <= right.value;
+                return { value: strRes, type: 'boolean' };
+            }
             if (left.type !== right.type) {
               // Allow comparison between integer and float
               if (!((left.type === 'integer' && right.type === 'float') || (left.type === 'float' && right.type === 'integer'))) {
@@ -283,6 +309,10 @@ export class Expression implements IExpression {
         
         const leftResult = this.#evaluateAST(leftAst, currentValuedVariables);
         const rightResult = this.#evaluateAST(rightAst, currentValuedVariables);
+
+        if (leftResult.type === 'boolean' && rightResult.type === 'boolean' && this.equality !== '==' && this.equality !== '!=') {
+            throw new Error(`Cannot apply ordering operator "${this.equality}" to booleans.`);
+        }
 
         if (leftResult.type !== rightResult.type) {
             // Allow comparison between integer and float
