@@ -2,7 +2,7 @@ import React, { useCallback, useState, useContext } from 'react';
 import { Edge, Node, useReactFlow } from '@xyflow/react';
 import { useVariables } from '../context/VariablesContext';
 import { useFilename } from '../context/FilenameContext';
-import { useFlowExecutorActions } from '../context/FlowExecutorContext';
+import { useFlowExecutorActions, useFlowExecutorState } from '../context/FlowExecutorContext';
 import { SelectedNodeContext } from '../context/SelectedNodeContext';
 import { Variable } from '../models';
 import { Button } from './ui/button';
@@ -46,6 +46,7 @@ const ImportExport: React.FC = () => {
   const { variables, updateNodeVariables, deleteNodeVariables } = useVariables();
   const { filename, setFilename } = useFilename();
   const { stop } = useFlowExecutorActions();
+  const { isRunning } = useFlowExecutorState();
   const { setSelectedNode } = useContext(SelectedNodeContext);
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -197,6 +198,7 @@ const ImportExport: React.FC = () => {
     <div className="flex items-center gap-2">
       <Button
         onClick={onNew}
+        disabled={isRunning}
         variant="outline"
         size="sm"
         className="flex items-center gap-2"
@@ -207,7 +209,7 @@ const ImportExport: React.FC = () => {
 
       <Button
         onClick={onExport}
-        disabled={isExporting}
+        disabled={isExporting || isRunning}
         variant="outline"
         size="sm"
         className="flex items-center gap-2"
@@ -218,7 +220,7 @@ const ImportExport: React.FC = () => {
       
       <Button
         onClick={onImport}
-        disabled={isImporting}
+        disabled={isImporting || isRunning}
         variant="outline"
         size="sm"
         className="flex items-center gap-2"
