@@ -18,7 +18,7 @@ import {
 
 const VariableDeclarationEditor = () => {
   const { selectedNode } = useContext(SelectedNodeContext);
-  const { getNodeVariables, updateNodeVariables, getAllVariables } = useVariables();
+  const { updateNodeVariables, getAllVariables } = useVariables();
   const [variables, setVariables] = useState<Variable[]>([]);
   const isInitialLoadRef = useRef(true);
   const updateTimeoutRef = useRef<number | null>(null);
