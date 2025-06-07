@@ -1,7 +1,7 @@
 import React, { memo, useState } from 'react';
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
-import { topPanelTabs, bottomPanelTabs, PanelTab } from './PanelList';
+import { usePanelTabs } from './PanelList';
 
 // Define the type for the mapping
 type PanelType = 'top' | 'bottom';
@@ -10,14 +10,11 @@ interface PanelProps {
   type: PanelType;
 }
 
-const mapping: Record<PanelType, PanelTab[]> = {
-  top: topPanelTabs,
-  bottom: bottomPanelTabs
-}
-
 const Panel: React.FC<PanelProps> = ({ type }) => {
-  const panelTabs = mapping[type];
-  const [activeTab, setActiveTab] = useState(panelTabs[0]?.label || "");
+  const { topPanelTabs, bottomPanelTabs } = usePanelTabs();
+  const panelTabs = type === 'top' ? topPanelTabs : bottomPanelTabs;
+  
+  const [activeTab, setActiveTab] = useState(panelTabs[0]?.id || "");
   
   if (panelTabs.length === 0) {
     return (
@@ -36,19 +33,19 @@ const Panel: React.FC<PanelProps> = ({ type }) => {
             gridTemplateColumns: `repeat(${panelTabs.length}, minmax(0, 1fr))` 
           }}
         >
-          {panelTabs.map((tab, index) => (
-            <TabsTrigger key={index} value={tab.label}>
+          {panelTabs.map((tab) => (
+            <TabsTrigger key={tab.id} value={tab.id}>
               {tab.label}
             </TabsTrigger>
           ))}
         </TabsList>
         
         <div className="flex-1 overflow-hidden relative">
-          {panelTabs.map((tab, index) => (
+          {panelTabs.map((tab) => (
             <div
-              key={index}
+              key={tab.id}
               className={`absolute inset-0 overflow-auto p-4 ${
-                activeTab === tab.label ? 'block' : 'hidden' // Keep the tab content rendered even if not active to prevent unmounting and losing state when switching tabs
+                activeTab === tab.id ? 'block' : 'hidden' // Keep the tab content rendered even if not active to prevent unmounting and losing state when switching tabs
               }`}
             >
               {tab.content}
