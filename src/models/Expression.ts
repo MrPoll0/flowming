@@ -136,14 +136,7 @@ export class Expression implements IExpression {
 
       return result.value;
     } catch (e) {
-        console.warn(`Expression evaluation error: ${(e as Error).message}`);
-        switch (exprTyping) {
-            case 'string': return '';
-            case 'integer': return 0;
-            case 'float': return 0.0;
-            case 'boolean': return false;
-            default: return null as any;
-        }
+        throw e;
     }
   }
 
@@ -160,7 +153,7 @@ export class Expression implements IExpression {
 
       case 'Identifier':
         const v = currentValuedVariables.find(vv => vv.id === node.variable.id);
-        if (!v) throw new Error(`Variable "${node.name}" is not defined.`);
+        if (!v) throw new Error(`Variable "${node.name}" does not have a value assigned.`);
         return { value: v.value, type: v.type };
 
       case 'FunctionCall':
@@ -309,8 +302,7 @@ export class Expression implements IExpression {
             throw new Error(`Unsupported equality operator: ${this.equality}`);
         }
     } catch (e) {
-        console.warn(`Conditional expression evaluation error: ${(e as Error).message}`);
-        return false; // Return false on any error during evaluation.
+        throw e;
     }
   }
 

@@ -13,7 +13,7 @@ import {
 
 export default function ExecutionControl() {
     const { isRunning, isPaused } = useFlowExecutorState();
-    const { start, stop, pause, resume, reset, clearOutputNodes } = useFlowExecutorActions();
+    const { start, stop, pause, resume, reset, clearOutputNodes, clearErrorIndicators } = useFlowExecutorActions();
     const { awareness, users } = useCollaboration();
     const hostUser = useMemo(() => {
         if (!users.length) return null;
@@ -79,7 +79,7 @@ export default function ExecutionControl() {
                         Reset
                     </Button>
                     <Button 
-                        onClick={clearOutputNodes} 
+                        onClick={() => { clearOutputNodes(); clearErrorIndicators(); }} 
                         disabled={!isHost}
                         variant="outline"
                         size="sm"

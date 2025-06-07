@@ -40,6 +40,7 @@ export interface IExecutorActions {
     stepBackward(): void;
     stepForward(): void;
     clearOutputNodes(): void;
+    clearErrorIndicators(): void;
 }
 
 export interface IExecutor extends IExecutorState, IExecutorActions {}
@@ -259,6 +260,20 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
         return isRunningRef.current;
     }, []);
 
+    const clearErrorIndicators = useCallback(() => {
+        reactFlow.setNodes(nodes =>
+            nodes
+                .filter(n => n.type !== 'ErrorNode')
+                .map(n => {
+                    if (n.data.isError) {
+                        const { isError, ...restData } = n.data;
+                        return { ...n, data: restData };
+                    }
+                    return n;
+                })
+        );
+    }, [reactFlow]);
+
     const clearOutputNodes = useCallback(() => {
         reactFlow.setNodes(nodes => nodes.filter(n => n.type !== 'ValueOutput'));
     }, [reactFlow]);
@@ -343,7 +358,26 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
                 }
             } catch (error) {
                 console.error(`Error processing node ${node.id}:`, error);
-                // TODO: handle the error (e.g., stop execution)
+                
+                // Stop execution
+                stopExecution();
+
+                // Highlight node in red
+                reactFlow.updateNodeData(node.id, { isError: true });
+
+                // Add error node
+                const errorNode: Node = {
+                    id: `error-${node.id}-${Date.now()}`,
+                    type: 'ErrorNode',
+                    position: { x: node.position.x + (node.measured?.width ?? node.width ?? 150) + 20, y: node.position.y },
+                    data: {
+                        visualId: node.data.visualId,
+                        errorMessage: (error as Error).message,
+                    },
+                };
+                reactFlow.addNodes(errorNode);
+                
+                return { targetNodeId: null, valuedVariables: [] };
             }
         }
         
@@ -408,6 +442,7 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
 
         // Clear previous output nodes from the diagram before starting a new run.
         clearOutputNodes();
+        clearErrorIndicators();
 
         // First, reset all animations from previous runs
         resetAllAnimations(reactFlow); // TODO: this unconditionally updates all node data and edge data AND STYLING. be careful
@@ -449,7 +484,7 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
             executionContext,
             startNode
         );
-    }, [reactFlow, processNode, stopExecution, startRecording, clearOutputNodes]);
+    }, [reactFlow, processNode, stopExecution, startRecording, clearOutputNodes, clearErrorIndicators]);
 
     const stop = useCallback(() => {
         if (!isRunningRef.current) {
@@ -457,7 +492,9 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
         }
 
         stopExecution();
-    }, [stopExecution]);
+        clearErrorIndicators();
+        clearOutputNodes();
+    }, [stopExecution, clearErrorIndicators, clearOutputNodes]);
 
     const pause = useCallback(() => {
         if (!isRunningRef.current) {
@@ -551,8 +588,9 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
         reset,
         stepBackward,
         stepForward,
-        clearOutputNodes
-    }), [getIsRunning, start, stop, pause, resume, reset, stepBackward, stepForward, clearOutputNodes]);
+        clearOutputNodes,
+        clearErrorIndicators
+    }), [getIsRunning, start, stop, pause, resume, reset, stepBackward, stepForward, clearOutputNodes, clearErrorIndicators]);
     
     return {
         state,

@@ -86,7 +86,7 @@ export class DeclareVariableProcessor implements NodeProcessor {
 }
 
 const DeclareVariable = memo(function DeclareVariableComponent({ data, id: nodeId }: { data: BaseNode; id: string }) {
-  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, width, height, visualId } = data;
+  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, width, height, visualId, isError } = data;
   const { getNodeVariables } = useVariables();
   const nodeVariables = getNodeVariables(nodeId);
   
@@ -96,6 +96,7 @@ const DeclareVariable = memo(function DeclareVariableComponent({ data, id: nodeI
       isSelected,
       isHighlighted,
       isCodeHighlighted,
+      isError,
       minWidth: width ? `${width}px` : '250px',
       minHeight: height ? `${height}px` : '80px'
     })}>

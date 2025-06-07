@@ -53,9 +53,9 @@ export class OutputProcessor implements NodeProcessor {
     return currentValuedVariables;
   }
 }
-
+  
 const Output = memo(function OutputComponent({ data, id: _nodeId }: { data: OutputNode; id: string }) {
-  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, expression, width, height, visualId } = data;
+  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, expression, width, height, visualId, isError } = data;
 
   const expr = expression ? (expression instanceof Expression ? expression : Expression.fromObject(expression)) : null;
 
@@ -65,11 +65,11 @@ const Output = memo(function OutputComponent({ data, id: _nodeId }: { data: Outp
       isSelected,
       isHighlighted,
       isCodeHighlighted,
+      isError,
       minWidth: width ? `${width}px` : '150px',
       minHeight: height ? `${height}px` : '50px',
       additionalStyles: { transform: 'skewX(-20deg)', transformOrigin: '0 0' }
     })}>
-
       {visualId && (
         <div 
           style={{

@@ -31,6 +31,7 @@ import FilenameEditor from '../FilenameEditor';
 import { useCollaboration } from '../../context/CollaborationContext';
 import RemoteCursorsOverlay from './RemoteCursorsOverlay';
 import ValueOutputNode from './Nodes/ValueOutputNode';
+import ErrorNode from './Nodes/ErrorNode';
 import * as Y from 'yjs';
 
 // Define transaction origins
@@ -44,6 +45,7 @@ const SYNC_ORIGIN_INIT_VARIABLES = 'local_init_variables';
 const allNodeTypes = {
   ...nodeTypes,
   ValueOutput: ValueOutputNode,
+  ErrorNode: ErrorNode,
 };
 
 const FlowContent: React.FC = () => {
@@ -91,13 +93,23 @@ const FlowContent: React.FC = () => {
   
   // Assign sequential visual IDs to nodes
   useEffect(() => {
-    setNodes((currentNodes) =>
-      currentNodes.map((node, index) => {
-        const visualId = `B${index + 1}`;
-        if (node.data.visualId === visualId) return node;
+    setNodes((currentNodes) => {
+      let regularNodeCounter = 0;
+      return currentNodes.map((node) => {
+        // Do not assign visual IDs to ValueOutput or Error nodes
+        if (node.type === 'ValueOutput' || node.type === 'ErrorNode') {
+          return node;
+        }
+        regularNodeCounter++;
+        const visualId = `B${regularNodeCounter}`;
+
+        if (node.data.visualId === visualId) {
+          return node;
+        }
+        
         return { ...node, data: { ...node.data, visualId } };
-      })
-    );
+      });
+    });
   }, [nodes.length, setNodes]); // Re-run if the number of nodes changes
 
   // TODO: conditional edges cannot be created after being created, runned, etc
@@ -182,7 +194,7 @@ const FlowContent: React.FC = () => {
   const onNodeContextMenu = (event: React.MouseEvent, node: FlowNode) => {
     event.preventDefault();
     // Don't show context menu when flow is running, unless it's a dismissable output node
-    if (isRunning && node.type !== 'ValueOutput') return;
+    if (isRunning && node.type !== 'ValueOutput' && node.type !== 'ErrorNode') return;
 
     setSelectedNode(node);
     setSelectedElement({ id: node.id, type: 'node' });
@@ -226,7 +238,7 @@ const FlowContent: React.FC = () => {
       const nodeToDelete = nodes.find(node => node.id === element.id);
       
       // Allow dismissing output nodes even while running
-      if (isRunning && nodeToDelete?.type !== 'ValueOutput') { 
+      if (isRunning && nodeToDelete?.type !== 'ValueOutput' && nodeToDelete?.type !== 'ErrorNode') { 
         console.warn('Cannot delete elements while flow is running'); 
         return; 
       }

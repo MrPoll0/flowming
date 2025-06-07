@@ -62,16 +62,17 @@ export class InputProcessor implements NodeProcessor {
     return currentValuedVariables;
   }
 }
-
+  
 const Input = memo(function InputComponent({ data, id: _nodeId }: { data: InputNode; id: string }) {
-  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, variable, width, height, visualId } = data;
-
+  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, variable, width, height, visualId, isError } = data;
+  
   return (
     <div className="input-node" style={getNodeStyles({
       isHovered,
       isSelected,
       isHighlighted,
       isCodeHighlighted,
+      isError,
       minWidth: width ? `${width}px` : '150px',
       minHeight: height ? `${height}px` : '50px',
       additionalStyles: { transform: 'skewX(-20deg)', transformOrigin: '0 0' }

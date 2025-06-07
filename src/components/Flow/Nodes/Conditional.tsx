@@ -52,7 +52,7 @@ export class ConditionalProcessor implements NodeProcessor {
 }
 
 const Conditional = memo(function ConditionalComponent({ data, id: _nodeId }: { data: ConditionalNode; id: string }) {
-  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, width, height, visualId } = data;
+  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, width, height, visualId, isError } = data;
 
   const diamondStyle = {
     width: width,
@@ -66,6 +66,7 @@ const Conditional = memo(function ConditionalComponent({ data, id: _nodeId }: { 
       isSelected,
       isHighlighted,
       isCodeHighlighted,
+      isError
     }),
   } as React.CSSProperties;
   
