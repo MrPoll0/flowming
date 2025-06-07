@@ -130,7 +130,11 @@ const convertDiagramExpressionToAST = (elements: ExpressionElement[], nodeId: st
         if (!isNaN(num)) {
           astStack.push({ type: 'Literal', value: num, raw: token.value, diagramNodeId: nodeId } as Literal);
         } else {
-          astStack.push({ type: 'Literal', value: token.value, raw: JSON.stringify(token.value), diagramNodeId: nodeId } as Literal);
+          let strValue = token.value;
+          if ((strValue.startsWith("'") && strValue.endsWith("'")) || (strValue.startsWith('"') && strValue.endsWith('"'))) {
+            strValue = strValue.slice(1, -1);
+          }
+          astStack.push({ type: 'Literal', value: strValue, raw: JSON.stringify(strValue), diagramNodeId: nodeId } as Literal);
         }
       }
     } else if (token.isVariable() && token.variable) {
