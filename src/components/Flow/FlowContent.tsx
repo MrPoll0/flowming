@@ -30,6 +30,7 @@ import { decisionEdgeLabels } from './Nodes/Conditional';
 import FilenameEditor from '../FilenameEditor';
 import { useCollaboration } from '../../context/CollaborationContext';
 import RemoteCursorsOverlay from './RemoteCursorsOverlay';
+import ValueOutputNode from './Nodes/ValueOutputNode';
 import * as Y from 'yjs';
 
 // Define transaction origins
@@ -39,6 +40,11 @@ const SYNC_ORIGIN_INIT_NODES = 'local_init_nodes';
 const SYNC_ORIGIN_INIT_EDGES = 'local_init_edges';
 const SYNC_ORIGIN_VARIABLES = 'local_variables_sync';
 const SYNC_ORIGIN_INIT_VARIABLES = 'local_init_variables';
+
+const allNodeTypes = {
+  ...nodeTypes,
+  ValueOutput: ValueOutputNode,
+};
 
 const FlowContent: React.FC = () => {
   const [nodes, setNodes, onNodesChangeOriginal] = useNodesState<FlowNode>(initialNodes);
@@ -175,8 +181,9 @@ const FlowContent: React.FC = () => {
   // Handle node/edge right-click (context menu)
   const onNodeContextMenu = (event: React.MouseEvent, node: FlowNode) => {
     event.preventDefault();
-    // Don't show context menu when flow is running (TODO: this is done to avoid a maximum depth setState when right-clicking AssignVariable with 2 variables in right side)
-    if (isRunning) return;
+    // Don't show context menu when flow is running, unless it's a dismissable output node
+    if (isRunning && node.type !== 'ValueOutput') return;
+
     setSelectedNode(node);
     setSelectedElement({ id: node.id, type: 'node' });
     // Use viewport coordinates directly since ContextMenu is fixed positioned
@@ -216,9 +223,15 @@ const FlowContent: React.FC = () => {
   // Handle element deletion
   const onDelete = useCallback(
     (element: { id: string; type: 'node' | 'edge' }) => {
-      if (isRunning) { console.warn('Cannot delete elements while flow is running'); return; } // TODO: handle this
+      const nodeToDelete = nodes.find(node => node.id === element.id);
+      
+      // Allow dismissing output nodes even while running
+      if (isRunning && nodeToDelete?.type !== 'ValueOutput') { 
+        console.warn('Cannot delete elements while flow is running'); 
+        return; 
+      }
+
       if (element.type === 'node') {
-        const nodeToDelete = nodes.find(node => node.id === element.id);
         if (nodeToDelete?.type === 'DeclareVariable') {
           // Delete all variables associated with this node
           deleteNodeVariables(element.id);
@@ -676,7 +689,7 @@ const FlowContent: React.FC = () => {
         onDragLeave={onDragLeave}
         nodes={nodes}
         edges={edges}
-        nodeTypes={nodeTypes}
+        nodeTypes={allNodeTypes}
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChangeHandler}
         onEdgesChange={onEdgesChangeHandler}

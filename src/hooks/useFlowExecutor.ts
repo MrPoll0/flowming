@@ -39,6 +39,7 @@ export interface IExecutorActions {
     reset(): void;
     stepBackward(): void;
     stepForward(): void;
+    clearOutputNodes(): void;
 }
 
 export interface IExecutor extends IExecutorState, IExecutorActions {}
@@ -258,6 +259,10 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
         return isRunningRef.current;
     }, []);
 
+    const clearOutputNodes = useCallback(() => {
+        reactFlow.setNodes(nodes => nodes.filter(n => n.type !== 'ValueOutput'));
+    }, [reactFlow]);
+
     const stopExecution = useCallback(() => {
         setIsRunningState(false);
         isRunningRef.current = false;
@@ -399,6 +404,9 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
             throw new Error("No start node found"); // TODO: handle this
         }
 
+        // Clear previous output nodes from the diagram before starting a new run.
+        clearOutputNodes();
+
         // First, reset all animations from previous runs
         resetAllAnimations(reactFlow); // TODO: this unconditionally updates all node data and edge data AND STYLING. be careful
 
@@ -439,7 +447,7 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
             executionContext,
             startNode
         );
-    }, [reactFlow, processNode, stopExecution, startRecording]);
+    }, [reactFlow, processNode, stopExecution, startRecording, clearOutputNodes]);
 
     const stop = useCallback(() => {
         if (!isRunningRef.current) {
@@ -540,8 +548,9 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
         resume,
         reset,
         stepBackward,
-        stepForward
-    }), [getIsRunning, start, stop, pause, resume, reset, stepBackward, stepForward]);
+        stepForward,
+        clearOutputNodes
+    }), [getIsRunning, start, stop, pause, resume, reset, stepBackward, stepForward, clearOutputNodes]);
     
     return {
         state,

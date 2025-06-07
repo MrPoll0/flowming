@@ -1,9 +1,10 @@
-import React, { useContext, useRef, useEffect, memo } from 'react';
-import { FlowInteractionContext } from '../../context/FlowInteractionContext';
-import { SelectedNodeContext } from '../../context/SelectedNodeContext';
+import { useContext, useRef, useEffect, memo, useMemo } from 'react';
+import { FlowInteractionContext } from "../../context/FlowInteractionContext";
+import { SelectedNodeContext } from "../../context/SelectedNodeContext";
+import { useCollaboration } from '../../context/CollaborationContext';
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Trash2 } from "lucide-react";
+import { Trash2, MessageSquareText } from "lucide-react";
 
 interface ContextMenuProps {
   onDelete: (element: { id: string; type: 'node' | 'edge' }) => void;
@@ -14,6 +15,14 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ onDelete }) => {
   const { setSelectedNode } = useContext(SelectedNodeContext)
   const { x, y, visible, elements } = contextMenuPosition;
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const { awareness, users } = useCollaboration();
+  const hostUser = useMemo(() => {
+      if (!users.length) return null;
+      return users.reduce((prev, curr) => (prev.joinedAt <= curr.joinedAt ? prev : curr));
+  }, [users]);
+  const localClientID = awareness?.clientID;
+  const isHost = hostUser?.clientID === localClientID;
 
   // Hide the context menu if clicked outside
   useEffect(() => {
@@ -45,12 +54,14 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ onDelete }) => {
       hideContextMenu();
     }
   };
+  
+  const isValueOutputNode = elements.length === 1 && elements[0].type === 'node' && document.querySelector(`[data-id="${elements[0].id}"]`)?.closest('.react-flow__node')?.classList.contains('react-flow__node-ValueOutput');
 
   return (
-    <Card 
+    <Card
       ref={menuRef}
       className="fixed z-[1000] p-1 shadow-lg border"
-      style={{ 
+      style={{
         top: y,
         left: x,
       }}
@@ -60,10 +71,11 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ onDelete }) => {
         variant="ghost"
         size="sm"
         onClick={handleDelete}
-        className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10"
+        disabled={isValueOutputNode && !isHost}
+        className={`w-full justify-start ${isValueOutputNode ? 'text-blue-600 hover:text-blue-700 hover:bg-blue-50' : 'text-destructive hover:text-destructive hover:bg-destructive/10'}`}
       >
-        <Trash2 className="h-4 w-4 mr-2" />
-        Delete
+        {isValueOutputNode ? <MessageSquareText className="h-4 w-4 mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+        {isValueOutputNode ? 'Dismiss' : 'Delete'}
       </Button>
     </Card>
   );

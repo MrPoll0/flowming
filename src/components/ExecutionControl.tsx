@@ -7,14 +7,13 @@ import {
   Play, 
   Square, 
   Pause, 
-  SkipBack, 
-  SkipForward, 
-  RotateCcw 
+  RotateCcw,
+  Eraser
 } from "lucide-react";
 
 export default function ExecutionControl() {
     const { isRunning, isPaused } = useFlowExecutorState();
-    const { start, stop, pause, resume, reset, stepBackward, stepForward } = useFlowExecutorActions();
+    const { start, stop, pause, resume, reset, clearOutputNodes } = useFlowExecutorActions();
     const { awareness, users } = useCollaboration();
     const hostUser = useMemo(() => {
         if (!users.length) return null;
@@ -70,26 +69,6 @@ export default function ExecutionControl() {
                         Resume
                     </Button>
                     <Button 
-                        onClick={stepBackward} 
-                        disabled={!isHost || !isRunning || !isPaused}
-                        variant="outline"
-                        size="sm"
-                        className="flex items-center gap-2"
-                    >
-                        <SkipBack className="h-4 w-4" />
-                        Step Back
-                    </Button>
-                    <Button 
-                        onClick={stepForward} 
-                        disabled={!isHost || !isRunning || !isPaused}
-                        variant="outline"
-                        size="sm"
-                        className="flex items-center gap-2"
-                    >
-                        <SkipForward className="h-4 w-4" />
-                        Step Forward
-                    </Button>
-                    <Button 
                         onClick={reset} 
                         disabled={!isHost || !isRunning}
                         variant="secondary"
@@ -98,6 +77,16 @@ export default function ExecutionControl() {
                     >
                         <RotateCcw className="h-4 w-4" />
                         Reset
+                    </Button>
+                    <Button 
+                        onClick={clearOutputNodes} 
+                        disabled={!isHost}
+                        variant="outline"
+                        size="sm"
+                        className="flex items-center gap-2"
+                    >
+                        <Eraser className="h-4 w-4" />
+                        Clear
                     </Button>
                 </div>
             </CardContent>
