@@ -1,6 +1,7 @@
 import { Variable, VariableType, ValueTypeMap } from './Variable';
 import { ExpressionElement } from './ExpressionElement';
 import { ValuedVariable } from './ValuedVariable';
+import { buildAST } from './ExpressionParser';
 
 export const operators = ['+', '-', '*', '/', '!', '%', '&&', '||', '==', '!=', '>', '<', '>=', '<=', '(', ')'];
 export type IOperator = typeof operators[number];
@@ -14,17 +15,51 @@ export interface IExpression {
   equality?: IEquality;
 }
 
+// --- AST Definition ---
+interface BaseASTNode {
+  type: string;
+}
+
+interface LiteralNode extends BaseASTNode {
+  type: 'Literal';
+  value: any;
+  valueType: VariableType | 'unknown';
+}
+
+interface IdentifierNode extends BaseASTNode {
+  type: 'Identifier';
+  name: string;
+  variable: Variable;
+}
+
+interface UnaryOpNode extends BaseASTNode {
+  type: 'UnaryOp';
+  operator: '!' | '-' | '+';
+  operand: ExpressionASTNode;
+}
+
+interface BinaryOpNode extends BaseASTNode {
+  type: 'BinaryOp';
+  operator: IOperator;
+  left: ExpressionASTNode;
+  right: ExpressionASTNode;
+}
+
+interface FunctionCallNode extends BaseASTNode {
+  type: 'FunctionCall';
+  functionName: 'integer' | 'string' | 'float' | 'boolean';
+  argument: ExpressionASTNode;
+}
+
+type ExpressionASTNode = LiteralNode | IdentifierNode | UnaryOpNode | BinaryOpNode | FunctionCallNode;
+
+
 export class Expression implements IExpression {
   leftSide: Variable | ExpressionElement[] | undefined;
   rightSide: ExpressionElement[];
   equality?: IEquality;
 
-  // TODO: add expression type to handle typing well (VariableLHS/RHS, EE[]LHS/RHS, only RHS)
-
   constructor(leftSide: Variable | ExpressionElement[] | undefined, rightSide: ExpressionElement[] = [], equality?: IEquality) {
-    // If expression has equality, then leftSide can be multiple expression element and rightSide too, with an equality in the middle
-    // However, if there is no equality, then leftSide must be a Variable and rightSide must be an array of ExpressionElement, with an equal sign in the middle
-
     if(leftSide != undefined){ 
       if (equality && (!Array.isArray(leftSide) || leftSide.some(e => !(e instanceof ExpressionElement)))) {
         throw new Error('leftSide must be an array of ExpressionElement instances');
@@ -39,7 +74,6 @@ export class Expression implements IExpression {
     if (rightSide.some(e => !(e instanceof ExpressionElement))) {
       throw new Error('rightSide must contain only ExpressionElement instances');
     }
-
     if (equality && !equalities.includes(equality)) {
       throw new Error(`Invalid equality: ${equality}`);
     }
@@ -52,197 +86,174 @@ export class Expression implements IExpression {
   }
 
   /**
-   * Calculates the value of the expression
+   * Evaluates the expression using an AST-based approach with strong type checking.
+   * @param exprElements The elements of the expression to evaluate.
+   * @param exprTyping The expected result type, used for type coercion if necessary.
+   * @param currentValuedVariables The current state of variables in the flow.
+   * @returns The calculated value.
    */
-  calculateValue(exprElements: ExpressionElement[], exprTyping: ValueTypeMap[VariableType] | null, currentValuedVariables: ValuedVariable<VariableType>[]): ValueTypeMap[VariableType] {
-    if (exprElements.length === 0) {
-      // Return default value based on the left side variable type
-      // TODO: refactor this to not have duplicated code (ValuedVariable)
-      // TODO: return error instead?
-
-      // TODO: does this work properly?
-      switch (exprTyping) {
-        case 'string': return '' as ValueTypeMap[VariableType];
-        case 'integer': return 0 as ValueTypeMap[VariableType];
-        case 'float': return 0.0 as ValueTypeMap[VariableType];
-        case 'boolean': return false as ValueTypeMap[VariableType];
-        default: return 0 as ValueTypeMap[VariableType];
+  calculateValue(
+    exprElements: ExpressionElement[],
+    exprTyping: VariableType | null,
+    currentValuedVariables: ValuedVariable<VariableType>[]
+  ): ValueTypeMap[VariableType] {
+    try {
+      console.log(exprElements.length);
+      if (exprElements.length === 0) {
+        console.log('Expression is empty and cannot be evaluated.');
+        throw new Error('Expression is empty and cannot be evaluated.');
       }
-    }
 
-    // Process the expression elements
-    let currentValue: any;
-    let currentOperator = '+';
+      const ast = buildAST(exprElements);
+      const result = this.#evaluateAST(ast, currentValuedVariables);
 
-
-
-
-
-    // TODO: validation (element, operator, element, etc)
-    // test1 = + will lead test1 to be undefined (its not a valid type)
-    // TODO: proper type validation too (string test1 = + 1 leads to test1 = 1)
-    // TODO: also handle correctly parentheses ====> RPN / AST for proper expression parsing
-    // TODO: añadir operador NOT?
-    // TODO: is currentValuedVariables being resetted correctly in new starts? (apparently, why?)
-
-
-
-
-    for (let i = 0; i < exprElements.length; i++) {
-      const element = exprElements[i];
-      
-      // Get the value of the current element
-      let elementValue: any;
-      
-      if (element.isVariable()) {
-        // Get variable value from the current valued variables
-        const variable = currentValuedVariables.find(v => v.id === element.variable?.id);
-        if (!variable) {
-          console.error(`Variable ${element.value} not found in current valued variables`);
-          continue; // Skip this element (TODO: throw error, stop execution)
+      // Final type coercion based on the left-side variable type (if specified)
+      if (exprTyping) {
+        if (result.type === 'unknown') {
+          throw new Error('Cannot assign value from an expression with unknown type.');
         }
-        elementValue = variable.value;
-      } else if (element.isLiteral()) {
-        // Parse literal value based on the target variable type
+        
+        if (exprTyping === result.type) {
+          return result.value;
+        }
+
+        // Allow safe coercions, e.g. integer to float
+        if (exprTyping === 'float' && result.type === 'integer') {
+          return Number(result.value);
+        }
+        if (exprTyping === 'string') {
+          return String(result.value);
+        }
+        if (exprTyping === 'integer' && result.type === 'float') {
+          return Math.floor(Number(result.value));
+        }
+        if (exprTyping === 'boolean') {
+          return Boolean(result.value);
+        }
+        
+        throw new Error(`Type mismatch: Cannot assign a value of type '${result.type}' to a variable of type '${exprTyping}'.`);
+      }
+
+      return result.value;
+    } catch (e) {
+        console.warn(`Expression evaluation error: ${(e as Error).message}`);
         switch (exprTyping) {
-          case 'string':
-            elementValue = element.value;
-            break;
-          case 'integer':
-            elementValue = parseInt(element.value, 10);
-            break;
-          case 'float':
-            elementValue = parseFloat(element.value);
-            break;
-          case 'boolean':
-            elementValue = element.value.toLowerCase() === 'true';
-            break;
-          default:
-            elementValue = element.value;
+            case 'string': return '';
+            case 'integer': return 0;
+            case 'float': return 0.0;
+            case 'boolean': return false;
+            default: return null as any;
         }
-      } else if (element.isFunction()) {
-        // Handle function calls with nested expressions
-        if (element.nestedExpression) {
-          // Recursively evaluate the nested expression
-          const nestedValue = this.calculateValue(element.nestedExpression.rightSide, null, currentValuedVariables);
-          
-          // Apply the type conversion function
-          switch (element.value) {
-            case 'integer':
-              // Convert nested value to integer, stripping quotes from strings (TODO: does this make sense?)
-              if (typeof nestedValue === 'string') {
-                const numStr = nestedValue.replace(/^['\"]|['\"]$/g, '');
-                elementValue = Math.floor(Number(numStr));
-              } else {
-                elementValue = Math.floor(Number(nestedValue));
-              }
-              break;
-            case 'string':
-              // Convert nested value to string
-              elementValue = String(nestedValue);
-              break;
-            case 'float':
-              // Convert nested value to float, stripping quotes from strings
-              if (typeof nestedValue === 'string') {
-                const numStr = nestedValue.replace(/^['\"]|['\"]$/g, '');
-                elementValue = Number(numStr);
-              } else {
-                elementValue = Number(nestedValue);
-              }
-              break;
-            case 'boolean':
-              // Convert nested value to boolean (TODO: handle specific cases?)
-              elementValue = Boolean(nestedValue);
-              break;
-            default:
-              console.warn(`Unknown function type: ${element.value}`);
-              elementValue = nestedValue;
-          }
-        } else {
-          console.warn(`Function ${element.value} has no nested expression`);
-          elementValue = 0; // Default value
+    }
+  }
+
+  /**
+   * Recursively evaluates an AST node with strong type checking.
+   * @param node The AST node to evaluate.
+   * @param currentValuedVariables The current state of variables.
+   * @returns An object containing the calculated value and its type.
+   */
+  #evaluateAST(node: ExpressionASTNode, currentValuedVariables: ValuedVariable<VariableType>[]): { value: any, type: VariableType | 'unknown' } {
+    switch (node.type) {
+      case 'Literal':
+        return { value: node.value, type: node.valueType };
+
+      case 'Identifier':
+        const v = currentValuedVariables.find(vv => vv.id === node.variable.id);
+        if (!v) throw new Error(`Variable "${node.name}" is not defined.`);
+        return { value: v.value, type: v.type };
+
+      case 'FunctionCall':
+        const arg = this.#evaluateAST(node.argument, currentValuedVariables);
+        switch (node.functionName) {
+            case 'integer': return { value: Math.floor(Number(arg.value)), type: 'integer' };
+            case 'float': return { value: Number(arg.value), type: 'float' };
+            case 'string': return { value: String(arg.value), type: 'string' };
+            case 'boolean': return { value: Boolean(arg.value), type: 'boolean' };
+            default: throw new Error(`Unknown function: ${node.functionName}`);
         }
-      } else if (element.isOperator()) {
-        // Store the operator for the next value
-        if (operators.includes(element.value)) {
-          currentOperator = element.value;
+
+      case 'UnaryOp':
+        const operand = this.#evaluateAST(node.operand, currentValuedVariables);
+        if (node.operator === '!') {
+          if (operand.type !== 'boolean') throw new Error(`Logical NOT operator "!" can only be applied to booleans, not ${operand.type}.`);
+          return { value: !operand.value, type: 'boolean' };
         }
-        continue; // Skip to the next element
-      }
+        if (node.operator === '-') {
+          if (operand.type !== 'integer' && operand.type !== 'float') throw new Error(`Unary minus operator "-" can only be applied to numbers, not ${operand.type}.`);
+          return { value: -operand.value, type: operand.type };
+        }
+        if (node.operator === '+') {
+            if (operand.type !== 'integer' && operand.type !== 'float') throw new Error(`Unary plus operator "+" can only be applied to numbers, not ${operand.type}.`);
+            return { value: operand.value, type: operand.type }; // It's a no-op for numbers
+        }
+        throw new Error(`Unknown unary operator: ${node.operator}`);
 
-      // TODO: model for operators to simplify this?
+      case 'BinaryOp':
+        const left = this.#evaluateAST(node.left, currentValuedVariables);
+        const right = this.#evaluateAST(node.right, currentValuedVariables);
 
-      // Apply the operation
-      if (currentValue === undefined) {
-        currentValue = elementValue;
-      } else {
-        // TODO: validation (should e.g. true + false be allowed?)
-        // string - string? etc
-
-        switch (currentOperator) {
+        switch (node.operator) {
           case '+':
-            currentValue = exprTyping === 'string' 
-              ? String(currentValue) + String(elementValue)
-              : currentValue + elementValue;
-            break;
+            if (left.type === 'string' || right.type === 'string') {
+              return { value: String(left.value) + String(right.value), type: 'string' };
+            }
+            if ((left.type === 'integer' || left.type === 'float') && (right.type === 'integer' || right.type === 'float')) {
+              const resultType = (left.type === 'float' || right.type === 'float') ? 'float' : 'integer';
+              return { value: left.value + right.value, type: resultType };
+            }
+            throw new Error(`Cannot apply operator "+" to types ${left.type} and ${right.type}.`);
+          
           case '-':
-            currentValue = currentValue - elementValue;
-            break;
           case '*':
-            currentValue = currentValue * elementValue;
-            break;
           case '/':
-            currentValue = currentValue / elementValue;
-            break;
           case '%':
-            currentValue = currentValue % elementValue;
-            break;
+            if ((left.type === 'integer' || left.type === 'float') && (right.type === 'integer' || right.type === 'float')) {
+              const resultType = (left.type === 'float' || right.type === 'float' || node.operator === '/') ? 'float' : 'integer';
+              if (node.operator === '/' && right.value === 0) throw new Error("Division by zero.");
+              let value;
+              if (node.operator === '-') value = left.value - right.value;
+              else if (node.operator === '*') value = left.value * right.value;
+              else if (node.operator === '/') value = left.value / right.value;
+              else value = left.value % right.value;
+              return { value, type: resultType };
+            }
+            throw new Error(`Cannot apply operator "${node.operator}" to types ${left.type} and ${right.type}.`);
+
           case '&&':
-            currentValue = currentValue && elementValue;
-            break;
           case '||':
-            currentValue = currentValue || elementValue;
-            break;
+            if (left.type !== 'boolean' || right.type !== 'boolean') {
+              throw new Error(`Logical operator "${node.operator}" can only be applied to booleans, not ${left.type} and ${right.type}.`);
+            }
+            const value = node.operator === '&&' ? left.value && right.value : left.value || right.value;
+            return { value, type: 'boolean' };
+          
           case '==':
-            currentValue = currentValue == elementValue;
-            break;
           case '!=':
-            currentValue = currentValue != elementValue;
-            break;
           case '>':
-            currentValue = currentValue > elementValue;
-            break;
           case '<':
-            currentValue = currentValue < elementValue;
-            break;
           case '>=':
-            currentValue = currentValue >= elementValue;
-            break;
           case '<=':
-            currentValue = currentValue <= elementValue;
-            break;
+            if (left.type !== right.type) {
+              // Allow comparison between integer and float
+              if (!((left.type === 'integer' && right.type === 'float') || (left.type === 'float' && right.type === 'integer'))) {
+                throw new Error(`Cannot compare values of different types: ${left.type} and ${right.type}.`);
+              }
+            }
+            let res;
+            if (node.operator === '==') res = left.value == right.value;
+            else if (node.operator === '!=') res = left.value != right.value;
+            else if (node.operator === '>') res = left.value > right.value;
+            else if (node.operator === '<') res = left.value < right.value;
+            else if (node.operator === '>=') res = left.value >= right.value;
+            else res = left.value <= right.value;
+            return { value: res, type: 'boolean' };
+
           default:
-            console.warn(`Unsupported operator: ${currentOperator}`);
+            throw new Error(`Unsupported binary operator: ${node.operator}`);
         }
-      }
     }
-
-    // TODO: this will return NaN or similar in some cases
-    // (e.g. 1 + true)
-
-    // Ensure the calculated value matches the expected type
-    switch (exprTyping) {
-      case 'string':
-        return String(currentValue) as ValueTypeMap[VariableType];
-      case 'integer':
-        return Math.floor(Number(currentValue)) as ValueTypeMap[VariableType];
-      case 'float':
-        return Number(currentValue) as ValueTypeMap[VariableType];
-      case 'boolean':
-        return Boolean(currentValue) as ValueTypeMap[VariableType];
-      default:
-        return currentValue as ValueTypeMap[VariableType];
-    }
+    throw new Error(`Unknown AST node type: ${(node as any).type}`);
   }
 
   /**
@@ -260,28 +271,46 @@ export class Expression implements IExpression {
    * Evaluates the expression and returns a boolean value
    */
   evaluate(currentValuedVariables: ValuedVariable<VariableType>[]): boolean {
-    if (!this.equality) throw new Error('Expression must have an equality operator');
-    if (!Array.isArray(this.leftSide) || !(this.leftSide[0] instanceof ExpressionElement)) throw new Error('leftSide must be an ExpressionElement array or a Variable instance');
+    if (!this.equality) {
+        console.warn('Expression must have an equality operator for evaluation.');
+        return false;
+    };
+    if (!Array.isArray(this.leftSide)) {
+        console.warn('leftSide must be an ExpressionElement array for evaluation.');
+        return false;
+    }
 
-    // TODO: typing? (consensuated? just not used here?)
-    const leftSideValue = this.calculateValue((this.leftSide as ExpressionElement[]), null, currentValuedVariables);
-    const rightSideValue = this.calculateValue(this.rightSide, null, currentValuedVariables);
+    try {
+        if ((this.leftSide as ExpressionElement[]).length === 0 || this.rightSide.length === 0) {
+            throw new Error('Conditional expression sides cannot be empty.');
+        }
 
-    switch (this.equality) {
-      case '==':
-        return leftSideValue == rightSideValue;
-      case '!=':
-        return leftSideValue != rightSideValue;
-      case '>':
-        return leftSideValue > rightSideValue;
-      case '<':
-        return leftSideValue < rightSideValue;
-      case '>=':
-        return leftSideValue >= rightSideValue;
-      case '<=':
-        return leftSideValue <= rightSideValue;
-      default:
-        throw new Error(`Unsupported equality operator: ${this.equality}`);
+        const leftAst = buildAST(this.leftSide as ExpressionElement[]);
+        const rightAst = buildAST(this.rightSide);
+        
+        const leftResult = this.#evaluateAST(leftAst, currentValuedVariables);
+        const rightResult = this.#evaluateAST(rightAst, currentValuedVariables);
+
+        if (leftResult.type !== rightResult.type) {
+            // Allow comparison between integer and float
+            if (!((leftResult.type === 'integer' && rightResult.type === 'float') || (leftResult.type === 'float' && rightResult.type === 'integer'))) {
+                throw new Error(`Cannot compare values of different types: ${leftResult.type} and ${rightResult.type}.`);
+            }
+        }
+
+        switch (this.equality) {
+          case '==': return leftResult.value == rightResult.value;
+          case '!=': return leftResult.value != rightResult.value;
+          case '>': return leftResult.value > rightResult.value;
+          case '<': return leftResult.value < rightResult.value;
+          case '>=': return leftResult.value >= rightResult.value;
+          case '<=': return leftResult.value <= rightResult.value;
+          default:
+            throw new Error(`Unsupported equality operator: ${this.equality}`);
+        }
+    } catch (e) {
+        console.warn(`Conditional expression evaluation error: ${(e as Error).message}`);
+        return false; // Return false on any error during evaluation.
     }
   }
 
@@ -439,4 +468,4 @@ export class Expression implements IExpression {
     const equality = obj.equality;
     return new Expression(leftSide, rightSide, equality);
   }
-} 
+}
