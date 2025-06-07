@@ -3,7 +3,7 @@ import { SelectedNodeContext } from '../../../../context/SelectedNodeContext';
 import { useVariables } from '../../../../context/VariablesContext';
 import { Variable } from '../../../../models';
 import { variableTypes } from '../../../../models';
-import { useFlowExecutorContext } from '../../../../context/FlowExecutorContext';
+import { useFlowExecutorState } from '../../../../context/FlowExecutorContext';
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,13 +18,14 @@ import {
 
 const VariableDeclarationEditor = () => {
   const { selectedNode } = useContext(SelectedNodeContext);
-  const { getNodeVariables, updateNodeVariables } = useVariables();
+  const { getNodeVariables, updateNodeVariables, getAllVariables } = useVariables();
   const [variables, setVariables] = useState<Variable[]>([]);
   const isInitialLoadRef = useRef(true);
   const updateTimeoutRef = useRef<number | null>(null);
   const previousNodeIdRef = useRef<string | null>(null);
 
-  const { isRunning } = useFlowExecutorContext();
+  const { isRunning } = useFlowExecutorState();
+  const allVariables = getAllVariables();
 
   // Cleanup function for the debounce timeout
   const clearUpdateTimeout = () => {
@@ -43,24 +44,29 @@ const VariableDeclarationEditor = () => {
     }, 100);
   }, [updateNodeVariables]);
   
-  // Load variables when the selected node changes
+  // Load variables when the selected node changes or when the global variable list changes
   useEffect(() => {
-    // Reset initial load flag
     isInitialLoadRef.current = true;
     
-    // Only load if we have a DeclareVariable node selected
     if (selectedNode && selectedNode.type === 'DeclareVariable') {
-      // Check if node changed
-      if (previousNodeIdRef.current !== selectedNode.id) {
+      const nodeChanged = previousNodeIdRef.current !== selectedNode.id;
+      if (nodeChanged) {
         previousNodeIdRef.current = selectedNode.id;
-        const nodeVars = getNodeVariables(selectedNode.id);
-        
+      }
+
+      const nodeVars = allVariables.filter(v => v.nodeId === selectedNode.id);
+
+      // Only update local state if it differs from the context state
+      if (JSON.stringify(nodeVars) !== JSON.stringify(variables.filter(v => v.name.trim() !== ''))) {
         if (nodeVars.length > 0) {
           setVariables(nodeVars);
-        } else {
-          // Initialize with one empty variable if none exist
+        } else if (nodeChanged) {
+          // If a new node is selected and it has no variables, show a placeholder
           const newVar = new Variable(crypto.randomUUID(), 'integer', '', selectedNode.id);
           setVariables([newVar]);
+        } else {
+          // If variables were deleted by another user, clear the list
+          setVariables([]);
         }
       }
     } else {
@@ -70,21 +76,18 @@ const VariableDeclarationEditor = () => {
     
     isInitialLoadRef.current = false;
     
-    // Cleanup on component unmount or when selected node changes
     return () => {
       clearUpdateTimeout();
     };
-  }, [selectedNode, getNodeVariables]);
+  }, [selectedNode, allVariables]);
   
   // Save variables when they change
   useEffect(() => {
-    // Skip the initial load
     if (isInitialLoadRef.current) {
       return;
     }
     
-    // Only update if we have a DeclareVariable node selected and variables to save
-    if (selectedNode && selectedNode.type === 'DeclareVariable' && variables.length > 0) {
+    if (selectedNode && selectedNode.type === 'DeclareVariable') {
       // Filter out variables with empty names before saving
       const validVariables = variables.filter(v => v.name.trim() !== '');
       debouncedUpdateNodeVariables(selectedNode.id, validVariables);

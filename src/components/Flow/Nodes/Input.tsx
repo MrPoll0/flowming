@@ -1,5 +1,5 @@
-import { Handle, Position, ReactFlowInstance, useReactFlow } from '@xyflow/react';
-import { memo, useEffect } from 'react';
+import { Handle, Position, ReactFlowInstance } from '@xyflow/react';
+import { memo } from 'react';
 import { getNodeStyles } from '../../../utils/nodeStyles';
 import { BaseNode, NodeProcessor } from './NodeTypes';
 import { IVariable, VariableType, Variable } from '../../../models/Variable';
@@ -11,10 +11,14 @@ interface InputNode extends BaseNode {
   variable?: IVariable;
 }
 
-class InputProcessor implements NodeProcessor {
-  constructor(private reactFlow: ReactFlowInstance, private nodeId: string) {}
+export class InputProcessor implements NodeProcessor {
+  constructor(
+    private reactFlow: ReactFlowInstance, 
+    private nodeId: string,
+    private showInputDialog: (title: string, variableType: 'string' | 'integer' | 'float' | 'boolean', description?: string, placeholder?: string) => Promise<string | null>
+  ) {}
   
-  process(): ValuedVariable<VariableType>[] {
+  async process(): Promise<ValuedVariable<VariableType>[]> {
     const node = this.reactFlow.getNode(this.nodeId)!;
     const data = node.data as InputNode;
     console.log(`Processing Input node ${this.nodeId} with variable:`, data.variable);
@@ -31,54 +35,44 @@ class InputProcessor implements NodeProcessor {
 
     // TODO: input sanitization for XSS attacks
 
-    // Get basic input from user with prompt (TODO: how to handle user input?)
-    const input = prompt(data.variable?.name);
-    if (input && data.variable) {
-      // Convert IVariable to Variable before passing to fromVariable
-      const variableObj = Variable.fromObject(data.variable);
-      const newValuedVariable = ValuedVariable.fromVariable(variableObj, input);
+    // Get input from user with dialog
+    if (data.variable) {
+      const input = await this.showInputDialog(
+        `Enter value for ${data.variable.name}`,
+        data.variable.type as 'string' | 'integer' | 'float' | 'boolean', // TODO: array
+        `Please enter a ${data.variable.type} value for the variable "${data.variable.name}" (Block ID: ${data.visualId}).`,
+        `Enter ${data.variable.type} value...`
+      );
       
-      // Overwrite the existing variable
-      const existingIndex = currentValuedVariables.findIndex(v => v.id === newValuedVariable.id);
-      if (existingIndex !== -1) {
-        currentValuedVariables[existingIndex] = newValuedVariable;
-      } else {
-        currentValuedVariables.push(newValuedVariable);
+      if (input !== null && data.variable) {
+        // Convert IVariable to Variable before passing to fromVariable
+        const variableObj = Variable.fromObject(data.variable);
+        const newValuedVariable = ValuedVariable.fromVariable(variableObj, input);
+        
+        // Overwrite the existing variable
+        const existingIndex = currentValuedVariables.findIndex(v => v.id === newValuedVariable.id);
+        if (existingIndex !== -1) {
+          currentValuedVariables[existingIndex] = newValuedVariable;
+        } else {
+          currentValuedVariables.push(newValuedVariable);
+        }
       }
     }
 
     return currentValuedVariables;
   }
 }
-
-const Input = memo(function InputComponent({ data, id: nodeId }: { data: InputNode; id: string }) {
-  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, variable, width, height, visualId } = data;
-
-  const reactFlow = useReactFlow();
-
-  // Update processor only on mount/unmount to prevent infinite loops
-  useEffect(() => {
-    const processor = new InputProcessor(reactFlow, nodeId);
-
-    // Set the processor to the node data to make it available for the flow executor to use 
-    reactFlow.updateNodeData(nodeId, {
-      processor: processor
-    });
-
-    // Clean up on unmount
-    return () => {
-      reactFlow.updateNodeData(nodeId, {
-        processor: null
-      });
-    };
-  }, [nodeId, reactFlow]);
-
+  
+const Input = memo(function InputComponent({ data, id: _nodeId }: { data: InputNode; id: string }) {
+  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, variable, width, height, visualId, isError } = data;
+  
   return (
     <div className="input-node" style={getNodeStyles({
       isHovered,
       isSelected,
       isHighlighted,
       isCodeHighlighted,
+      isError,
       minWidth: width ? `${width}px` : '150px',
       minHeight: height ? `${height}px` : '50px',
       additionalStyles: { transform: 'skewX(-20deg)', transformOrigin: '0 0' }

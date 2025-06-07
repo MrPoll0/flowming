@@ -3,12 +3,12 @@ import toolbarBlocksList from './ToolbarBlocksList';
 import ToolbarBlock from './ToolbarBlock';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useFlowExecutorContext } from '../../context/FlowExecutorContext';
+import { useFlowExecutorState } from '../../context/FlowExecutorContext';
 
 // Main Toolbar component
 const Toolbar: React.FC = () => {
   const blocks = toolbarBlocksList;
-  const { isRunning } = useFlowExecutorContext();
+  const { isRunning } = useFlowExecutorState();
 
   return (
     <Card className="h-full">
@@ -32,4 +32,4 @@ const Toolbar: React.FC = () => {
   );
 };
 
-export default Toolbar; 
+export default React.memo(Toolbar); 

@@ -3,8 +3,8 @@ import { memo } from 'react';
 import { getNodeStyles } from '../../../utils/nodeStyles';
 import { BaseNode } from './NodeTypes';
 
-function Start({ data }: { data: BaseNode }) {
-  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, width, height, visualId } = data;
+const Start = memo(function StartComponent({ data }: { data: BaseNode }) {
+  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, isError, width, height, visualId } = data;
   
   return (
     <div className="start-node" style={getNodeStyles({
@@ -13,6 +13,7 @@ function Start({ data }: { data: BaseNode }) {
       isHighlighted,
       isCodeHighlighted,
       borderRadius: '50px',
+      isError,
       minWidth: width ? `${width}px` : '100px',
       minHeight: height ? `${height}px` : '40px',
       additionalStyles: {
@@ -64,7 +65,6 @@ function Start({ data }: { data: BaseNode }) {
       />
     </div>
   );
-}
- 
-// Memoize the node component to prevent unnecessary re-renders
-export default memo(Start);
+});
+
+export default Start;

@@ -2,7 +2,7 @@ import { useContext, useState, useEffect, useRef } from 'react';
 import { SelectedNodeContext } from '../../../../context/SelectedNodeContext';
 import { useVariables } from '../../../../context/VariablesContext';
 import { useReactFlow } from '@xyflow/react';
-import { Expression, ExpressionElement } from '../../../../models';
+import { Expression, ExpressionElement, Variable } from '../../../../models';
 import {
   DndContext, 
   useSensors, 
@@ -14,10 +14,11 @@ import {
 import {
   SortableContext,
   horizontalListSortingStrategy,
-  arrayMove
+  useSortable
 } from '@dnd-kit/sortable';
 import { operators as expressionOperators, equalities, IEquality } from '../../../../models/Expression';
-import { useFlowExecutorContext } from '../../../../context/FlowExecutorContext';
+import { useFlowExecutorState } from '../../../../context/FlowExecutorContext';
+import { CSS } from '@dnd-kit/utilities';
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,15 +49,136 @@ const operators = [
   ...expressionOperators
 ];
 
+// Helper to generate UUID
+const uuid = () => crypto.randomUUID();
+
+// Interface to describe the location of an element for drag & drop logic
+interface ElementLocation {
+  id: string; // Original ID from the event (active.id or over.id)
+  isPaletteItem: boolean;
+  isMainDropArea: boolean; // e.g., 'left-expression-drop-area' or 'right-expression-drop-area'
+  isMainExpressionElement: boolean;
+  isNestedDropArea: boolean;
+  isNestedExpressionElement: boolean;
+  side?: 'left' | 'right'; // Indicates if the main element/area is on the left or right
+  funcId?: string; // ID of the parent function if nested
+  funcIdPath?: string[]; // Full path of parent function IDs for deep nesting
+  elementActualId?: string; // The ID of the element itself (if not a drop area or palette)
+  item?: ExpressionElement; // The actual ExpressionElement if it's an existing one
+  index?: number; // Index in its respective list (main or nested)
+}
+
+// Helper function to create new expression element
+const createNewElement = (activeItem: ExpressionElement, getAllVars: () => Variable[]): ExpressionElement | null => {
+  if (activeItem.type === 'variable') {
+    // For palette items, activeItem.variable might not be a full Variable instance yet,
+    // so we re-fetch from getAllVars using the ID if it was a palette drag (id like 'var-someId')
+    // or use the embedded variable directly if it's an existing ExpressionElement being cloned.
+    const varId = activeItem.variable?.id || (activeItem.id.startsWith('var-') ? activeItem.id.replace('var-', '') : null);
+    if (varId) {
+      const variable = getAllVars().find(v => v.id === varId);
+      if (variable) {
+        return new ExpressionElement(uuid(), 'variable', variable.name, variable);
+      }
+    }
+    // If activeItem.variable exists and is a full instance (e.g. cloning an existing element)
+    if (activeItem.variable instanceof Variable) {
+      return new ExpressionElement(uuid(), 'variable', activeItem.variable.name, activeItem.variable.clone());
+    }
+    return null;
+  } else if (activeItem.type === 'function') {
+    const nestedExpr = activeItem.nestedExpression ? activeItem.nestedExpression.clone() : new Expression(undefined, []);
+    return new ExpressionElement(uuid(), 'function', activeItem.value, nestedExpr);
+  } else {
+    // For literals and operators, value is usually sufficient.
+    // The original ID from activeItem (palette ID) isn't used for the new element.
+    return new ExpressionElement(uuid(), activeItem.type, activeItem.value);
+  }
+};
+
+// Props for function expression element
+interface FunctionExpressionElementProps {
+  element: ExpressionElement;
+  removeExpressionElement: (id: string) => void;
+  disabled: boolean;
+  side: 'left' | 'right';
+}
+
+// Function block component for nesting
+const FunctionExpressionElement: React.FC<FunctionExpressionElementProps> = ({ element, removeExpressionElement, disabled, side }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: element.id, disabled });
+  
+  const nestedDropId = `nested-${side}-${element.id}`;
+  const nestedElements = element.nestedExpression?.rightSide || [];
+  const nestedItems = nestedElements.map(e => e.id);
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      {...attributes}
+      {...listeners}
+      className={`
+        relative inline-flex items-center p-2 m-1 rounded-lg text-sm bg-purple-100 border border-purple-200
+        ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-grab hover:bg-purple-150'}
+        ${isDragging ? 'opacity-30' : 'opacity-100'}
+        transition-all duration-200
+      `}
+    >
+      <span className="font-medium text-purple-700 mr-1">{element.value}</span>
+      <span className="text-purple-600 font-bold">(</span>
+      <div className="flex-1 min-w-[60px] mx-1">
+        <ExpressionDropArea id={nestedDropId} disabled={disabled}>
+          <SortableContext items={nestedItems} strategy={horizontalListSortingStrategy}>
+            {nestedElements.length > 0 ? (
+              nestedElements.map((nestedElem: ExpressionElement, idx: number) => (
+                nestedElem.isFunction() ? (
+                  <FunctionExpressionElement
+                    key={nestedElem.id}
+                    element={nestedElem}
+                    removeExpressionElement={removeExpressionElement}
+                    disabled={disabled}
+                    side={side}
+                  />
+                ) : (
+                  <DraggableExpressionElement
+                    key={nestedElem.id}
+                    element={nestedElem}
+                    index={idx}
+                    removeExpressionElement={removeExpressionElement}
+                    disabled={disabled}
+                  />
+                )
+              ))
+            ) : (
+              <span className="text-purple-400 text-xs italic">drop here</span>
+            )}
+          </SortableContext>
+        </ExpressionDropArea>
+      </div>
+      <span className="text-purple-600 font-bold">)</span>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={(e) => { e.stopPropagation(); removeExpressionElement(element.id); }}
+        disabled={disabled}
+        className="ml-1 h-5 w-5 p-0 text-purple-600 hover:text-red-600 hover:bg-red-50 rounded-full"
+      >
+        ×
+      </Button>
+    </div>
+  );
+};
+
 const ConditionalEditor = () => {
   const { selectedNode } = useContext(SelectedNodeContext);
   const { getAllVariables } = useVariables();
   const isInitialLoadRef = useRef(true);
   const previousNodeIdRef = useRef<string | null>(null);
   const [expression, setExpression] = useState<Expression | null>(null);
-  const [conditionalTab, setConditionalTab] = useState<'variables' | 'literals'>('variables');
+  const [conditionalTab, setConditionalTab] = useState<'variables' | 'literals' | 'functions'>('variables');
   const [_activeId, setActiveId] = useState<string | null>(null);
-  const [activeItem, setActiveItem] = useState<ExpressionElement | null>(null);
+  const [activeDraggableItem, setActiveDraggableItem] = useState<ExpressionElement | null>(null);
   
   const reactFlowInstance = useReactFlow();
   
@@ -68,7 +190,23 @@ const ConditionalEditor = () => {
     })
   );
 
-  const { isRunning } = useFlowExecutorContext();
+  const { isRunning } = useFlowExecutorState();
+
+  const findFunctionElementById = (elements: ExpressionElement[], id: string): ExpressionElement | null => {
+    if (!elements) return null;
+    for (const element of elements) {
+      if (element.id === id && element.isFunction()) {
+        return element;
+      }
+      if (element.isFunction() && element.nestedExpression) {
+        const found = findFunctionElementById(element.nestedExpression.rightSide, id);
+        if (found) {
+          return found;
+        }
+      }
+    }
+    return null;
+  };
 
   // Update the node data when expression changes
   useEffect(() => {
@@ -87,16 +225,22 @@ const ConditionalEditor = () => {
     }
   }, [expression, reactFlowInstance, selectedNode]);
 
-  // Load conditional data when the selected node changes
+  // Load conditional data when the selected node changes or when its data changes (for collaboration)
   useEffect(() => {
     // Reset initial load flag
     isInitialLoadRef.current = true;
     
     if (selectedNode && selectedNode.type === 'Conditional') {
-      // Load conditional data if available
-      if (previousNodeIdRef.current !== selectedNode.id) {
+      // Load conditional data if available or if data has changed (collaboration)
+      const nodeChanged = previousNodeIdRef.current !== selectedNode.id;
+      const hasExpressionData = selectedNode.data.expression;
+      
+      if (nodeChanged) {
         previousNodeIdRef.current = selectedNode.id;
-        
+      }
+      
+      // Always update if node changed OR if we have expression data (to handle collaborative updates)
+      if (nodeChanged || hasExpressionData) {
         // Initialize with existing data if available
         if (selectedNode.data.expression) {
           try {
@@ -116,8 +260,8 @@ const ConditionalEditor = () => {
           } catch (error) {
             console.error('Error creating expression:', error);
           }
-        } else {
-          // For Conditional, initialize with empty expression
+        } else if (nodeChanged) {
+          // For Conditional, initialize with empty expression only when it's a new node
           setExpression(new Expression([], [], '=='));
         }
       }
@@ -127,7 +271,7 @@ const ConditionalEditor = () => {
     }
     
     isInitialLoadRef.current = false;
-  }, [selectedNode, getAllVariables]);
+  }, [selectedNode, selectedNode?.data?.expression, getAllVariables]);
 
   // Expression building functions
   const addExpressionElement = (element: ExpressionElement, side?: 'left' | 'right') => {
@@ -141,7 +285,7 @@ const ConditionalEditor = () => {
           newExpr.leftSide = [...newExpr.leftSide, element];
         } else {
           // Otherwise add to the right side (default)
-          newExpr.addElement(element);
+          newExpr.rightSide.push(element);
         }
         
         return newExpr;
@@ -164,20 +308,6 @@ const ConditionalEditor = () => {
       setExpression(prev => {
         if (!prev) return null;
         const newExpr = prev.clone();
-        
-        // For conditional nodes, check both left and right sides
-        if (Array.isArray(newExpr.leftSide)) {
-          // Check if the element to remove is in the left side
-          const leftIndex = (newExpr.leftSide as ExpressionElement[]).findIndex(e => e.id === id);
-          if (leftIndex > -1) {
-            const newLeftSide = [...(newExpr.leftSide as ExpressionElement[])];
-            newLeftSide.splice(leftIndex, 1);
-            newExpr.leftSide = newLeftSide;
-            return newExpr;
-          }
-        }
-        
-        // Otherwise remove from right side
         newExpr.removeElement(id);
         return newExpr;
       });
@@ -188,171 +318,216 @@ const ConditionalEditor = () => {
   const handleDragStart = (event: any) => {
     const { active } = event;
     setActiveId(active.id);
-    
-    // Find the active item
-    let foundItem: ExpressionElement | null = null;
-    
-    // Check if it's an existing expression element being reordered
-    const isExistingElement = expression?.rightSide.find(item => item.id === active.id) ||
-                             (Array.isArray(expression?.leftSide) && expression.leftSide.find(item => item.id === active.id));
 
-    if (isExistingElement) {
-      foundItem = isExistingElement;
-    } else if (active.id.startsWith('var-')) {
-      const varId = active.id.replace('var-', '');
-      const variable = getAllVariables().find(v => v.id === varId);
-      if (variable) {
-        foundItem = new ExpressionElement(
-          active.id, 
-          'variable', 
-          variable.name,
-          variable
-        );
+    const findActiveElementRecursive = (elements: ExpressionElement[], id: string): ExpressionElement | null => {
+      for (const element of elements) {
+        if (element.id === id) {
+          return element;
+        }
+        if (element.isFunction() && element.nestedExpression) {
+          const found = findActiveElementRecursive(element.nestedExpression.rightSide, id);
+          if (found) {
+            return found;
+          }
+        }
       }
-    } else if (active.id.startsWith('op-')) {
-      const op = active.id.replace('op-', '');
-      foundItem = new ExpressionElement(active.id, 'operator', op);
-    } else if (active.id.startsWith('lit-')) {
-      const parts = active.id.split('-');
-      if (parts.length >= 3) {
-        const value = parts.slice(2).join('-');
-        foundItem = new ExpressionElement(active.id, 'literal', value);
-      }
+      return null;
     }
     
-    setActiveItem(foundItem);
+    let determinedActiveElement: ExpressionElement | null = null;
+    
+    if (expression) {
+      if (Array.isArray(expression.leftSide)) {
+        determinedActiveElement = findActiveElementRecursive(expression.leftSide, active.id);
+      }
+      if (!determinedActiveElement) {
+        determinedActiveElement = findActiveElementRecursive(expression.rightSide, active.id);
+      }
+    }
+
+    if (!determinedActiveElement) {
+      // Element is from palette
+      if (active.id.startsWith('var-')) {
+        const varId = active.id.replace('var-', '');
+        const variable = getAllVariables().find(v => v.id === varId);
+        if (variable) {
+          determinedActiveElement = new ExpressionElement(active.id, 'variable', variable.name, variable);
+        }
+      } else if (active.id.startsWith('op-')) {
+        const op = active.id.replace('op-', '');
+        determinedActiveElement = new ExpressionElement(active.id, 'operator', op);
+      } else if (active.id.startsWith('lit-')) {
+        const parts = active.id.split('-');
+        if (parts.length >= 3) {
+          const value = parts.slice(2).join('-');
+          determinedActiveElement = new ExpressionElement(active.id, 'literal', value);
+        }
+      } else if (active.id.startsWith('func-')) {
+        const funcName = active.id.replace('func-', '');
+        determinedActiveElement = new ExpressionElement(active.id, 'function', funcName, new Expression(undefined, []));
+      }
+    }
+    setActiveDraggableItem(determinedActiveElement);
+  };
+
+  const findElementLocationRecursive = (
+    id: string, 
+    elements: ExpressionElement[], 
+    side: 'left' | 'right', 
+    funcIdPath: string[]
+  ): ElementLocation | null => {
+    for (let index = 0; index < elements.length; index++) {
+      const item = elements[index];
+      if (item.id === id) {
+        if (funcIdPath.length > 0) {
+          return {
+            id, isPaletteItem: false, isMainDropArea: false, isMainExpressionElement: false, isNestedDropArea: false, isNestedExpressionElement: true,
+            side, funcId: funcIdPath[funcIdPath.length - 1], funcIdPath, elementActualId: id, item, index
+          };
+        } else {
+          return {
+            id, isPaletteItem: false, isMainDropArea: false, isMainExpressionElement: true, isNestedDropArea: false, isNestedExpressionElement: false,
+            side, elementActualId: id, item, index, funcIdPath
+          };
+        }
+      }
+      if (item.isFunction() && item.nestedExpression) {
+        const found = findElementLocationRecursive(id, item.nestedExpression.rightSide, side, [...funcIdPath, item.id]);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  const getElementLocationInfo = (id: string, expr: Expression | null): ElementLocation | null => {
+      if (!expr) return null;
+  
+      if (id.startsWith('var-') || id.startsWith('op-') || id.startsWith('lit-') || id.startsWith('func-')) {
+        return { id, isPaletteItem: true, isMainDropArea: false, isMainExpressionElement: false, isNestedDropArea: false, isNestedExpressionElement: false };
+      }
+      if (id === 'left-expression-drop-area') {
+        return { id, isPaletteItem: false, isMainDropArea: true, side: 'left', isMainExpressionElement: false, isNestedDropArea: false, isNestedExpressionElement: false };
+      }
+      if (id === 'right-expression-drop-area') {
+        return { id, isPaletteItem: false, isMainDropArea: true, side: 'right', isMainExpressionElement: false, isNestedDropArea: false, isNestedExpressionElement: false };
+      }
+      if (id.startsWith('nested-')) {
+        const parts = id.replace('nested-', '').split('-');
+        const side = parts[0] as 'left' | 'right';
+        const funcId = parts.slice(1).join('-');
+        const allElements = [...(expr.leftSide as ExpressionElement[]), ...expr.rightSide];
+        const funcElemPath = findElementLocationRecursive(funcId, allElements, side, []);
+        return { 
+            id, isPaletteItem: false, isMainDropArea: false, isMainExpressionElement: false, isNestedDropArea: true, isNestedExpressionElement: false, 
+            side, funcId, funcIdPath: funcElemPath ? [...(funcElemPath.funcIdPath || []), funcId] : [funcId]
+        };
+      }
+  
+      if (Array.isArray(expr.leftSide)) {
+        const foundOnLeft = findElementLocationRecursive(id, expr.leftSide, 'left', []);
+        if (foundOnLeft) return foundOnLeft;
+      }
+      
+      const foundOnRight = findElementLocationRecursive(id, expr.rightSide, 'right', []);
+      if (foundOnRight) return foundOnRight;
+      
+      return null;
   };
 
   // Handle drag end
   const handleDragEnd = (event: any) => {
     const { active, over } = event;
-    setActiveId(null);
-    setActiveItem(null);
 
-    // Exit if dropped outside a valid droppable area
-    if (!over) {
+    if (!over || !active || !activeDraggableItem || !expression) {
+      setActiveId(null);
+      setActiveDraggableItem(null);
       return;
     }
+    
+    const activeLocation = getElementLocationInfo(active.id, expression);
+    const overLocation = getElementLocationInfo(over.id, expression);
 
-    const activeId = active.id;
-    const overId = over.id;
-
-    if (selectedNode?.type === 'Conditional') {
-      // Initialize expression if it doesn't exist
-      if (!expression) {
-        setExpression(new Expression([], [], '=='));
+    if (!activeLocation || !overLocation) {
+        setActiveId(null);
+        setActiveDraggableItem(null);
         return;
-      }
-
-      // Create helper function to create a new element
-      const createNewExpressionElement = () => {
-        if (!activeItem) return null;
-        
-        let newElement: ExpressionElement;
-        
-        if (activeItem.type === 'variable') {
-          const element = activeItem as any;
-          const varId = element.variable?.id;
-          
-          if (varId) {
-            const variable = getAllVariables().find(v => v.id === varId);
-            if (variable) {
-              newElement = new ExpressionElement(
-                crypto.randomUUID(),
-                'variable',
-                variable.name,
-                variable
-              );
-            } else {
-              console.error(`Variable ${varId} not found`);
-              return null;
-            }
-          } else {
-            console.error(`Variable ID not found`);
-            return null;
-          }
-        } else {
-          newElement = new ExpressionElement(
-            crypto.randomUUID(),
-            activeItem.type,
-            activeItem.value
-          );
-        }
-        
-        return newElement;
-      };
-      
-      // Handle dropping into left expression drop area
-      if (overId === 'left-expression-drop-area') {
-        const newElement = createNewExpressionElement();
-        
-        if (newElement) {
-          setExpression(prev => {
-            if (!prev) return null;
-            const newExpr = prev.clone();
-            if (Array.isArray(newExpr.leftSide)) {
-              newExpr.leftSide = [...newExpr.leftSide, newElement];
-            } else {
-              newExpr.leftSide = [newElement];
-            }
-            return newExpr;
-          });
-        }
-      }
-      // Handle dropping into right expression drop area
-      else if (overId === 'right-expression-drop-area') {
-        const newElement = createNewExpressionElement();
-        
-        if (newElement) {
-          setExpression(prev => {
-            if (!prev) return null;
-            const newExpr = prev.clone();
-            newExpr.rightSide = [...newExpr.rightSide, newElement];
-            return newExpr;
-          });
-        }
-      }
-      // Handle reordering or insertion in left/right expression areas
-      else {
-        // Check if the active element is in the left side
-        const leftSide = Array.isArray(expression.leftSide) ? expression.leftSide : [];
-        const activeLeftElementIndex = leftSide.findIndex(e => e.id === activeId);
-        const overLeftElementIndex = leftSide.findIndex(e => e.id === overId);
-        
-        // Check if the active element is in the right side
-        const activeRightElementIndex = expression.rightSide.findIndex(e => e.id === activeId);
-        const overRightElementIndex = expression.rightSide.findIndex(e => e.id === overId);
-        
-        // Reordering in left side
-        if (activeLeftElementIndex > -1 && overLeftElementIndex > -1) {
-          setExpression(prev => {
-            if (!prev) return null;
-            const newExpr = prev.clone();
-            if (Array.isArray(newExpr.leftSide)) {
-              newExpr.leftSide = arrayMove(
-                newExpr.leftSide as ExpressionElement[], 
-                activeLeftElementIndex, 
-                overLeftElementIndex
-              );
-            }
-            return newExpr;
-          });
-        }
-        // Reordering in right side
-        else if (activeRightElementIndex > -1 && overRightElementIndex > -1) {
-          setExpression(prev => {
-            if (!prev) return null;
-            const newExpr = prev.clone();
-            newExpr.rightSide = arrayMove(
-              newExpr.rightSide, 
-              activeRightElementIndex, 
-              overRightElementIndex
-            );
-            return newExpr;
-          });
-        }
-      }
     }
+
+    setExpression(prevExpr => {
+        if (!prevExpr) return null;
+        const newExpr = prevExpr.clone();
+        
+        const itemToMove = activeLocation.isPaletteItem
+          ? createNewElement(activeDraggableItem, getAllVariables)
+          : activeLocation.item?.clone();
+
+        if (!itemToMove) return newExpr;
+        
+        const getList = (side: 'left' | 'right', path: string[] = []): ExpressionElement[] | null => {
+            let currentList: ExpressionElement[] | undefined | Variable = side === 'left' ? newExpr.leftSide : newExpr.rightSide;
+            if (!Array.isArray(currentList)) return null;
+
+            let currentFunc: ExpressionElement | undefined;
+            for (const funcId of path) {
+                currentFunc = currentList.find(e => e.id === funcId);
+                if (!currentFunc || !currentFunc.isFunction() || !currentFunc.nestedExpression) return null;
+                currentList = currentFunc.nestedExpression.rightSide;
+            }
+            return currentList;
+        };
+
+        // --- Reorder within the same list ---
+        if (active.id === over.id) {
+          // No change
+        } else if (
+            !activeLocation.isPaletteItem &&
+            activeLocation.side === overLocation.side &&
+            JSON.stringify(activeLocation.funcIdPath) === JSON.stringify(overLocation.funcIdPath) &&
+            overLocation.isNestedExpressionElement
+        ) {
+            const list = getList(activeLocation.side!, activeLocation.funcIdPath);
+            if (list && activeLocation.index !== undefined && overLocation.index !== undefined) {
+                const [movedItem] = list.splice(activeLocation.index, 1);
+                list.splice(overLocation.index, 0, movedItem);
+            }
+        } else {
+            // --- Move between different lists ---
+            // 1. Remove from original location
+            if (!activeLocation.isPaletteItem) {
+                const sourceList = getList(activeLocation.side!, activeLocation.funcIdPath);
+                if (sourceList && activeLocation.index !== undefined) {
+                    sourceList.splice(activeLocation.index, 1);
+                }
+            }
+
+            // 2. Add to new location
+            const targetSide = overLocation.side!;
+            let targetPath = overLocation.funcIdPath || [];
+            let targetIndex = overLocation.index;
+            
+            if (overLocation.isNestedDropArea) { // Dropped on area, not element
+                targetPath = overLocation.funcIdPath!;
+                targetIndex = undefined; // Append to end
+            } else if (overLocation.isMainDropArea) {
+                targetPath = [];
+                targetIndex = undefined; // Append to end
+            }
+            
+            const targetList = getList(targetSide, targetPath);
+            if (targetList) {
+                if (targetIndex !== undefined) {
+                    targetList.splice(targetIndex, 0, itemToMove);
+                } else {
+                    targetList.push(itemToMove);
+                }
+            }
+        }
+        
+        return newExpr;
+    });
+
+    setActiveId(null);
+    setActiveDraggableItem(null);
   };
 
   // Don't render if not a Conditional node
@@ -385,15 +560,28 @@ const ConditionalEditor = () => {
                       strategy={horizontalListSortingStrategy}
                     >
                       {expression?.leftSide && Array.isArray(expression.leftSide) ? (
-                        expression.leftSide.map((element, index) => (
-                          <DraggableExpressionElement 
-                            key={element.id}
-                            element={element}
-                            index={index}
-                            removeExpressionElement={removeExpressionElement}
-                            disabled={isRunning}
-                          />
-                        ))
+                        expression.leftSide.map((element, index) => {
+                          if (element.type === 'function') {
+                            return (
+                              <FunctionExpressionElement
+                                key={element.id}
+                                element={element}
+                                removeExpressionElement={removeExpressionElement}
+                                disabled={isRunning}
+                                side='left'
+                              />
+                            );
+                          }
+                          return (
+                            <DraggableExpressionElement 
+                              key={element.id}
+                              element={element}
+                              index={index}
+                              removeExpressionElement={removeExpressionElement}
+                              disabled={isRunning}
+                            />
+                          );
+                        })
                       ) : (
                         <span className="text-muted-foreground text-sm italic">
                           Drag elements here to build left side
@@ -436,13 +624,23 @@ const ConditionalEditor = () => {
                       strategy={horizontalListSortingStrategy}
                     >
                       {expression?.rightSide.map((element, index) => (
-                        <DraggableExpressionElement 
-                          key={element.id}
-                          element={element}
-                          index={index}
-                          removeExpressionElement={removeExpressionElement}
-                          disabled={isRunning}
-                        />
+                        element.type === 'function' ? (
+                          <FunctionExpressionElement
+                            key={element.id}
+                            element={element}
+                            removeExpressionElement={removeExpressionElement}
+                            disabled={isRunning}
+                            side='right'
+                          />
+                        ) : (
+                          <DraggableExpressionElement 
+                            key={element.id}
+                            element={element}
+                            index={index}
+                            removeExpressionElement={removeExpressionElement}
+                            disabled={isRunning}
+                          />
+                        )
                       )) || (
                         <span className="text-muted-foreground text-sm italic">
                           Drag elements here to build right side
@@ -461,15 +659,16 @@ const ConditionalEditor = () => {
           {/* Left column: Tabbed Variables and Literals */}
           <Card>
             <CardHeader className="pb-2">
-              <Tabs value={conditionalTab} onValueChange={(value) => setConditionalTab(value as 'variables' | 'literals')} className="w-full">
-                <TabsList className="grid grid-cols-2 w-full">
+              <Tabs value={conditionalTab} onValueChange={(value) => setConditionalTab(value as 'variables' | 'literals' | 'functions')} className="w-full">
+                <TabsList className="grid grid-cols-3 w-full">
                   <TabsTrigger value="variables">Variables</TabsTrigger>
                   <TabsTrigger value="literals">Literals</TabsTrigger>
+                  <TabsTrigger value="functions">Functions</TabsTrigger>
                 </TabsList>
               </Tabs>
             </CardHeader>
             <CardContent>
-              <Tabs value={conditionalTab} onValueChange={(value) => setConditionalTab(value as 'variables' | 'literals')}>
+              <Tabs value={conditionalTab} onValueChange={(value) => setConditionalTab(value as 'variables' | 'literals' | 'functions')}>
                 <TabsContent value="variables" className="mt-0">
                   <div className="space-y-2">
                     {getAllVariables().map(variable => (
@@ -732,6 +931,40 @@ const ConditionalEditor = () => {
                     </div>
                   </div>
                 </TabsContent>
+                
+                <TabsContent value="functions" className="mt-0">
+                  <div className="space-y-2">
+                    {/* Conversion functions */}
+                    {['integer', 'string', 'float', 'boolean'].map(func => (
+                      <DraggablePaletteItem
+                        key={`func-${func}`}
+                        id={`func-${func}`}
+                        type="function"
+                        value={`${func}()`}
+                        backgroundColor="#d1d1ff"
+                        disabled={isRunning}
+                        onClick={() => {
+                          const element = new ExpressionElement(
+                            crypto.randomUUID(),
+                            'function',
+                            func,
+                            new Expression(undefined, [])
+                          );
+                          addElementOnLeftClick(element);
+                        }}
+                        onRightClick={() => {
+                          const element = new ExpressionElement(
+                            crypto.randomUUID(),
+                            'function',
+                            func,
+                            new Expression(undefined, [])
+                          );
+                          addElementOnRightClick(element);
+                        }}
+                      />
+                    ))}
+                  </div>
+                </TabsContent>
               </Tabs>
             </CardContent>
           </Card>
@@ -774,13 +1007,14 @@ const ConditionalEditor = () => {
       </div>
       
       <DragOverlay>
-        {activeItem ? (
+        {activeDraggableItem ? (
           <div className={`
             px-2 py-1 m-1 rounded text-sm shadow-lg cursor-grabbing
-            ${activeItem.type === 'variable' ? 'bg-blue-100' :
-              activeItem.type === 'operator' ? 'bg-red-100' : 'bg-green-100'}
+            ${activeDraggableItem.type === 'variable' ? 'bg-blue-100' :
+              activeDraggableItem.type === 'operator' ? 'bg-red-100' :
+              activeDraggableItem.type === 'literal' ? 'bg-green-100' : 'bg-purple-100'}
           `}>
-            {activeItem.value}
+            {activeDraggableItem.value}
           </div>
         ) : null}
       </DragOverlay>

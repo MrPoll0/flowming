@@ -5,36 +5,53 @@ import CodeTab from './Tabs/CodeTab';
 import ExercisesTab from './Tabs/ExercisesTab';
 import CollaborateTab from './Tabs/CollaborateTab';
 import DebuggerTab from './Tabs/DebuggerTab';
+import { useCollaboration } from '../../context/CollaborationContext';
 
 export interface PanelTab {
-    label: string;
-    content: React.ReactNode;
-  }
+  id: string;
+  label: React.ReactNode;
+  content: React.ReactNode;
+}
 
-const topPanelTabs: PanelTab[] = [
+export const usePanelTabs = () => {
+  const { provider } = useCollaboration();
+
+  const topPanelTabs: PanelTab[] = [
     {
+      id: "details",
       label: "Details",
       content: <DetailsTab />
     },
     {
+      id: "exercises",
       label: "Exercises",
       content: <ExercisesTab />
     },
     {
-      label: "Collaboration",
+      id: "collaboration",
+      label: provider ? (
+        <div className="flex items-center justify-center">
+            <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+            Collaboration
+            <span className="text-muted-foreground ml-1">({provider.roomName})</span>
+        </div>
+      ) : "Collaboration",
       content: <CollaborateTab />
     }
   ];
-  
-const bottomPanelTabs: PanelTab[] = [
+
+  const bottomPanelTabs: PanelTab[] = [
     {
+      id: "debugger",
       label: "Debugger",
       content: <DebuggerTab />
     },
     {
+      id: "code",
       label: "Code",
       content: <CodeTab />
     }
   ];
 
-  export { topPanelTabs, bottomPanelTabs }; 
+  return { topPanelTabs, bottomPanelTabs };
+}; 

@@ -1,5 +1,5 @@
-import { Handle, Position, useReactFlow, ReactFlowInstance } from '@xyflow/react';
-import { memo, useEffect } from 'react'; 
+import { Handle, Position, ReactFlowInstance } from '@xyflow/react';
+import { memo } from 'react'; 
 import { BaseNode, NodeProcessor } from './NodeTypes';
 import { Expression, VariableType } from '../../../models';
 import { getNodeActionsStyles } from '../../../utils/nodeStyles';
@@ -19,7 +19,7 @@ interface ConditionalNode extends BaseNode {
   expression?: Expression;
 }
 
-class ConditionalProcessor implements NodeProcessor {
+export class ConditionalProcessor implements NodeProcessor {
   constructor(private reactFlow: ReactFlowInstance, private nodeId: string) {}
   
   process(): { valuedVariables: ValuedVariable<VariableType>[], result: boolean } {
@@ -51,28 +51,8 @@ class ConditionalProcessor implements NodeProcessor {
   }
 }
 
-const Conditional = memo(function ConditionalComponent({ data, id: nodeId }: { data: ConditionalNode; id: string }) {
-  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, width, height, visualId } = data;
-  
-  const reactFlow = useReactFlow();
-
-  // Update processor only on mount/unmount to prevent infinite loops
-  useEffect(() => {
-    const processor = new ConditionalProcessor(reactFlow, nodeId);
-
-    // Set the processor to the node data to make it available for the flow executor to use 
-    reactFlow.updateNodeData(nodeId, {
-      processor: processor
-    });
-
-    // Clean up on unmount
-    return () => {
-      reactFlow.updateNodeData(nodeId, {
-        processor: null
-      });
-    };
-  }, [nodeId, reactFlow]);
-
+const Conditional = memo(function ConditionalComponent({ data, id: _nodeId }: { data: ConditionalNode; id: string }) {
+  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, width, height, visualId, isError } = data;
 
   const diamondStyle = {
     width: width,
@@ -86,6 +66,7 @@ const Conditional = memo(function ConditionalComponent({ data, id: nodeId }: { d
       isSelected,
       isHighlighted,
       isCodeHighlighted,
+      isError
     }),
   } as React.CSSProperties;
   

@@ -1,12 +1,14 @@
 import { IVariable, Variable } from './Variable';
+import { Expression } from './Expression';
 
-export type ExpressionElementType = 'variable' | 'operator' | 'literal';
+export type ExpressionElementType = 'variable' | 'operator' | 'literal' | 'function';
 
 export interface IExpressionElement {
   id: string;
   type: ExpressionElementType;
   value: string;
   variable?: IVariable;
+  nestedExpression?: any;
 }
 
 export class ExpressionElement implements IExpressionElement {
@@ -14,15 +16,22 @@ export class ExpressionElement implements IExpressionElement {
   type: ExpressionElementType;
   value: string;
   variable?: Variable;
+  nestedExpression?: Expression;
 
-  constructor(id: string, type: ExpressionElementType, value: string, variable?: Variable) {
+  constructor(
+    id: string,
+    type: ExpressionElementType,
+    value: string,
+    variableOrNested?: Variable | Expression
+  ) {
     this.id = id;
     this.type = type;
     this.value = value;
-
-    if (type === 'variable' && variable) {
-      this.variable = variable;
-      this.value = variable.name;
+    if (type === 'variable' && variableOrNested instanceof Variable) {
+      this.variable = variableOrNested;
+      this.value = variableOrNested.name;
+    } else if (type === 'function' && variableOrNested instanceof Expression) {
+      this.nestedExpression = variableOrNested;
     }
   }
 
@@ -43,6 +52,9 @@ export class ExpressionElement implements IExpressionElement {
   toString(): string {
     if (this.isVariable() && this.variable) {
       return this.variable.toString();
+    }
+    if (this.isFunction()) {
+      return `${this.value}(${this.nestedExpression?.toString()})`;
     }
     return this.value;
   }
@@ -69,23 +81,57 @@ export class ExpressionElement implements IExpressionElement {
   }
 
   /**
+   * Check if this element is a function call
+   */
+  isFunction(): boolean {
+    return this.type === 'function';
+  }
+
+  /**
    * Clones the expression element
    */
   clone(): ExpressionElement {
-    return new ExpressionElement(this.id, this.type, this.value, this.variable);
+    const cloned = new ExpressionElement(
+      this.id,
+      this.type,
+      this.value,
+      this.type === 'variable' ? this.variable : this.type === 'function' ? this.nestedExpression?.clone() : undefined
+    );
+    if (this.type === 'function' && this.nestedExpression) {
+      cloned.nestedExpression = this.nestedExpression.clone();
+    }
+    return cloned;
   }
 
   /**
    * Creates an object representation of the expression element
    */
   toObject(): IExpressionElement {
-    return {id: this.id, type: this.type, value: this.value, variable: this.variable?.toObject()};
+    return {
+      id: this.id, 
+      type: this.type, 
+      value: this.value, 
+      variable: this.variable?.toObject(), 
+      nestedExpression: this.nestedExpression?.toObject()
+    };
   }
 
   /**
    * Creates an ExpressionElement from a plain object
    */
   static fromObject(obj: IExpressionElement): ExpressionElement {
-    return new ExpressionElement(obj.id, obj.type, obj.value, obj.variable ? Variable.fromObject(obj.variable) : undefined);
+    let elem: ExpressionElement;
+    if (obj.type === 'function' && obj.nestedExpression) {
+      const nested = Expression.fromObject(obj.nestedExpression);
+      elem = new ExpressionElement(obj.id, obj.type, obj.value, nested);
+    } else {
+      elem = new ExpressionElement(
+        obj.id,
+        obj.type,
+        obj.value,
+        obj.variable ? Variable.fromObject(obj.variable) : undefined
+      );
+    }
+    return elem;
   }
 } 

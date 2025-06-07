@@ -1,12 +1,14 @@
 import React, { useCallback, useState, useContext } from 'react';
-import { useReactFlow } from '@xyflow/react';
+import { Edge, Node, useReactFlow } from '@xyflow/react';
 import { useVariables } from '../context/VariablesContext';
 import { useFilename } from '../context/FilenameContext';
-import { useFlowExecutorContext } from '../context/FlowExecutorContext';
+import { useFlowExecutorActions, useFlowExecutorState } from '../context/FlowExecutorContext';
 import { SelectedNodeContext } from '../context/SelectedNodeContext';
 import { Variable } from '../models';
 import { Button } from './ui/button';
 import { Download, Upload, FileX } from 'lucide-react';
+import { useDebugger } from '../context/DebuggerContext';
+import { FlowNode } from './Flow/FlowTypes';
 
 interface FlowData {
   nodes: any[];
@@ -17,40 +19,47 @@ interface FlowData {
   filename?: string;
 }
 
+export const clearDiagram = (setNodes: (nodes: FlowNode[]) => void, setEdges: (edges: Edge[]) => void, getNodes: () => Node[], deleteNodeVariables: (nodeId: string) => void, setSelectedNode: (node: FlowNode | null) => void, setFilename: (filename: string) => void, stop: () => void, clearHistory: () => void) => {
+  // Stop execution before creating new diagram
+  stop();
+  clearHistory();
+
+  // Clear all nodes and edges
+  setNodes([]);
+  setEdges([]);
+  
+  // Clear all variables
+  const existingNodes = getNodes();
+  existingNodes.forEach(node => {
+    deleteNodeVariables(node.id);
+  });
+  
+  // Clear selected node (this will clear the Details tab)
+  setSelectedNode(null);
+  
+  // Reset filename
+  setFilename('Untitled');
+}
+
 const ImportExport: React.FC = () => {
   const { getNodes, getEdges, setNodes, setEdges, fitView, setViewport } = useReactFlow();
   const { variables, updateNodeVariables, deleteNodeVariables } = useVariables();
   const { filename, setFilename } = useFilename();
-  const { stop } = useFlowExecutorContext();
+  const { stop } = useFlowExecutorActions();
+  const { isRunning } = useFlowExecutorState();
   const { setSelectedNode } = useContext(SelectedNodeContext);
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const { clearHistory } = useDebugger();
 
   const onNew = useCallback(() => {
-    // Stop execution before creating new diagram
-    stop();
-
-    // Clear all nodes and edges
-    setNodes([]);
-    setEdges([]);
-    
-    // Clear all variables
-    const existingNodes = getNodes();
-    existingNodes.forEach(node => {
-      deleteNodeVariables(node.id);
-    });
-    
-    // Clear selected node (this will clear the Details tab)
-    setSelectedNode(null);
-    
-    // Reset filename
-    setFilename('Untitled');
+    clearDiagram(setNodes, setEdges, getNodes, deleteNodeVariables, setSelectedNode, setFilename, stop, clearHistory);
     
     // Fit view to center
     setTimeout(() => {
       setViewport({ x: 0, y: 0, zoom: 2 });
     }, 100);
-  }, [setNodes, setEdges, getNodes, deleteNodeVariables, setFilename, setViewport, stop, setSelectedNode]);
+  }, [setNodes, setEdges, getNodes, deleteNodeVariables, setFilename, setViewport, stop, setSelectedNode, clearHistory]);
 
   const onExport = useCallback(() => {
     // Stop execution before exporting to avoid exporting unexpected node/edge data
@@ -61,7 +70,16 @@ const ImportExport: React.FC = () => {
     // Add a delay to ensure stop() has fully reset all animations and state
     setTimeout(() => {
       try {
-        const nodes = getNodes();
+        const nodes = getNodes()
+          .filter(node => node.type !== 'ErrorNode' && node.type !== 'ValueOutput') // Make sure to exclude ErrorNode and ValueOutput nodes, only core flowchart is exported
+          .map(node => {
+            // Remove any transient state like `isError` from the data
+            if (node.data.isError) {
+              const { isError, ...restData } = node.data;
+              return { ...node, data: restData };
+            }
+            return node;
+          });
         const edges = getEdges();
 
         // Serialize variables to plain objects
@@ -107,6 +125,7 @@ const ImportExport: React.FC = () => {
     input.accept = '.flowming';
     
     input.onchange = async (event) => {
+      clearHistory(); // Clear debugger history
       setIsImporting(true);
       try {
         const file = (event.target as HTMLInputElement).files?.[0];
@@ -156,17 +175,13 @@ const ImportExport: React.FC = () => {
           });
         }
 
-        // Use setTimeout to ensure the clearing happens first, then restore nodes and edges
-        // This ensures that node components will properly re-mount and initialize their processors
-        setTimeout(() => {
-          setNodes(flowData.nodes || []);
-          setEdges(flowData.edges || []);
+        setNodes(flowData.nodes || []);
+        setEdges(flowData.edges || []);
 
-          // Fit and center the view for the imported diagram
-          setTimeout(() => {
-            fitView({ padding: 0.2, duration: 800 });
-          }, 100);
-        }, 50);
+        // Fit and center the view for the imported diagram
+        setTimeout(() => {
+          fitView({ padding: 0.2, duration: 800 });
+        }, 100);
 
       } catch (error) {
         console.error('Error importing:', error);
@@ -183,6 +198,7 @@ const ImportExport: React.FC = () => {
     <div className="flex items-center gap-2">
       <Button
         onClick={onNew}
+        disabled={isRunning}
         variant="outline"
         size="sm"
         className="flex items-center gap-2"
@@ -193,7 +209,7 @@ const ImportExport: React.FC = () => {
 
       <Button
         onClick={onExport}
-        disabled={isExporting}
+        disabled={isExporting || isRunning}
         variant="outline"
         size="sm"
         className="flex items-center gap-2"
@@ -204,7 +220,7 @@ const ImportExport: React.FC = () => {
       
       <Button
         onClick={onImport}
-        disabled={isImporting}
+        disabled={isImporting || isRunning}
         variant="outline"
         size="sm"
         className="flex items-center gap-2"
@@ -216,4 +232,4 @@ const ImportExport: React.FC = () => {
   );
 };
 
-export default ImportExport; 
+export default React.memo(ImportExport); 

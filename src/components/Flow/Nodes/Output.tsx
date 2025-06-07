@@ -1,75 +1,63 @@
-import { Handle, Position, ReactFlowInstance, useReactFlow } from '@xyflow/react';
-import { memo, useEffect } from 'react';
+import { Handle, Position, ReactFlowInstance } from '@xyflow/react';
+import { memo } from 'react';
 import { getNodeStyles } from '../../../utils/nodeStyles';
-import { BaseNode, NodeProcessor, } from './NodeTypes';
+import { BaseNode, NodeProcessor } from './NodeTypes';
 import { Expression, VariableType } from '../../../models';
-import { IValuedVariable } from '../../../models/ValuedVariable';
-import { ValuedVariable } from '../../../models/ValuedVariable';
+import { IValuedVariable, ValuedVariable } from '../../../models/ValuedVariable';
 import { Badge } from '@/components/ui/badge';
+import { FlowNode } from '../FlowTypes';
 
 interface OutputNode extends BaseNode {
   expression?: Expression;
 }
 
-class OutputProcessor implements NodeProcessor {
+export class OutputProcessor implements NodeProcessor {
   constructor(private reactFlow: ReactFlowInstance, private nodeId: string) {}
   
   process(): ValuedVariable<VariableType>[] {
     const node = this.reactFlow.getNode(this.nodeId)!;
     const data = node.data as OutputNode;
-    console.log(`Processing Output node ${this.nodeId} with expression:`, data.expression);
-
+    
     let currentValuedVariables: ValuedVariable<VariableType>[] = [];
-    data.currentValuedVariables?.forEach((valuedVariable: IValuedVariable<VariableType>) => {
-      currentValuedVariables.push(ValuedVariable.fromObject(valuedVariable));
-    });
-
-    console.log("Current valued variables:");
-    currentValuedVariables.forEach((valuedVariable: ValuedVariable<VariableType>) => {
-      console.log(valuedVariable.toString());
-    });
+    if (data.currentValuedVariables) {
+      data.currentValuedVariables.forEach((valuedVariable: IValuedVariable<VariableType>) => {
+        currentValuedVariables.push(ValuedVariable.fromObject(valuedVariable));
+      });
+    }
 
     // TODO: output sanitization for XSS attacks?
-
-    if(data.expression) {
-      const expr = data.expression && !(data.expression instanceof Expression) ? Expression.fromObject(data.expression) : null;
-      if(expr) {
+    if (data.expression) {
+      const expr = data.expression instanceof Expression ? data.expression : Expression.fromObject(data.expression);
+      if (!expr.isEmpty()) {
         const value = expr.calculateValue(expr.rightSide, null, currentValuedVariables);
-        console.log(`Output value: ${value}`);
+        
+        const outputNode: FlowNode = {
+          id: `output-display-${node.id}-${Date.now()}`,
+          type: 'ValueOutput',
+          position: { 
+            x: node.position.x + (node.measured?.width ?? node.width ?? 150) + 20, 
+            y: node.position.y 
+          },
+          data: {
+            value: value,
+            label: 'Output Display'
+          },
+          draggable: true,
+          selectable: true,
+          deletable: true,
+        };
+        this.reactFlow.addNodes(outputNode);
       }
     }
 
     return currentValuedVariables;
   }
 }
+  
+const Output = memo(function OutputComponent({ data, id: _nodeId }: { data: OutputNode; id: string }) {
+  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, expression, width, height, visualId, isError } = data;
 
-const Output = memo(function OutputComponent({ data, id: nodeId }: { data: OutputNode; id: string }) {
-  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, expression, width, height, visualId } = data;
-
-  // TODO: expression is not Expression but ExpressionElement[]
-  // or just Expression without leftSide? (setup in constructor)
-  // but it may be an extension of Expression or somewhat because it can also have string concatenation, commas, etc (e.g. variable1, variable2?)
-
-  const reactFlow = useReactFlow();
-
-  // Update processor only on mount/unmount to prevent infinite loops
-  useEffect(() => {
-    const processor = new OutputProcessor(reactFlow, nodeId);
-
-    // Set the processor to the node data to make it available for the flow executor to use 
-    reactFlow.updateNodeData(nodeId, {
-      processor: processor
-    });
-
-    // Clean up on unmount
-    return () => {
-      reactFlow.updateNodeData(nodeId, {
-        processor: null
-      });
-    };
-  }, [nodeId, reactFlow]);
-
-  const expr = expression && !(expression instanceof Expression) ? Expression.fromObject(expression) : null;
+  const expr = expression ? (expression instanceof Expression ? expression : Expression.fromObject(expression)) : null;
 
   return (
     <div className="output-node" style={getNodeStyles({
@@ -77,11 +65,11 @@ const Output = memo(function OutputComponent({ data, id: nodeId }: { data: Outpu
       isSelected,
       isHighlighted,
       isCodeHighlighted,
+      isError,
       minWidth: width ? `${width}px` : '150px',
       minHeight: height ? `${height}px` : '50px',
       additionalStyles: { transform: 'skewX(-20deg)', transformOrigin: '0 0' }
     })}>
-
       {visualId && (
         <div 
           style={{

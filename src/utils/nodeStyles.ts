@@ -7,6 +7,7 @@ interface NodeStyleOptions {
   isSelected?: boolean;
   isHighlighted?: boolean;
   isCodeHighlighted?: boolean;
+  isError?: boolean;
   borderRadius?: string | number;
   padding?: string;
   minWidth?: string;
@@ -24,9 +25,12 @@ export function getNodeActionsStyles({
   isSelected,
   isHighlighted,
   isCodeHighlighted,
+  isError,
   additionalStyles = {}
 }: NodeStyleOptions): React.CSSProperties {
-  const borderStyle = isHighlighted
+  const borderStyle = isError
+    ? '2px solid #ef4444'
+    : isHighlighted
     ? '2px solid #0066ff'
     : isCodeHighlighted
       ? '1px solid #f59e0b'
@@ -35,7 +39,9 @@ export function getNodeActionsStyles({
         : isHovered
           ? '1px solid #4d9cff'
           : '1px solid #000';
-  const boxShadow = isHighlighted
+  const boxShadow = isError
+    ? '0 0 8px rgba(239, 68, 68, 0.6)'
+    : isHighlighted
     ? '0 0 10px rgba(0, 102, 255, 0.5)'
     : isCodeHighlighted
       ? '0 0 10px rgba(245, 158, 11, 0.6)'
@@ -57,6 +63,7 @@ export function getNodeStyles({
   isSelected,
   isHighlighted,
   isCodeHighlighted,
+  isError,
   borderRadius = '0px',
   padding = '10px 20px',
   minWidth = '250px',
@@ -71,6 +78,7 @@ export function getNodeStyles({
       isSelected,
       isHighlighted,
       isCodeHighlighted,
+      isError,
     }),
     display: 'flex',
     flexDirection: 'column',
