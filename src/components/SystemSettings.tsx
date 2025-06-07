@@ -8,6 +8,44 @@ import { HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
+// Reusable WIP Badge Component
+const WIPBadge: React.FC = () => (
+  <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full border">
+    WIP
+  </span>
+);
+
+// Reusable Setting Row Component
+const SettingRow: React.FC<{
+  label: string;
+  children: React.ReactNode;
+  showWIP?: boolean;
+  tooltip?: React.ReactNode;
+  htmlFor?: string;
+}> = ({ label, children, showWIP = false, tooltip, htmlFor }) => (
+  <div className="flex items-center justify-between">
+    <div className="flex items-center space-x-2">
+      <Label htmlFor={htmlFor} className="text-sm font-medium">
+        {label}
+      </Label>
+      {showWIP && <WIPBadge />}
+      {tooltip && (
+        <TooltipProvider delayDuration={100}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
+            </TooltipTrigger>
+            <TooltipContent>{tooltip}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+    </div>
+    <div className="flex items-center space-x-2">
+      {children}
+    </div>
+  </div>
+);
+
 const SystemSettings: React.FC = () => {
   const { settings, updateSetting } = useSystemSettings();
   const { isRunning } = useFlowExecutorState();
@@ -22,7 +60,7 @@ const SystemSettings: React.FC = () => {
 
   const languageOptions = [
     { value: 'en', label: 'English' },
-    { value: 'es', label: 'Español' }
+    { value: 'es', label: 'Español', disabled: true }
   ];
 
   const typingModeOptions = [
@@ -65,7 +103,7 @@ const SystemSettings: React.FC = () => {
             variant="outline" 
             className="w-8 h-8 p-0 border-2"
             style={{ backgroundColor: value }}
-            disabled={isRunning}
+            disabled={true}
           />
         </PopoverTrigger>
         <PopoverContent className="w-64 p-3">
@@ -106,10 +144,11 @@ const SystemSettings: React.FC = () => {
 
       <div className="space-y-4">
         {/* Language Setting */}
-        <div className="flex items-center justify-between">
-          <Label htmlFor="language" className="text-sm font-medium">
-            Language
-          </Label>
+        <SettingRow 
+          label="Language" 
+          showWIP={true}
+          htmlFor="language"
+        >
           <Select 
             value={settings.language} 
             onValueChange={(value) => updateSetting('language', value)}
@@ -120,65 +159,52 @@ const SystemSettings: React.FC = () => {
             </SelectTrigger>
             <SelectContent>
               {languageOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
+                <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
                   {option.label}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </SettingRow>
 
         {/* Background Color Setting */}
-        <div className="flex items-center justify-between">
-          <Label className="text-sm font-medium">
-            Background Color
-          </Label>
-          <div className="flex items-center space-x-2">
-            <ColorPicker 
-              value={settings.backgroundColor}
-              onChange={(color) => handleColorChange('background', color)}
-              type="background"
-            />
-          </div>
-        </div>
+        <SettingRow 
+          label="Background Color" 
+          showWIP={true}
+        >
+          <ColorPicker 
+            value={settings.backgroundColor}
+            onChange={(color) => handleColorChange('background', color)}
+            type="background"
+          />
+        </SettingRow>
 
         {/* Text Color Setting */}
-        <div className="flex items-center justify-between">
-          <Label className="text-sm font-medium">
-            Text Color
-          </Label>
-          <div className="flex items-center space-x-2">
-            <ColorPicker 
-              value={settings.textColor}
-              onChange={(color) => handleColorChange('text', color)}
-              type="text"
-            />
-          </div>
-        </div>
+        <SettingRow 
+          label="Text Color" 
+          showWIP={true}
+        >
+          <ColorPicker 
+            value={settings.textColor}
+            onChange={(color) => handleColorChange('text', color)}
+            type="text"
+          />
+        </SettingRow>
 
         {/* Typing Mode Setting */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Label className="text-sm font-medium">
-              Typing
-            </Label>
-            <TooltipProvider delayDuration={100}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
-                </TooltipTrigger>
-                <TooltipContent>
-                  <div className="text-sm max-w-xs">
-                    <p className="font-medium">Strongly Typed:</p>
-                    <p>Variables must have explicit types and type checking is enforced.</p>
-                    <br />
-                    <p className="font-medium">Weakly Typed:</p>
-                    <p>Variables can change types dynamically with automatic type conversion.</p>
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
+        <SettingRow 
+          label="Typing" 
+          showWIP={true}
+          tooltip={
+            <div className="text-sm max-w-xs">
+              <p className="font-medium">Strongly Typed:</p>
+              <p>Type checking is enforced.</p>
+              <br />
+              <p className="font-medium">Weakly Typed:</p>
+              <p>Type checking is not enforced and there are implicit type conversions.</p>
+            </div>
+          }
+        >
           <Select 
             value={settings.typingMode} 
             onValueChange={(value: 'strongly-typed' | 'weakly-typed') => updateSetting('typingMode', value)}
@@ -189,34 +215,24 @@ const SystemSettings: React.FC = () => {
             </SelectTrigger>
             <SelectContent>
               {typingModeOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
+                <SelectItem key={option.value} value={option.value} disabled={option.value === 'weakly-typed'}>
                   {option.label}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </SettingRow>
 
         {/* Execution Speed Setting */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Label className="text-sm font-medium">
-              Execution Speed
-            </Label>
-            <TooltipProvider delayDuration={100}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
-                </TooltipTrigger>
-                <TooltipContent>
-                  <div className="text-sm max-w-xs">
-                    <p>Controls how fast the flow execution moves between nodes.</p>
-                    <p>Slower speeds are better for learning and debugging.</p>
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
+        <SettingRow 
+          label="Execution Speed"
+          tooltip={
+            <div className="text-sm max-w-xs">
+              <p>Controls how fast the flow execution moves between nodes.</p>
+              <p>Slower speeds are better for learning and debugging.</p>
+            </div>
+          }
+        >
           <Select 
             value={settings.executionSpeed.toString()} 
             onValueChange={(value) => updateSetting('executionSpeed', parseInt(value))}
@@ -232,7 +248,7 @@ const SystemSettings: React.FC = () => {
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </SettingRow>
       </div>
     </div>
   );
