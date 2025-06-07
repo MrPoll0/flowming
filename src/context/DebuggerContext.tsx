@@ -209,9 +209,13 @@ export const DebuggerProvider: React.FC<{ children: ReactNode }> = ({ children }
           arr = new Y.Array<any>();
           ySharedVariableHistories.set(variable.id, arr);
         }
-        const visualId = (node.data?.visualId as string) || `Node-${stepCounter.current}`;
-        const change = { stepNumber: stepCounter.current, nodeVisualId: visualId, value: variable.value, timestamp: Date.now() };
-        arr.push([change]);
+
+        const lastChange = arr.length > 0 ? arr.get(arr.length - 1) : null;
+        if (!lastChange || lastChange.value !== variable.value) {
+            const visualId = (node.data?.visualId as string) || `Node-${stepCounter.current}`;
+            const change = { stepNumber: stepCounter.current, nodeVisualId: visualId, value: variable.value, timestamp: Date.now() };
+            arr.push([change]);
+        }
       });
     }
   };

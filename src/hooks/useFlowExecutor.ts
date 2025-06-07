@@ -336,7 +336,9 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
                     
                     // Track variable changes for debugger
                     if (valuedVariables.length > 0) {
-                        updateVariables(node, valuedVariables);
+                        if (node.type === "DeclareVariable" || node.type === "AssignVariable" || node.type === "Input") {
+                            updateVariables(node, valuedVariables);
+                        }
                     }
                 }
             } catch (error) {
