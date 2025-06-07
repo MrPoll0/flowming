@@ -247,13 +247,30 @@ const FlowContent: React.FC = () => {
         if (nodeToDelete?.type === 'DeclareVariable') {
           // Delete all variables associated with this node
           deleteNodeVariables(element.id);
+        } else if (nodeToDelete?.type === 'ErrorNode') {
+          // Clear error highlighting from the original node when ErrorNode is dismissed
+          // ErrorNode id format: error-${originalNodeId}-${timestamp}
+          const errorNodeId = element.id;
+          const match = errorNodeId.match(/^error-(.+)-\d+$/);
+          if (match) {
+            const originalNodeId = match[1];
+            setNodes(prevNodes => 
+              prevNodes.map(node => {
+                if (node.id === originalNodeId && node.data.isError) {
+                  const { isError, ...restData } = node.data;
+                  return { ...node, data: restData };
+                }
+                return node;
+              })
+            );
+          }
         }
         onNodesChangeOriginal([{ type: 'remove', id: element.id }]);
       } else if (element.type === 'edge') {
         onEdgesChangeOriginal([{ type: 'remove', id: element.id }]);
       }
     },
-    [isRunning, nodes, deleteNodeVariables, onNodesChangeOriginal, onEdgesChangeOriginal]
+    [isRunning, nodes, deleteNodeVariables, onNodesChangeOriginal, onEdgesChangeOriginal, setNodes]
   );
 
   const onDragOver = useCallback((event: React.DragEvent) => {
