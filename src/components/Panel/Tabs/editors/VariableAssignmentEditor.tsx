@@ -347,9 +347,6 @@ const VariableAssignmentEditor = () => {
     setActiveDraggableItem(determinedActiveElement);
   };
 
-  // Helper to generate nested area ID
-  const nestedAreaId = (elemId: string) => `nested-${elemId}`;
-
   // Helper function to create new expression element
   const createNewElement = (activeItem: ExpressionElement, getAllVars: () => Variable[]): ExpressionElement | null => {
     if (activeItem.type === 'variable') {
