@@ -669,15 +669,14 @@ const FlowContent: React.FC = () => {
 
   const isValidConnectionCheck: IsValidConnection = useCallback(
     (connection: Connection | Edge) => {
-      // TODO: allow self-connections for while True on the same
-      // careful with which type, e.g. conditional (then not?)
-      // Prevent self-connections (a node connecting to itself)
-      if (connection.source === connection.target) return false;
+      // Prevent self-connections (a node connecting to itself) except for Conditional nodes
       const sourceNode = nodes.find(node => node.id === connection.source);
+      if ((connection.source === connection.target) && sourceNode?.type !== 'Conditional') return false;
+      
       if (sourceNode?.type === 'Conditional') {
         const existingEdgesFromHandle = edges.filter(e => e.source === connection.source && e.sourceHandle === connection.sourceHandle);
         // Only for the case of Conditional nodes (as dragging a new edge from a handle if there are already Yes/No wont create a new edge, per onConnect)
-      // If there's already an edge from this specific handle, prevent another one (1 outgoing edge per handle Yes/No to prevent label confusion and follow standard)
+        // If there's already an edge from this specific handle, prevent another one (1 outgoing edge per handle Yes/No to prevent label confusion and follow standard)
         if (existingEdgesFromHandle.length > 0) return false;
       }
       return true;
