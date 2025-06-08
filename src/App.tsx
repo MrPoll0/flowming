@@ -30,7 +30,7 @@ import {
 function AppHeader() {
   return (
     <div className="bg-muted/50 p-4 border-b border-border flex-shrink-0 flex items-center justify-between">
-      <h1 className="text-lg font-semibold">Flowming</h1>
+      <img src="/logo.svg" alt="Flowming logo" className="h-9" />
       <ImportExport />
     </div>
   );
