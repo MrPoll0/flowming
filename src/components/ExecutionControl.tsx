@@ -8,11 +8,12 @@ import {
   Square, 
   Pause, 
   RotateCcw,
-  Eraser
+  Eraser,
+  Bug
 } from "lucide-react";
 
 export default function ExecutionControl() {
-    const { isRunning, isPaused } = useFlowExecutorState();
+    const { isRunning, isPaused, isPausedByBreakpoint } = useFlowExecutorState();
     const { start, stop, pause, resume, reset, clearOutputNodes, clearErrorIndicators } = useFlowExecutorActions();
     const { awareness, users } = useCollaboration();
     const hostUser = useMemo(() => {
@@ -61,11 +62,13 @@ export default function ExecutionControl() {
                     <Button 
                         onClick={resume} 
                         disabled={!isHost || !isPaused || !isRunning}
-                        variant="outline"
+                        variant={isPausedByBreakpoint ? "destructive" : "outline"}
                         size="sm"
-                        className="flex items-center gap-2"
+                        className={`flex items-center gap-2 ${
+                            isPausedByBreakpoint ? 'bg-red-600 hover:bg-red-700 text-white' : ''
+                        }`}
                     >
-                        <Play className="h-4 w-4" />
+                        {isPausedByBreakpoint ? <Bug className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                         Resume
                     </Button>
                     <Button 

@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useDebugger } from '../../../context/DebuggerContext';
 import { useFlowExecutorState } from '../../../context/FlowExecutorContext';
-import { Clock, Variable, Play, Pause, Square } from 'lucide-react';
+import { Clock, Variable, Play, Pause, Square, Bug } from 'lucide-react';
 
 const DebuggerTab = () => {
     const { 
@@ -14,7 +14,7 @@ const DebuggerTab = () => {
         currentVariables, 
         isRecording 
     } = useDebugger();
-    const { isRunning, isPaused } = useFlowExecutorState();
+    const { isRunning, isPaused, isPausedByBreakpoint } = useFlowExecutorState();
 
     const [activeTab, setActiveTab] = useState("variables");
 
@@ -23,7 +23,9 @@ const DebuggerTab = () => {
     };
 
     const getStatusIcon = () => {
-        if (isRunning && !isPaused) {
+        if (isPausedByBreakpoint) {
+            return <Bug className="h-4 w-4 text-red-500" />;
+        } else if (isRunning && !isPaused) {
             return <Play className="h-4 w-4 text-green-500" />;
         } else if (isPaused) {
             return <Pause className="h-4 w-4 text-yellow-500" />;
@@ -33,7 +35,9 @@ const DebuggerTab = () => {
     };
 
     const getStatusText = () => {
-        if (isRunning && !isPaused) {
+        if (isPausedByBreakpoint) {
+            return "Breakpoint";
+        } else if (isRunning && !isPaused) {
             return "Running";
         } else if (isPaused) {
             return "Paused";

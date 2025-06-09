@@ -5,6 +5,7 @@ import { Expression, VariableType } from '../../../models';
 import { getNodeActionsStyles } from '../../../utils/nodeStyles';
 import { IValuedVariable } from '../../../models/ValuedVariable';
 import { ValuedVariable } from '../../../models/ValuedVariable';
+import BreakpointIndicator from './BreakpointIndicator';
 
 // TODO: check https://codesandbox.io/s/react-flow-node-shapes-k47gz
 // https://github.com/xyflow/xyflow/discussions/2608
@@ -52,7 +53,7 @@ export class ConditionalProcessor implements NodeProcessor {
 }
 
 const Conditional = memo(function ConditionalComponent({ data, id: _nodeId }: { data: ConditionalNode; id: string }) {
-  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, width, height, visualId, isError } = data;
+  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, width, height, visualId, isError, hasBreakpoint, isBreakpointTriggered } = data;
 
   const diamondStyle = {
     width: width,
@@ -66,7 +67,9 @@ const Conditional = memo(function ConditionalComponent({ data, id: _nodeId }: { 
       isSelected,
       isHighlighted,
       isCodeHighlighted,
-      isError
+      isError,
+      hasBreakpoint,
+      isBreakpointTriggered
     }),
   } as React.CSSProperties;
   
@@ -135,7 +138,10 @@ const Conditional = memo(function ConditionalComponent({ data, id: _nodeId }: { 
             border: '1px solid #ddd',
           }}
         >
-          {visualId}
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            {hasBreakpoint && <BreakpointIndicator />}
+            {visualId}
+          </div>
         </div>
       )}
 

@@ -6,6 +6,7 @@ import { Expression, VariableType } from '../../../models';
 import { IValuedVariable, ValuedVariable } from '../../../models/ValuedVariable';
 import { Badge } from '@/components/ui/badge';
 import { FlowNode } from '../FlowTypes';
+import BreakpointIndicator from './BreakpointIndicator';
 
 interface OutputNode extends BaseNode {
   expression?: Expression;
@@ -55,21 +56,26 @@ export class OutputProcessor implements NodeProcessor {
 }
   
 const Output = memo(function OutputComponent({ data, id: _nodeId }: { data: OutputNode; id: string }) {
-  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, expression, width, height, visualId, isError } = data;
+  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, expression, width, height, visualId, isError, hasBreakpoint, isBreakpointTriggered } = data;
 
   const expr = expression ? (expression instanceof Expression ? expression : Expression.fromObject(expression)) : null;
 
   return (
-    <div className="output-node" style={getNodeStyles({
-      isHovered,
-      isSelected,
-      isHighlighted,
-      isCodeHighlighted,
-      isError,
-      minWidth: width ? `${width}px` : '150px',
-      minHeight: height ? `${height}px` : '50px',
-      additionalStyles: { transform: 'skewX(-20deg)', transformOrigin: '0 0' }
-    })}>
+    <div 
+      className={`output-node`}
+      style={getNodeStyles({
+        isHovered,
+        isSelected,
+        isHighlighted,
+        isCodeHighlighted,
+        isError,
+        hasBreakpoint,
+        isBreakpointTriggered,
+        minWidth: width ? `${width}px` : '150px',
+        minHeight: height ? `${height}px` : '50px',
+        additionalStyles: { transform: 'skewX(-20deg)', transformOrigin: '0 0' }
+      })}
+    >
       {visualId && (
         <div 
           style={{
@@ -80,7 +86,7 @@ const Output = memo(function OutputComponent({ data, id: _nodeId }: { data: Outp
             color: 'rgb(119, 119, 119)',
             fontWeight: 'bold',
             userSelect: 'none',
-            zIndex: 1, 
+            zIndex: 1,
             transform: 'skewX(20deg)',
             backgroundColor: 'rgba(255, 255, 255, 0.8)',
             borderRadius: '3px',
@@ -88,7 +94,10 @@ const Output = memo(function OutputComponent({ data, id: _nodeId }: { data: Outp
             lineHeight: '1',
           }}
         >
-          {visualId}
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            {hasBreakpoint && <BreakpointIndicator />}
+            {visualId}
+          </div>
         </div>
       )}
 

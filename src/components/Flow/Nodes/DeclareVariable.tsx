@@ -6,6 +6,7 @@ import { BaseNode, NodeProcessor } from './NodeTypes';
 import { Variable, VariableType } from '../../../models/Variable';
 import { IValuedVariable, ValuedVariable } from '../../../models/ValuedVariable';
 import { Badge } from '@/components/ui/badge';
+import BreakpointIndicator from './BreakpointIndicator';
 
 export class DeclareVariableProcessor implements NodeProcessor {
   // @ts-ignore - _reactFlow is intentionally saved for future use (TODO)
@@ -86,22 +87,27 @@ export class DeclareVariableProcessor implements NodeProcessor {
 }
 
 const DeclareVariable = memo(function DeclareVariableComponent({ data, id: nodeId }: { data: BaseNode; id: string }) {
-  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, width, height, visualId, isError } = data;
+  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, width, height, visualId, isError, hasBreakpoint, isBreakpointTriggered } = data;
   const { getNodeVariables } = useVariables();
   const nodeVariables = getNodeVariables(nodeId);
   
   return (
-    <div className="declare-variable-node" style={getNodeStyles({
-      isHovered,
-      isSelected,
-      isHighlighted,
-      isCodeHighlighted,
-      isError,
-      minWidth: width ? `${width}px` : '250px',
-      minHeight: height ? `${height}px` : '80px'
-    })}>
+    <div 
+      className={`declare-variable-node`}
+      style={getNodeStyles({
+        isHovered,
+        isSelected,
+        isHighlighted,
+        isCodeHighlighted,
+        isError,
+        hasBreakpoint,
+        isBreakpointTriggered,
+        minWidth: width ? `${width}px` : '250px',
+        minHeight: height ? `${height}px` : '80px'
+      })}
+    >
       <div className="font-bold text-center mb-2.5">Declare variable</div>
-
+  
       {visualId && (
         <div 
           style={{
@@ -119,25 +125,30 @@ const DeclareVariable = memo(function DeclareVariableComponent({ data, id: nodeI
             lineHeight: '1',
           }}
         >
-          {visualId}
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            {hasBreakpoint && <BreakpointIndicator />}
+            {visualId}
+          </div>
         </div>
       )}
-      
-      {nodeVariables.length > 0 ? (
-        <div className="py-1">
-          {nodeVariables.map((variable) => (
-            <div key={variable.id} className="mb-1 last:mb-0">
-              <Badge variant="secondary" className="font-mono text-sm">
-                {variable.type} {variable.name}
-              </Badge>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="text-center text-muted-foreground py-2.5 italic text-sm">
-          No variables defined
-        </div>
-      )}
+
+      <div className="variables-container">
+        {nodeVariables.length > 0 ? (
+          <div className="py-1">
+            {nodeVariables.map((variable) => (
+              <div key={variable.id} className="mb-1 last:mb-0">
+                <Badge variant="secondary" className="font-mono text-sm">
+                  {variable.type} {variable.name}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center text-muted-foreground py-2.5 italic text-sm">
+            No variables defined
+          </div>
+        )}
+      </div>
 
       {/* TODO: problem -> cycle/bidirectional edges (doesnt make sense) */}
       {/* could be "fixed" with floating edges */}

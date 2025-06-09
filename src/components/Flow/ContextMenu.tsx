@@ -4,17 +4,20 @@ import { SelectedNodeContext } from "../../context/SelectedNodeContext";
 import { useCollaboration } from '../../context/CollaborationContext';
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Trash2, MessageSquareText } from "lucide-react";
+import { Trash2, MessageSquareText, Bug } from "lucide-react";
+import { useFlowExecutorState } from '../../context/FlowExecutorContext';
 
 interface ContextMenuProps {
   onDelete: (element: { id: string; type: 'node' | 'edge' }) => void;
+  onToggleBreakpoint: (elementId: string) => void;
 }
 
-const ContextMenu: React.FC<ContextMenuProps> = ({ onDelete }) => {
+const ContextMenu: React.FC<ContextMenuProps> = ({ onDelete, onToggleBreakpoint }) => {
   const { contextMenuPosition, hideContextMenu } = useContext(FlowInteractionContext);
-  const { setSelectedNode } = useContext(SelectedNodeContext)
+  const { selectedNode, setSelectedNode } = useContext(SelectedNodeContext)
   const { x, y, visible, elements } = contextMenuPosition;
   const menuRef = useRef<HTMLDivElement>(null);
+  const { isRunning } = useFlowExecutorState();
 
   const { awareness, users } = useCollaboration();
   const hostUser = useMemo(() => {
@@ -55,7 +58,18 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ onDelete }) => {
     }
   };
   
+  const handleToggleBreakpoint = () => {
+    if (elements && elements.length === 1 && elements[0].type === 'node') {
+      onToggleBreakpoint(elements[0].id);
+    }
+  };
+
   const isValueOutputNode = elements.length === 1 && elements[0].type === 'node' && document.querySelector(`[data-id="${elements[0].id}"]`)?.closest('.react-flow__node')?.classList.contains('react-flow__node-ValueOutput');
+  const isErrorNode = elements.length === 1 && elements[0].type === 'node' && document.querySelector(`[data-id="${elements[0].id}"]`)?.closest('.react-flow__node')?.classList.contains('react-flow__node-ErrorNode');
+  const isDismissible = isValueOutputNode || isErrorNode;
+  const showBreakpointButton = elements.length === 1 && elements[0].type === 'node' && !isDismissible;
+  const hasBreakpoint = selectedNode?.data?.hasBreakpoint;
+  const deleteDisabled = (isDismissible && !isHost) || (isRunning && !isDismissible);
 
   return (
     <Card
@@ -71,12 +85,24 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ onDelete }) => {
         variant="ghost"
         size="sm"
         onClick={handleDelete}
-        disabled={isValueOutputNode && !isHost}
-        className={`w-full justify-start ${isValueOutputNode ? 'text-blue-600 hover:text-blue-700 hover:bg-blue-50' : 'text-destructive hover:text-destructive hover:bg-destructive/10'}`}
+        disabled={deleteDisabled}
+        className={`w-full justify-start ${isDismissible ? 'text-blue-600 hover:text-blue-700 hover:bg-blue-50' : 'text-destructive hover:text-destructive hover:bg-destructive/10'}`}
       >
-        {isValueOutputNode ? <MessageSquareText className="h-4 w-4 mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
-        {isValueOutputNode ? 'Dismiss' : 'Delete'}
+        {isDismissible ? <MessageSquareText className="h-4 w-4 mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+        {isDismissible ? 'Dismiss' : 'Delete'}
       </Button>
+      {showBreakpointButton && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleToggleBreakpoint}
+          disabled={!isHost}
+          className="w-full justify-start"
+        >
+          <Bug className="h-4 w-4 mr-2" />
+          {hasBreakpoint ? 'Remove Breakpoint' : 'Add Breakpoint'}
+        </Button>
+      )}
     </Card>
   );
 };

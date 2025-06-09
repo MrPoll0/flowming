@@ -2,27 +2,30 @@ import { Handle, Position } from '@xyflow/react';
 import { memo } from 'react';
 import { getNodeStyles } from '../../../utils/nodeStyles';
 import { BaseNode } from './NodeTypes';
+import BreakpointIndicator from './BreakpointIndicator';
 
 const Start = memo(function StartComponent({ data }: { data: BaseNode }) {
-  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, isError, width, height, visualId } = data;
+  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, isError, width, height, visualId, hasBreakpoint, isBreakpointTriggered } = data;
   
   return (
-    <div className="start-node" style={getNodeStyles({
-      isHovered,
-      isSelected,
-      isHighlighted,
-      isCodeHighlighted,
-      borderRadius: '50px',
-      isError,
-      minWidth: width ? `${width}px` : '100px',
-      minHeight: height ? `${height}px` : '40px',
-      additionalStyles: {
-        alignItems: 'center',
-        position: 'relative'
-      }
-    })}>
-      <div className="font-bold">Start</div>
-
+    <div 
+      className={`start-node`}
+      style={getNodeStyles({
+        isHovered,
+        isSelected,
+        isHighlighted,
+        isCodeHighlighted,
+        borderRadius: '50px',
+        isError,
+        hasBreakpoint,
+        isBreakpointTriggered,
+        minWidth: width ? `${width}px` : '100px',
+        minHeight: height ? `${height}px` : '40px',
+        additionalStyles: {
+          alignItems: 'center',
+          position: 'relative'
+        }
+      })}>
       {visualId && (
         <div 
           style={{
@@ -39,9 +42,13 @@ const Start = memo(function StartComponent({ data }: { data: BaseNode }) {
             lineHeight: '1',
           }}
         >
-          {visualId}
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            {hasBreakpoint && <BreakpointIndicator />}
+            {visualId}
+          </div>
         </div>
       )}
+      <div className="font-bold">Start</div>
 
       <Handle 
         type="source" 

@@ -89,6 +89,22 @@ const FlowContent: React.FC = () => {
     selectedNodeRef.current = selectedNode;
   }, [selectedNode]);
 
+  const onToggleBreakpoint = useCallback((elementId: string) => {
+    setNodes((nds) =>
+      nds.map((node) => {
+        if (node.id === elementId) {
+          const hasBreakpoint = !node.data.hasBreakpoint;
+          return {
+            ...node,
+            data: { ...node.data, hasBreakpoint },
+          };
+        }
+        return node;
+      })
+    );
+    hideContextMenu();
+  }, [setNodes, hideContextMenu]);
+
   // TODO: possible problems when modifying node data from multiple places at the same time?
   
   // Assign sequential visual IDs to nodes
@@ -193,9 +209,7 @@ const FlowContent: React.FC = () => {
   // Handle node/edge right-click (context menu)
   const onNodeContextMenu = (event: React.MouseEvent, node: FlowNode) => {
     event.preventDefault();
-    // Don't show context menu when flow is running, unless it's a dismissable output node
-    if (isRunning && node.type !== 'ValueOutput' && node.type !== 'ErrorNode') return;
-
+    
     setSelectedNode(node);
     setSelectedElement({ id: node.id, type: 'node' });
     // Use viewport coordinates directly since ContextMenu is fixed positioned
@@ -858,7 +872,7 @@ const FlowContent: React.FC = () => {
         {/* Render remote cursors overlay */}
         <RemoteCursorsOverlay reactFlowWrapper={reactFlowWrapper} />
       </ReactFlow>
-      <ContextMenu onDelete={onDelete} />
+      <ContextMenu onDelete={onDelete} onToggleBreakpoint={onToggleBreakpoint} />
     </div>
   );
 };
