@@ -55,9 +55,19 @@ export class ConditionalProcessor implements NodeProcessor {
 const Conditional = memo(function ConditionalComponent({ data, id: _nodeId }: { data: ConditionalNode; id: string }) {
   const { isHovered, isSelected, isHighlighted, isCodeHighlighted, width, height, visualId, isError, hasBreakpoint, isBreakpointTriggered } = data;
 
+  // Dynamically adjust diamond size based on label length
+  const expr = data.expression ? Expression.fromObject(data.expression) : null;
+  const label = (expr && !expr.isEmpty()) ? expr.toString() : 'Conditional';
+  const defaultSize = width ?? height ?? 100;
+  const avgCharWidth = 5; // approximate pixel width per character
+  const padding = 20; // extra padding in pixels
+  const step = 20; // size increment step in pixels
+  const requiredSize = label.length * avgCharWidth + padding;
+  const size = requiredSize > defaultSize ? Math.ceil(requiredSize / step) * step : defaultSize;
+
   const diamondStyle = {
-    width: width,
-    height: height,
+    width: size,
+    height: size,
     transform: "rotate(45deg)",
     background: "white",
     border: "1px solid #222",
@@ -109,11 +119,6 @@ const Conditional = memo(function ConditionalComponent({ data, id: _nodeId }: { 
     ...handleStyle,
     top: '100%',
   } as React.CSSProperties;
-
-  const expr = data.expression ? Expression.fromObject(data.expression) : null;
-  const label = (expr && !expr.isEmpty()) ? expr.toString() : 'Conditional';
-
-  // TODO: fix styling wtr expression length
 
   return (
     <div className="conditional-node" style={diamondStyle}>
