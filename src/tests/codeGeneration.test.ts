@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { generatePythonCode } from '../utils/codeGeneration';
 import { FlowNode } from '../components/Flow/FlowTypes';
 import { Edge } from '@xyflow/react';
@@ -7,9 +7,6 @@ import { ExpressionElement } from '../models/ExpressionElement';
 import { Variable } from '../models/Variable';
 
 // --- Test Helpers ---
-
-let nodeIdCounter = 0;
-const freshNodeId = () => `${++nodeIdCounter}`;
 
 const createNode = (
   id: string,
@@ -51,10 +48,6 @@ const createOpEl = (op: string) => new ExpressionElement('el-op', 'operator', op
 // --- Test Suite ---
 
 describe('codeGeneration', () => {
-
-  beforeEach(() => {
-    nodeIdCounter = 0;
-  });
   
   const cleanCode = (code: string) => {
     // Removes comments and empty lines
@@ -728,7 +721,6 @@ describe('codeGeneration', () => {
       // MARK -> start
       const x = varInt('x');
       const y = varInt('y');
-      const z = varInt('z');
       const nodes: FlowNode[] = [
         createNode('1', 'Start'),
         createNode('2', 'Input', { variable: x.toObject() }),
