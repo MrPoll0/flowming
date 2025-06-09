@@ -57,6 +57,7 @@ describe('codeGeneration', () => {
   });
   
   const cleanCode = (code: string) => {
+    // Removes comments and empty lines
     return code
       .split('\n')
       .filter(line => !line.trim().startsWith('#'))
@@ -111,6 +112,64 @@ describe('codeGeneration', () => {
 
     const code = generatePythonCode(nodes, edges);
     const expected = `if (x > 0):\n  y = 1\nelse:\n  y = -1`;
+    expect(cleanCode(code)).toBe(expected);
+  });
+
+  it('should handle complex boolean logic in conditions', () => {
+    const a = new Variable('a-id', 'boolean', 'a', 'n1');
+    const b = new Variable('b-id', 'boolean', 'b', 'n1');
+    const c = new Variable('c-id', 'boolean', 'c', 'n1');
+    const y = varInt('y');
+
+    const nodes: FlowNode[] = [
+        createNode('1', 'Start'),
+        createNode('2', 'Conditional', {
+            expression: new Expression(
+                [createVarEl(a), createOpEl('&&'), createVarEl(b), createOpEl('||'), createVarEl(c)],
+                [createLiteralEl(true)],
+                '=='
+            ).toObject()
+        }),
+        createNode('3', 'AssignVariable', { expression: new Expression(y, [createLiteralEl(1)]).toObject() }),
+        createNode('4', 'AssignVariable', { expression: new Expression(y, [createLiteralEl(0)]).toObject() }),
+        createNode('5', 'End'),
+    ];
+    const edges: Edge[] = [
+        createEdge('1', '2'),
+        createEdge('2', '3', 'yes'),
+        createEdge('2', '4', 'no'),
+        createEdge('3', '5'),
+        createEdge('4', '5'),
+    ];
+    const code = generatePythonCode(nodes, edges);
+    const expected = `if (((a and b) or c) == True):\n  y = 1\nelse:\n  y = 0`;
+    expect(cleanCode(code)).toBe(expected);
+  });
+
+  it('should handle function calls within expressions', () => {
+    const s = new Variable('s-id', 'string', 's', 'n1');
+    const x = varInt('x');
+    const nodes: FlowNode[] = [
+        createNode('1', 'Start'),
+        createNode('2', 'AssignVariable', {
+            expression: new Expression(
+                x,
+                [
+                    createOpEl('('),
+                    new ExpressionElement('fn1', 'function', 'integer', new Expression(undefined, [createVarEl(s)])),
+                    createOpEl('+'),
+                    createLiteralEl(10),
+                    createOpEl(')'),
+                    createOpEl('*'),
+                    createLiteralEl(2)
+                ]
+            ).toObject()
+        }),
+        createNode('3', 'End'),
+    ];
+    const edges: Edge[] = [ createEdge('1', '2'), createEdge('2', '3') ];
+    const code = generatePythonCode(nodes, edges);
+    const expected = 'x = ((int(s) + 10) * 2)';
     expect(cleanCode(code)).toBe(expected);
   });
 
@@ -186,15 +245,17 @@ describe('codeGeneration', () => {
       const nodes: FlowNode[] = [
         createNode('1', 'Start'),
         createNode('2', 'AssignVariable', { expression: new Expression(x, [createLiteralEl(1)]).toObject() }),
-        createNode('3', 'End'),
+        createNode('3', 'AssignVariable', { expression: new Expression(x, [createVarEl(x), createOpEl('+'), createLiteralEl(1)]).toObject() }),
+        createNode('4', 'End'),
       ];
       const edges: Edge[] = [
         createEdge('1', '2'),
-        createEdge('2', '2'), // loop back to self
-        createEdge('2', '3'), // this edge shouldn't be taken in the loop
+        createEdge('2', '3'),
+        createEdge('3', '2'), // loop back to previous node
+        createEdge('3', '4'),
       ];
       const code = generatePythonCode(nodes, edges);
-      const expected = "while True:\n  x = 1";
+      const expected = "while True:\n  x = 1\n  x = (x + 1)";
       expect(cleanCode(code)).toBe(expected);
     });
 
@@ -288,11 +349,11 @@ describe('codeGeneration', () => {
       ];
 
       const code = generatePythonCode(nodes, edges);
-      const expected = `x = 10\nwhile (True == True):\n  x = (x - 1)\n  if (x == 0):\n    pass`;
+      const expected = `x = 10\nwhile (True == True):\n  x = (x - 1)\n  if (x == 0):\n    break`;
       expect(cleanCode(code)).toBe(expected);
     });
 
-    it('should generate a loop with an effective continue', () => {
+    it('should generate a loop with nested if-else', () => {
       const i = varInt('i');
       const total = varInt('total');
       const nodes: FlowNode[] = [
@@ -310,7 +371,7 @@ describe('codeGeneration', () => {
         createEdge('4', '5', 'yes'), // enter loop
         createEdge('4', '8', 'no'), // end
         createEdge('5', '6'),
-        createEdge('6', '4', 'yes'), // continue
+        createEdge('6', '4', 'yes'),
         createEdge('6', '7', 'no'),
         createEdge('7', '4'), // back to loop condition
       ];
@@ -320,61 +381,30 @@ describe('codeGeneration', () => {
       expect(cleanCode(code)).toBe(expected);
     });
 
-    it('should handle complex boolean logic in conditions', () => {
-      const a = new Variable('a-id', 'boolean', 'a', 'n1');
-      const b = new Variable('b-id', 'boolean', 'b', 'n1');
-      const c = new Variable('c-id', 'boolean', 'c', 'n1');
-      const y = varInt('y');
-
+    it('should generate a loop with a break after process block', () => {
+      const i = varInt('i');
+      const total = varInt('total');
       const nodes: FlowNode[] = [
-          createNode('1', 'Start'),
-          createNode('2', 'Conditional', {
-              expression: new Expression(
-                  [createVarEl(a), createOpEl('&&'), createVarEl(b), createOpEl('||'), createVarEl(c)],
-                  [createLiteralEl(true)],
-                  '=='
-              ).toObject()
-          }),
-          createNode('3', 'AssignVariable', { expression: new Expression(y, [createLiteralEl(1)]).toObject() }),
-          createNode('4', 'AssignVariable', { expression: new Expression(y, [createLiteralEl(0)]).toObject() }),
-          createNode('5', 'End'),
+        createNode('1', 'Start'),
+        createNode('2', 'AssignVariable', { expression: new Expression(i, [createLiteralEl(5)]).toObject() }),
+        createNode('3', 'AssignVariable', { expression: new Expression(total, [createLiteralEl(0)]).toObject() }),
+        createNode('4', 'Conditional', { expression: new Expression([createVarEl(i)], [createLiteralEl(0)], '>').toObject() }), // while i > 0
+        createNode('5', 'AssignVariable', { expression: new Expression(i, [createVarEl(i), createOpEl('-'), createLiteralEl(1)]).toObject() }),
+        createNode('6', 'Conditional', { expression: new Expression([createVarEl(i), createOpEl('%'), createLiteralEl(2)], [createLiteralEl(0)], '==').toObject() }), // if i % 2 == 0
+        createNode('7', 'AssignVariable', { expression: new Expression(total, [createVarEl(total), createOpEl('+'), createVarEl(i)]).toObject() }),
+        createNode('8', 'End'),
       ];
       const edges: Edge[] = [
-          createEdge('1', '2'),
-          createEdge('2', '3', 'yes'),
-          createEdge('2', '4', 'no'),
-          createEdge('3', '5'),
-          createEdge('4', '5'),
+        createEdge('1', '2'), createEdge('2', '3'), createEdge('3', '4'),
+        createEdge('4', '5', 'yes'), // enter loop
+        createEdge('4', '8', 'no'), // end
+        createEdge('5', '6'),
+        createEdge('6', '4', 'yes'),
+        createEdge('6', '7', 'no'),
       ];
-      const code = generatePythonCode(nodes, edges);
-      const expected = `if (((a and b) or c) == True):\n  y = 1\nelse:\n  y = 0`;
-      expect(cleanCode(code)).toBe(expected);
-    });
 
-    it('should handle function calls within expressions', () => {
-      const s = new Variable('s-id', 'string', 's', 'n1');
-      const x = varInt('x');
-      const nodes: FlowNode[] = [
-          createNode('1', 'Start'),
-          createNode('2', 'AssignVariable', {
-              expression: new Expression(
-                  x,
-                  [
-                      createOpEl('('),
-                      new ExpressionElement('fn1', 'function', 'integer', new Expression(undefined, [createVarEl(s)])),
-                      createOpEl('+'),
-                      createLiteralEl(10),
-                      createOpEl(')'),
-                      createOpEl('*'),
-                      createLiteralEl(2)
-                  ]
-              ).toObject()
-          }),
-          createNode('3', 'End'),
-      ];
-      const edges: Edge[] = [ createEdge('1', '2'), createEdge('2', '3') ];
       const code = generatePythonCode(nodes, edges);
-      const expected = 'x = ((int(s) + 10) * 2)';
+      const expected = `i = 5\ntotal = 0\nwhile (i > 0):\n  i = (i - 1)\n  if ((i % 2) == 0):\n    pass\n  else:\n    total = (total + i)\n    break`;
       expect(cleanCode(code)).toBe(expected);
     });
 
@@ -396,7 +426,7 @@ describe('codeGeneration', () => {
       ];
 
       const code = generatePythonCode(nodes, edges);
-      const expected = `while True:\n  i = 5\n  if (i > 0):\n    i = (i - 1)`;
+      const expected = `while True:\n  i = 5\n  if (i > 0):\n    i = (i - 1)\n  else:\n    break`;
       expect(cleanCode(code)).toBe(expected);
     });
 
@@ -418,7 +448,7 @@ describe('codeGeneration', () => {
       ];
     
       const code = generatePythonCode(nodes, edges);
-      const expected = `i = 0\nwhile True:\n  i = (i + 1)\n  if (i < 5):\n    pass`;
+      const expected = `i = 0\nwhile True:\n  i = (i + 1)\n  if (i < 5):\n    pass\n  else:\n    break`;
       expect(cleanCode(code)).toBe(expected);
     });
 
@@ -450,8 +480,10 @@ describe('codeGeneration', () => {
       const expected = `i = 10\nwhile (i > 0):\n  i = (i - 1)\n  if (i > 5):\n    print("greater")\n  else:\n    print("smaller")`;
       expect(cleanCode(code)).toBe(expected);
     });
-    // Additional edge cases for more comprehensive loop testing
+
     it('should handle loop with Input node inside', () => {
+      // MARKED -> irrelevant?
+
       const x = varInt('x');
       const i = varInt('i');
       const nodes: FlowNode[] = [
@@ -506,6 +538,8 @@ describe('codeGeneration', () => {
     });
 
     it('should handle infinite loop with complex break conditions', () => {
+      // MARKED -> shoul break and somewhat irrelevant
+
       const counter = varInt('counter');
       const max_iter = varInt('max_iter');
       const nodes: FlowNode[] = [
@@ -524,7 +558,7 @@ describe('codeGeneration', () => {
       ];
 
       const code = generatePythonCode(nodes, edges);
-      const expected = `counter = 0\nmax_iter = 100\nwhile True:\n  counter = (counter + 1)\n  if (counter >= max_iter):\n    pass`;
+      const expected = `counter = 0\nmax_iter = 100\nwhile True:\n  counter = (counter + 1)\n  if (counter >= max_iter):\n    break`;
       expect(cleanCode(code)).toBe(expected);
     });
 
@@ -563,6 +597,8 @@ describe('codeGeneration', () => {
     });
 
     it('should handle loop with multiple exit conditions', () => {
+      // MARKED -> should have breaks
+
       const x = varInt('x');
       const y = varInt('y');
       const nodes: FlowNode[] = [
@@ -585,11 +621,13 @@ describe('codeGeneration', () => {
       ];
 
       const code = generatePythonCode(nodes, edges);
-      const expected = `x = 10\ny = 5\nwhile True:\n  x = (x - 1)\n  y = (y - 1)\n  if (x <= 0):\n    pass\n  else:\n    if (y <= 0):\n      pass`;
+      const expected = `x = 10\ny = 5\nwhile True:\n  x = (x - 1)\n  y = (y - 1)\n  if (x <= 0):\n    break\n  else:\n    if (y <= 0):\n      break`;
       expect(cleanCode(code)).toBe(expected);
     });
 
     it('should handle loop with variable declarations inside', () => {
+      // MARKED -> irrelevant?
+
       const i = varInt('i');
       const temp = varInt('temp');
       const nodes: FlowNode[] = [
@@ -615,6 +653,8 @@ describe('codeGeneration', () => {
     });
 
     it('should handle early exit with complex condition combinations', () => {
+      // MARKED -> should have breaks
+
       const a = varInt('a');
       const b = varInt('b');
       const c = varInt('c');
@@ -650,11 +690,13 @@ describe('codeGeneration', () => {
       ];
 
       const code = generatePythonCode(nodes, edges);
-      const expected = `a = 10\nb = 5\nc = 3\nwhile (((a > 0) and (b > 0)) == True):\n  a = (a - 1)\n  b = (b - 1)\n  if (((a == b) or (c == 0)) == True):\n    pass`;
+      const expected = `a = 10\nb = 5\nc = 3\nwhile (((a > 0) and (b > 0)) == True):\n  a = (a - 1)\n  b = (b - 1)\n  if (((a == b) or (c == 0)) == True):\n    break`;
       expect(cleanCode(code)).toBe(expected);
     });
 
     it('should handle loops with mathematical operations and comparisons', () => {
+      // MARKED -> irrelevant?
+
       const sum = varInt('sum');
       const count = varInt('count');
       const nodes: FlowNode[] = [
@@ -683,6 +725,7 @@ describe('codeGeneration', () => {
     });
 
     it('should handle while True with nested if-elif-else pattern', () => {
+      // MARK -> start
       const x = varInt('x');
       const y = varInt('y');
       const z = varInt('z');
@@ -711,6 +754,89 @@ describe('codeGeneration', () => {
 
       const code = generatePythonCode(nodes, edges);
       const expected = `while True:\n  x = int(input("Enter the value of 'x' by keyboard"))\n  if (x == 1):\n    y = 10\n    print(y)\n  else:\n    if (x == 2):\n      y = 20\n    else:\n      y = 0\n    print(y)`;
+      expect(cleanCode(code)).toBe(expected);
+    });
+
+    it('should handle a loop with a break in one branch and normal execution in the other', () => {
+      const i = varInt('i');
+      const nodes: FlowNode[] = [
+        createNode('1', 'Start'),
+        createNode('2', 'AssignVariable', { expression: new Expression(i, [createLiteralEl(10)]).toObject() }),
+        createNode('3', 'Conditional', { expression: new Expression([createVarEl(i)], [createLiteralEl(0)], '>').toObject() }), // while i > 0
+        createNode('4', 'Conditional', { expression: new Expression([createVarEl(i)], [createLiteralEl(5)], '==').toObject() }), // if i == 5
+        createNode('5', 'Output', { expression: new Expression(undefined, [createVarEl(i)]).toObject() }),
+        createNode('6', 'AssignVariable', { expression: new Expression(i, [createVarEl(i), createOpEl('-'), createLiteralEl(1)]).toObject() }),
+        createNode('7', 'End'), // break target
+      ];
+      const edges: Edge[] = [
+        createEdge('1', '2'),
+        createEdge('2', '3'),
+        createEdge('3', '4', 'yes'), // enter loop
+        createEdge('3', '7', 'no'),  // exit loop
+        createEdge('4', '7', 'yes'), // break
+        createEdge('4', '5', 'no'),  // else branch
+        createEdge('5', '6'),
+        createEdge('6', '3'),        // loop back
+      ];
+
+      const code = generatePythonCode(nodes, edges);
+      const expected = `i = 10\nwhile (i > 0):\n  if (i == 5):\n    break\n  else:\n    print(i)\n    i = (i - 1)`;
+      expect(cleanCode(code)).toBe(expected);
+    });
+
+    it('should handle a break from a nested conditional inside a loop', () => {
+      const i = varInt('i');
+      const condition = new Variable('condition', 'boolean', 'condition', 'node-1');
+      const nodes: FlowNode[] = [
+        createNode('1', 'Start'),
+        createNode('2', 'AssignVariable', { expression: new Expression(i, [createLiteralEl(10)]).toObject() }),
+        createNode('3', 'Conditional', { expression: new Expression([createVarEl(i)], [createLiteralEl(0)], '>').toObject() }), // while
+        createNode('4', 'Conditional', { expression: new Expression([createVarEl(condition)], [createLiteralEl(true)], '==').toObject() }), // outer if
+        createNode('5', 'Conditional', { expression: new Expression([createVarEl(i)], [createLiteralEl(3)], '<').toObject() }), // inner if
+        createNode('6', 'AssignVariable', { expression: new Expression(i, [createVarEl(i), createOpEl('-'), createLiteralEl(1)]).toObject() }),
+        createNode('7', 'End'), // break target
+      ];
+      const edges: Edge[] = [
+        createEdge('1', '2'),
+        createEdge('2', '3'),
+        createEdge('3', '4', 'yes'), // enter loop
+        createEdge('3', '7', 'no'), // exit loop
+        createEdge('4', '5', 'yes'), // outer if-yes
+        createEdge('4', '6', 'no'),  // outer if-no
+        createEdge('5', '7', 'yes'), // inner if-yes -> break
+        createEdge('5', '6', 'no'),  // inner if-no
+        createEdge('6', '3'),        // loop back
+      ];
+
+      const code = generatePythonCode(nodes, edges);
+      const expected = `i = 10\nwhile (i > 0):\n  if (condition == True):\n    if (i < 3):\n      break\n    else:\n      i = (i - 1)\n  else:\n    i = (i - 1)`;
+      expect(cleanCode(code)).toBe(expected);
+    });
+
+    it('should handle a loop with multiple break conditions from an if-elif structure', () => {
+      const x = varInt('x');
+      const nodes: FlowNode[] = [
+        createNode('1', 'Start'),
+        createNode('2', 'AssignVariable', { expression: new Expression(x, [createLiteralEl(0)]).toObject() }),
+        createNode('3', 'Conditional', { expression: new Expression([createVarEl(x)], [createLiteralEl(10)], '<').toObject() }), // while
+        createNode('4', 'AssignVariable', { expression: new Expression(x, [createVarEl(x), createOpEl('+'), createLiteralEl(1)]).toObject() }),
+        createNode('5', 'Conditional', { expression: new Expression([createVarEl(x)], [createLiteralEl(5)], '==').toObject() }), // if x == 5
+        createNode('6', 'Conditional', { expression: new Expression([createVarEl(x)], [createLiteralEl(8)], '==').toObject() }), // if x == 8
+        createNode('7', 'End'),
+      ];
+      const edges: Edge[] = [
+        createEdge('1', '2'),
+        createEdge('2', '3'),
+        createEdge('3', '4', 'yes'), // enter loop
+        createEdge('3', '7', 'no'),  // exit loop
+        createEdge('4', '5'),
+        createEdge('5', '7', 'yes'), // break 1
+        createEdge('5', '6', 'no'),
+        createEdge('6', '7', 'yes'), // break 2
+        createEdge('6', '3', 'no'),  // continue loop
+      ];
+      const code = generatePythonCode(nodes, edges);
+      const expected = `x = 0\nwhile (x < 10):\n  x = (x + 1)\n  if (x == 5):\n    break\n  else:\n    if (x == 8):\n      break`;
       expect(cleanCode(code)).toBe(expected);
     });
   });

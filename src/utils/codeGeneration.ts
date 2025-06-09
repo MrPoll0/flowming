@@ -1,7 +1,7 @@
 import { FlowNode } from '../components/Flow/FlowTypes';
 import { Edge } from '@xyflow/react';
 import {
-  Program, Statement, Expression as PyExpression, AssignmentStatement, IfStatement, WhileStatement, BlockStatement, Identifier, Literal, BinaryExpression, PrintStatement, UnsupportedNode, CallExpression, ASTNode
+  Program, Statement, Expression as PyExpression, AssignmentStatement, IfStatement, WhileStatement, BlockStatement, Identifier, Literal, BinaryExpression, PrintStatement, UnsupportedNode, CallExpression, ASTNode, BreakStatement
 } from '../models/pythonAST';
 import { Expression as DiagramExpression, ExpressionElement, Variable, IOperator, IExpression as DiagramIExpression } from '../models';
 import { buildAST, ExpressionASTNode as DiagramASTNode, UnaryOpNode, BinaryOpNode as DiagramBinaryOpNode, FunctionCallNode as DiagramFunctionCallNode, IdentifierNode as DiagramIdentifierNode, LiteralNode as DiagramLiteralNode } from '../models/ExpressionParser';
@@ -569,11 +569,13 @@ const generateStatementsFromCFG = (
       const yesEdge = outs.find(e => (e.data?.conditionalLabel as string)?.toLowerCase?.() === 'yes'); // TODO: use 0-1 instead of yes-no for language support
       const noEdge  = outs.find(e => (e.data?.conditionalLabel as string)?.toLowerCase?.() === 'no');
 
+      const loopBodyIds = inLoop ? loops.get(inLoop) : undefined;
+
       // Check for immediate merge: both branches lead to same next node
       if (yesEdge?.target && noEdge?.target) {
         const yesSucc = cfg.succMap.get(yesEdge.target) || [];
         const noSucc  = cfg.succMap.get(noEdge.target) || [];
-        if (yesSucc[0]?.target && yesSucc[0].target === noSucc[0]?.target) {
+        if (yesSucc.length > 0 && noSucc.length > 0 && yesSucc[0]?.target && yesSucc[0].target === noSucc[0]?.target) {
           // Merge detected
           const mergeId = yesSucc[0].target;
           // Build only branch statements (single nodes)
@@ -592,7 +594,9 @@ const generateStatementsFromCFG = (
           const stmts: Statement[] = [ifStmt];
 
           // After if-else, process merge node and its successors
-          stmts.push(...generateStatementsFromCFG(cfg, loops, mergeId, visited, inLoop));
+          if (!visited.has(mergeId)) {
+            stmts.push(...generateStatementsFromCFG(cfg, loops, mergeId, visited, inLoop));
+          }
           return stmts;
         }
       }
@@ -601,10 +605,39 @@ const generateStatementsFromCFG = (
       const trueVisited = new Set(visited);
       const falseVisited = new Set(visited);
       
-      // Build body statements for YES branch (consequent)
-      const cons = yesEdge?.target && cfg.nodesMap.has(yesEdge.target) ? generateStatementsFromCFG(cfg, loops, yesEdge.target, trueVisited, inLoop) : [];
-      // Build body statements for NO branch (alternate)
-      const alt  = noEdge?.target && cfg.nodesMap.has(noEdge.target) ? generateStatementsFromCFG(cfg, loops, noEdge.target, falseVisited, inLoop) : [];
+      const processBranch = (edge: Edge | undefined, branchVisited: Set<string>): Statement[] => {
+        if (!edge || !edge.target || !cfg.nodesMap.has(edge.target)) return [];
+    
+        const targetId = edge.target;
+    
+        if (inLoop && loopBodyIds) {
+            if (!loopBodyIds.has(targetId)) { // Exit from loop
+                if (cfg.nodesMap.get(targetId)?.type === 'End') {
+                    return [{ type: 'BreakStatement', diagramNodeId: nodeId, visualId } as BreakStatement];
+                }
+                const exitPathStmts = generateStatementsFromCFG(cfg, loops, targetId, branchVisited, null);
+                
+                const lastNodeIdOnPath = exitPathStmts.length > 0 ? (exitPathStmts[exitPathStmts.length - 1] as Statement).diagramNodeId : targetId;
+                const successors = lastNodeIdOnPath ? cfg.succMap.get(lastNodeIdOnPath) || [] : [];
+    
+                if (successors.every(e => e.target && !loopBodyIds.has(e.target))) {
+                     return [...exitPathStmts, { type: 'BreakStatement', diagramNodeId: nodeId, visualId } as BreakStatement];
+                }
+                return exitPathStmts;
+    
+            } else if (targetId === inLoop) { // continue
+                return [];
+            }
+        }
+        
+        return generateStatementsFromCFG(cfg, loops, targetId, branchVisited, inLoop);
+      };
+
+      const cons = processBranch(yesEdge, trueVisited);
+      const alt = processBranch(noEdge, falseVisited);
+
+      const commonVisited = new Set([...trueVisited].filter(x => falseVisited.has(x)));
+      commonVisited.forEach(id => visited.add(id));
 
       // Build if statement
       const ifStmt: IfStatement = {
@@ -614,7 +647,9 @@ const generateStatementsFromCFG = (
         diagramNodeId: nodeId,
         visualId
       };
-      if (alt.length) ifStmt.alternate = { type: 'BlockStatement', body: alt };
+      if (alt.length > 0) {
+        ifStmt.alternate = { type: 'BlockStatement', body: alt };
+      }
       stmts.push(ifStmt);
 
       return stmts;
@@ -712,8 +747,11 @@ const generateCodeFromASTNode = (astNode: ASTNode, indentLevel = 0): string => {
       code += `${indent}if ${generateCodeFromASTNode(ifStmt.test)}:` + '\n';
       code += generateCodeFromASTNode(ifStmt.consequent, indentLevel + 1);
       if (ifStmt.alternate) {
-        code += '\n' + `${indent}else:` + '\n';
-        code += generateCodeFromASTNode(ifStmt.alternate, indentLevel + 1);
+        const altCode = generateCodeFromASTNode(ifStmt.alternate, indentLevel + 1);
+        if (altCode.trim() !== '') {
+          code += '\n' + `${indent}else:` + '\n';
+          code += altCode;
+        }
       }
       return code;
 
@@ -729,6 +767,9 @@ const generateCodeFromASTNode = (astNode: ASTNode, indentLevel = 0): string => {
       const args = printStmt.arguments.map(arg => generateCodeFromASTNode(arg)).join(', ');
       code += `${indent}print(${args})`;
       return code;
+
+    case 'BreakStatement':
+      return `${indent}break`;
 
     case 'Identifier':
       return (astNode as Identifier).name;
