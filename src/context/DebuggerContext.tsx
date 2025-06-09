@@ -25,13 +25,23 @@ export interface VariableHistory {
   }>;
 }
 
+export interface OutputStep {
+  stepNumber: number;
+  nodeId: string;
+  visualId: string;
+  value: any;
+  timestamp: number;
+}
+
 interface DebuggerContextType {
   executionHistory: ExecutionStep[];
   variableHistories: Map<string, VariableHistory>;
   currentVariables: Map<string, IValuedVariable<VariableType>>;
+  outputHistory: OutputStep[];
   isRecording: boolean;
   addExecutionStep: (node: Node) => void;
   updateVariables: (node: Node, variables: ValuedVariable<VariableType>[]) => void;
+  addOutput: (node: Node, value: any) => void;
   clearHistory: () => void;
   startRecording: () => void;
   stopRecording: () => void;
@@ -49,11 +59,12 @@ export const useDebugger = () => {
 
 export const DebuggerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Collaboration-shared debugger state
-  const { ySharedExecutionHistory, ySharedCurrentVariables, ySharedVariableHistories, ySharedIsRecording } = useCollaboration();
+  const { ySharedExecutionHistory, ySharedCurrentVariables, ySharedVariableHistories, ySharedOutputHistory, ySharedIsRecording } = useCollaboration();
 
   const [executionHistory, setExecutionHistory] = useState<ExecutionStep[]>([]);
   const [variableHistories, setVariableHistories] = useState<Map<string, VariableHistory>>(new Map());
   const [currentVariables, setCurrentVariables] = useState<Map<string, IValuedVariable<VariableType>>>(new Map());
+  const [outputHistory, setOutputHistory] = useState<OutputStep[]>([]);
   const [isRecording, setIsRecording] = useState(false);
   const isRecordingRef = useRef(false);
   const stepCounter = useRef(0);
@@ -113,17 +124,33 @@ export const DebuggerProvider: React.FC<{ children: ReactNode }> = ({ children }
     return () => { ySharedVariableHistories.unobserveDeep(onDeepChange); };
   }, [ySharedVariableHistories]);
 
+  // Subscribe to shared output history updates
+  useEffect(() => {
+    if (!ySharedOutputHistory) return;
+
+    const onArrayChange = () => {
+      const history = ySharedOutputHistory.toArray() as OutputStep[];
+      setOutputHistory(history);
+    };
+    ySharedOutputHistory.observe(onArrayChange);
+
+    // initial load
+    onArrayChange();
+    return () => { ySharedOutputHistory.unobserve(onArrayChange); };
+  }, [ySharedOutputHistory]);
+
   // Subscribe to shared recording flag updates
   useEffect(() => {
     if (!ySharedIsRecording) return;
 
     const onMapChange = () => {
       const recording = (ySharedIsRecording.get('isRecording') as boolean) || false;
-      if (recording && !isRecordingRef.current) {
+              if (recording && !isRecordingRef.current) {
         // inline clearHistory logic
         setExecutionHistory([]);
         setVariableHistories(new Map());
         setCurrentVariables(new Map());
+        setOutputHistory([]);
         stepCounter.current = 0;
         isRecordingRef.current = true;
         setIsRecording(true);
@@ -220,10 +247,30 @@ export const DebuggerProvider: React.FC<{ children: ReactNode }> = ({ children }
     }
   };
 
+  const addOutput = (node: Node, value: any) => {
+    if (!isRecordingRef.current) return;
+
+    const outputStep: OutputStep = {
+      stepNumber: stepCounter.current,
+      nodeId: node.id,
+      visualId: (node.data?.visualId as string) || `Node-${stepCounter.current}`,
+      value: value,
+      timestamp: Date.now()
+    };
+
+    setOutputHistory(prev => [...prev, outputStep]);
+    
+    // Share output via Yjs
+    if (ySharedOutputHistory) {
+      ySharedOutputHistory.push([outputStep]);
+    }
+  };
+
   const clearHistory = () => {
     setExecutionHistory([]);
     setVariableHistories(new Map());
     setCurrentVariables(new Map());
+    setOutputHistory([]);
     stepCounter.current = 0;
   };
 
@@ -238,6 +285,9 @@ export const DebuggerProvider: React.FC<{ children: ReactNode }> = ({ children }
     }
     if (ySharedVariableHistories) {
       ySharedVariableHistories.clear();
+    }
+    if (ySharedOutputHistory) {
+      ySharedOutputHistory.delete(0, ySharedOutputHistory.length);
     }
     isRecordingRef.current = true;
     setIsRecording(true);
@@ -261,9 +311,11 @@ export const DebuggerProvider: React.FC<{ children: ReactNode }> = ({ children }
         executionHistory,
         variableHistories,
         currentVariables,
+        outputHistory,
         isRecording,
         addExecutionStep,
         updateVariables,
+        addOutput,
         clearHistory,
         startRecording,
         stopRecording

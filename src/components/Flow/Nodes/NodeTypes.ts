@@ -12,6 +12,9 @@ export interface BaseNode {
     isHovered?: boolean;
     isSelected?: boolean;
     isHighlighted?: boolean;
+    isCodeHighlighted?: boolean;
+    hasBreakpoint?: boolean;
+    isBreakpointTriggered?: boolean;
     currentValuedVariables?: ValuedVariable<VariableType>[];
     processor?: NodeProcessor;
     [key: string]: any; // TODO: remove this?

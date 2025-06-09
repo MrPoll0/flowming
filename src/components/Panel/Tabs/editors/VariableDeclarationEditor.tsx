@@ -47,35 +47,37 @@ const VariableDeclarationEditor = () => {
   // Load variables when the selected node changes or when the global variable list changes
   useEffect(() => {
     isInitialLoadRef.current = true;
-    
-    if (selectedNode && selectedNode.type === 'DeclareVariable') {
-      const nodeChanged = previousNodeIdRef.current !== selectedNode.id;
-      if (nodeChanged) {
-        previousNodeIdRef.current = selectedNode.id;
-      }
 
-      const nodeVars = allVariables.filter(v => v.nodeId === selectedNode.id);
-
-      // Only update local state if it differs from the context state
-      if (JSON.stringify(nodeVars) !== JSON.stringify(variables.filter(v => v.name.trim() !== ''))) {
-        if (nodeVars.length > 0) {
-          setVariables(nodeVars);
-        } else if (nodeChanged) {
-          // If a new node is selected and it has no variables, show a placeholder
-          const newVar = new Variable(crypto.randomUUID(), 'integer', '', selectedNode.id);
-          setVariables([newVar]);
-        } else {
-          // If variables were deleted by another user, clear the list
-          setVariables([]);
-        }
-      }
-    } else {
+    if (!selectedNode || selectedNode.type !== 'DeclareVariable') {
       previousNodeIdRef.current = null;
       setVariables([]);
+    } else {
+      const nodeChanged = previousNodeIdRef.current !== selectedNode.id;
+      const nodeVars = allVariables.filter(v => v.nodeId === selectedNode.id);
+
+      if (nodeChanged) {
+        previousNodeIdRef.current = selectedNode.id;
+        if (nodeVars.length > 0) {
+          setVariables(nodeVars);
+        } else {
+          // Show placeholder if no variables are declared
+          const newVar = new Variable(crypto.randomUUID(), 'integer', '', selectedNode.id);
+          setVariables([newVar]);
+        }
+      } else {
+        // Sync local state if context variables have changed
+        if (JSON.stringify(nodeVars) !== JSON.stringify(variables.filter(v => v.name.trim() !== ''))) {
+          if (nodeVars.length > 0) {
+            setVariables(nodeVars);
+          } else {
+            setVariables([]);
+          }
+        }
+      }
     }
-    
+
     isInitialLoadRef.current = false;
-    
+
     return () => {
       clearUpdateTimeout();
     };

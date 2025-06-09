@@ -6,6 +6,7 @@ import { Expression, Variable } from '../../../models';
 import { IValuedVariable, ValuedVariable } from '../../../models/ValuedVariable';
 import { VariableType } from '../../../models/Variable';
 import { Badge } from '@/components/ui/badge';
+import BreakpointIndicator from './BreakpointIndicator';
 
 interface AssignVariableNode extends BaseNode {
   expression?: Expression;
@@ -62,17 +63,22 @@ export class AssignVariableProcessor implements NodeProcessor {
 }
 
 const AssignVariable = memo(function AssignVariableComponent({ data, id: _nodeId }: { data: AssignVariableNode; id: string }) {
-  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, expression, width, height, visualId, isError } = data;
+  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, expression, width, height, visualId, isError, hasBreakpoint, isBreakpointTriggered } = data;
   return (
-    <div className="assign-variable-node" style={getNodeStyles({
-      isHovered,
-      isSelected,
-      isHighlighted,
-      isCodeHighlighted,
-      isError,
-      minWidth: width ? `${width}px` : '250px',
-      minHeight: height ? `${height}px` : '80px'
-    })}>
+    <div 
+      className={`assign-variable-node`}
+      style={getNodeStyles({
+        isHovered,
+        isSelected,
+        isHighlighted,
+        isCodeHighlighted,
+        isError,
+        hasBreakpoint,
+        isBreakpointTriggered,
+        minWidth: width ? `${width}px` : '250px',
+        minHeight: height ? `${height}px` : '80px'
+      })}
+    >
       <div className="font-bold text-center mb-2.5">Assign variable</div>
       
       {visualId && (
@@ -92,7 +98,10 @@ const AssignVariable = memo(function AssignVariableComponent({ data, id: _nodeId
             lineHeight: '1',
           }}
         >
-          {visualId}
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            {hasBreakpoint && <BreakpointIndicator />}
+            {visualId}
+          </div>
         </div>
       )}
 

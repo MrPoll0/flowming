@@ -89,6 +89,22 @@ const FlowContent: React.FC = () => {
     selectedNodeRef.current = selectedNode;
   }, [selectedNode]);
 
+  const onToggleBreakpoint = useCallback((elementId: string) => {
+    setNodes((nds) =>
+      nds.map((node) => {
+        if (node.id === elementId) {
+          const hasBreakpoint = !node.data.hasBreakpoint;
+          return {
+            ...node,
+            data: { ...node.data, hasBreakpoint },
+          };
+        }
+        return node;
+      })
+    );
+    hideContextMenu();
+  }, [setNodes, hideContextMenu]);
+
   // TODO: possible problems when modifying node data from multiple places at the same time?
   
   // Assign sequential visual IDs to nodes
@@ -193,9 +209,7 @@ const FlowContent: React.FC = () => {
   // Handle node/edge right-click (context menu)
   const onNodeContextMenu = (event: React.MouseEvent, node: FlowNode) => {
     event.preventDefault();
-    // Don't show context menu when flow is running, unless it's a dismissable output node
-    if (isRunning && node.type !== 'ValueOutput' && node.type !== 'ErrorNode') return;
-
+    
     setSelectedNode(node);
     setSelectedElement({ id: node.id, type: 'node' });
     // Use viewport coordinates directly since ContextMenu is fixed positioned
@@ -247,13 +261,30 @@ const FlowContent: React.FC = () => {
         if (nodeToDelete?.type === 'DeclareVariable') {
           // Delete all variables associated with this node
           deleteNodeVariables(element.id);
+        } else if (nodeToDelete?.type === 'ErrorNode') {
+          // Clear error highlighting from the original node when ErrorNode is dismissed
+          // ErrorNode id format: error-${originalNodeId}-${timestamp}
+          const errorNodeId = element.id;
+          const match = errorNodeId.match(/^error-(.+)-\d+$/);
+          if (match) {
+            const originalNodeId = match[1];
+            setNodes(prevNodes => 
+              prevNodes.map(node => {
+                if (node.id === originalNodeId && node.data.isError) {
+                  const { isError, ...restData } = node.data;
+                  return { ...node, data: restData };
+                }
+                return node;
+              })
+            );
+          }
         }
         onNodesChangeOriginal([{ type: 'remove', id: element.id }]);
       } else if (element.type === 'edge') {
         onEdgesChangeOriginal([{ type: 'remove', id: element.id }]);
       }
     },
-    [isRunning, nodes, deleteNodeVariables, onNodesChangeOriginal, onEdgesChangeOriginal]
+    [isRunning, nodes, deleteNodeVariables, onNodesChangeOriginal, onEdgesChangeOriginal, setNodes]
   );
 
   const onDragOver = useCallback((event: React.DragEvent) => {
@@ -652,15 +683,14 @@ const FlowContent: React.FC = () => {
 
   const isValidConnectionCheck: IsValidConnection = useCallback(
     (connection: Connection | Edge) => {
-      // TODO: allow self-connections for while True on the same
-      // careful with which type, e.g. conditional (then not?)
-      // Prevent self-connections (a node connecting to itself)
-      if (connection.source === connection.target) return false;
+      // Prevent self-connections (a node connecting to itself) except for Conditional nodes
       const sourceNode = nodes.find(node => node.id === connection.source);
+      if ((connection.source === connection.target) && sourceNode?.type !== 'Conditional') return false;
+      
       if (sourceNode?.type === 'Conditional') {
         const existingEdgesFromHandle = edges.filter(e => e.source === connection.source && e.sourceHandle === connection.sourceHandle);
         // Only for the case of Conditional nodes (as dragging a new edge from a handle if there are already Yes/No wont create a new edge, per onConnect)
-      // If there's already an edge from this specific handle, prevent another one (1 outgoing edge per handle Yes/No to prevent label confusion and follow standard)
+        // If there's already an edge from this specific handle, prevent another one (1 outgoing edge per handle Yes/No to prevent label confusion and follow standard)
         if (existingEdgesFromHandle.length > 0) return false;
       }
       return true;
@@ -842,7 +872,7 @@ const FlowContent: React.FC = () => {
         {/* Render remote cursors overlay */}
         <RemoteCursorsOverlay reactFlowWrapper={reactFlowWrapper} />
       </ReactFlow>
-      <ContextMenu onDelete={onDelete} />
+      <ContextMenu onDelete={onDelete} onToggleBreakpoint={onToggleBreakpoint} />
     </div>
   );
 };

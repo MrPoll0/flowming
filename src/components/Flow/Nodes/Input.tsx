@@ -3,9 +3,9 @@ import { memo } from 'react';
 import { getNodeStyles } from '../../../utils/nodeStyles';
 import { BaseNode, NodeProcessor } from './NodeTypes';
 import { IVariable, VariableType, Variable } from '../../../models/Variable';
-import { IValuedVariable } from '../../../models/ValuedVariable';
-import { ValuedVariable } from '../../../models/ValuedVariable';
+import { IValuedVariable, ValuedVariable } from '../../../models/ValuedVariable';
 import { Badge } from '@/components/ui/badge';
+import BreakpointIndicator from './BreakpointIndicator';
 
 interface InputNode extends BaseNode {
   variable?: IVariable;
@@ -64,19 +64,24 @@ export class InputProcessor implements NodeProcessor {
 }
   
 const Input = memo(function InputComponent({ data, id: _nodeId }: { data: InputNode; id: string }) {
-  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, variable, width, height, visualId, isError } = data;
+  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, variable, width, height, visualId, isError, hasBreakpoint, isBreakpointTriggered } = data;
   
   return (
-    <div className="input-node" style={getNodeStyles({
-      isHovered,
-      isSelected,
-      isHighlighted,
-      isCodeHighlighted,
-      isError,
-      minWidth: width ? `${width}px` : '150px',
-      minHeight: height ? `${height}px` : '50px',
-      additionalStyles: { transform: 'skewX(-20deg)', transformOrigin: '0 0' }
-    })}>
+    <div 
+      className={`input-node`}
+      style={getNodeStyles({
+        isHovered,
+        isSelected,
+        isHighlighted,
+        isCodeHighlighted,
+        isError,
+        hasBreakpoint,
+        isBreakpointTriggered,
+        minWidth: width ? `${width}px` : '150px',
+        minHeight: height ? `${height}px` : '50px',
+        additionalStyles: { transform: 'skewX(-20deg)', transformOrigin: '0 0' }
+      })}
+    >
 
       {visualId && (
         <div 
@@ -96,7 +101,10 @@ const Input = memo(function InputComponent({ data, id: _nodeId }: { data: InputN
             lineHeight: '1',
           }}
         >
-          {visualId}
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            {hasBreakpoint && <BreakpointIndicator />}
+            {visualId}
+          </div>
         </div>
       )}
       

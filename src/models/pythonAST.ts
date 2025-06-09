@@ -53,6 +53,10 @@ export interface ReturnStatement extends Statement {
     argument?: Expression;
 }
 
+export interface BreakStatement extends Statement {
+    type: 'BreakStatement';
+}
+
 // Expressions
 export interface Identifier extends Expression {
   type: 'Identifier';

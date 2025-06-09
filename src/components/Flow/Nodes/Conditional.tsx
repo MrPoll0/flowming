@@ -5,6 +5,7 @@ import { Expression, VariableType } from '../../../models';
 import { getNodeActionsStyles } from '../../../utils/nodeStyles';
 import { IValuedVariable } from '../../../models/ValuedVariable';
 import { ValuedVariable } from '../../../models/ValuedVariable';
+import BreakpointIndicator from './BreakpointIndicator';
 
 // TODO: check https://codesandbox.io/s/react-flow-node-shapes-k47gz
 // https://github.com/xyflow/xyflow/discussions/2608
@@ -52,11 +53,21 @@ export class ConditionalProcessor implements NodeProcessor {
 }
 
 const Conditional = memo(function ConditionalComponent({ data, id: _nodeId }: { data: ConditionalNode; id: string }) {
-  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, width, height, visualId, isError } = data;
+  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, width, height, visualId, isError, hasBreakpoint, isBreakpointTriggered } = data;
+
+  // Dynamically adjust diamond size based on label length
+  const expr = data.expression ? Expression.fromObject(data.expression) : null;
+  const label = (expr && !expr.isEmpty()) ? expr.toString() : 'Conditional';
+  const defaultSize = width ?? height ?? 100;
+  const avgCharWidth = 5; // approximate pixel width per character
+  const padding = 20; // extra padding in pixels
+  const step = 20; // size increment step in pixels
+  const requiredSize = label.length * avgCharWidth + padding;
+  const size = requiredSize > defaultSize ? Math.ceil(requiredSize / step) * step : defaultSize;
 
   const diamondStyle = {
-    width: width,
-    height: height,
+    width: size,
+    height: size,
     transform: "rotate(45deg)",
     background: "white",
     border: "1px solid #222",
@@ -66,7 +77,9 @@ const Conditional = memo(function ConditionalComponent({ data, id: _nodeId }: { 
       isSelected,
       isHighlighted,
       isCodeHighlighted,
-      isError
+      isError,
+      hasBreakpoint,
+      isBreakpointTriggered
     }),
   } as React.CSSProperties;
   
@@ -107,11 +120,6 @@ const Conditional = memo(function ConditionalComponent({ data, id: _nodeId }: { 
     top: '100%',
   } as React.CSSProperties;
 
-  const expr = data.expression ? Expression.fromObject(data.expression) : null;
-  const label = (expr && !expr.isEmpty()) ? expr.toString() : 'Conditional';
-
-  // TODO: fix styling wtr expression length
-
   return (
     <div className="conditional-node" style={diamondStyle}>
       <div style={labelStyle}>{label}</div>
@@ -135,7 +143,10 @@ const Conditional = memo(function ConditionalComponent({ data, id: _nodeId }: { 
             border: '1px solid #ddd',
           }}
         >
-          {visualId}
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            {hasBreakpoint && <BreakpointIndicator />}
+            {visualId}
+          </div>
         </div>
       )}
 

@@ -27,6 +27,7 @@ import { useCollaboration } from "@/context/CollaborationContext";
 export interface IExecutorState {
     isRunning: boolean;
     isPaused: boolean;
+    isPausedByBreakpoint: boolean;
     currentNode: Node | null;
 }
 
@@ -45,7 +46,7 @@ export interface IExecutorActions {
 
 export interface IExecutor extends IExecutorState, IExecutorActions {}
 
-function getNodeProcessor(reactFlow: ReactFlowInstance, valuedVariables: ValuedVariable<VariableType>[], node: FlowNode, showInputDialog: (title: string, variableType: 'string' | 'integer' | 'float' | 'boolean', description?: string, placeholder?: string) => Promise<string | null>, getNodeVariables: any): NodeProcessor | null {
+function getNodeProcessor(reactFlow: ReactFlowInstance, valuedVariables: ValuedVariable<VariableType>[], node: FlowNode, showInputDialog: (title: string, variableType: 'string' | 'integer' | 'float' | 'boolean', description?: string, placeholder?: string) => Promise<string | null>, getNodeVariables: any, addOutput: (node: Node, value: any) => void): NodeProcessor | null {
     switch (node.type) {
         case "DeclareVariable":
             return new DeclareVariableProcessor(reactFlow, node.id, valuedVariables, getNodeVariables);
@@ -56,7 +57,7 @@ function getNodeProcessor(reactFlow: ReactFlowInstance, valuedVariables: ValuedV
         case "Input":
             return new InputProcessor(reactFlow, node.id, showInputDialog);
         case "Output":
-            return new OutputProcessor(reactFlow, node.id);
+            return new OutputProcessor(reactFlow, node.id, addOutput);
         default:
             return null;
     }
@@ -65,7 +66,7 @@ function getNodeProcessor(reactFlow: ReactFlowInstance, valuedVariables: ValuedV
 export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorActions } {
     const reactFlow = useReactFlow();
     const { settings } = useSystemSettings();
-    const { addExecutionStep, updateVariables, startRecording, stopRecording } = useDebugger();
+    const { addExecutionStep, updateVariables, addOutput, startRecording, stopRecording } = useDebugger();
     const { showInputDialog } = useInputDialog();
     const { getNodeVariables } = useVariables();
     const { awareness, users } = useCollaboration();
@@ -73,11 +74,13 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
     // Local state for UI purposes (only used by host)
     const [isRunningState, setIsRunningState] = useState(false);
     const [isPausedState, setIsPausedState] = useState(false);
+    const [isPausedByBreakpointState, setIsPausedByBreakpointState] = useState(false);
     const [currentNode, setCurrentNode] = useState<Node | null>(null);
     
     // Shared state from host (only used by non-hosts)
     const [sharedIsRunning, setSharedIsRunning] = useState(false);
     const [sharedIsPaused, setSharedIsPaused] = useState(false);
+    const [sharedIsPausedByBreakpoint, setSharedIsPausedByBreakpoint] = useState(false);
     const sharedIsPausedRef = useRef(false);
     
     // Use refs for immediate access in callbacks
@@ -106,7 +109,8 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
         if (isHost && awareness) {
             awareness.setLocalStateField('executionState', {
                 isRunning: isRunningState,
-                isPaused: isPausedState
+                isPaused: isPausedState,
+                isPausedByBreakpoint: isPausedByBreakpointState
             });
             
             // Track the executing host when execution starts
@@ -119,7 +123,7 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
                 executingHostRef.current = null;
             }
         }
-    }, [isHost, awareness, isRunningState, isPausedState]);
+    }, [isHost, awareness, isRunningState, isPausedState, isPausedByBreakpointState]);
 
     // Read execution state from awareness when not host
     // TODO: awareness or doc?
@@ -135,6 +139,7 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
                         if (executionState) {
                             setSharedIsRunning(executionState.isRunning);
                             setSharedIsPaused(executionState.isPaused);
+                            setSharedIsPausedByBreakpoint(executionState.isPausedByBreakpoint || false);
                             sharedIsPausedRef.current = executionState.isPaused;
                             
                             // Track the executing host for cleanup purposes
@@ -177,6 +182,7 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
                 // Reset shared execution state
                 setSharedIsRunning(false);
                 setSharedIsPaused(false);
+                setSharedIsPausedByBreakpoint(false);
                 sharedIsPausedRef.current = false;
                 
                 // Reset local execution state
@@ -184,6 +190,7 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
                 isRunningRef.current = false;
                 setIsPausedState(false);
                 isPausedRef.current = false;
+                setIsPausedByBreakpointState(false);
                 
                 // Clean up animations and unlock flow
                 resetAllAnimations(reactFlow);
@@ -250,11 +257,11 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
     // Helper to get the effective running/paused state
     const getEffectiveState = useCallback(() => {
         if (isHost) {
-            return { isRunning: isRunningState, isPaused: isPausedState };
+            return { isRunning: isRunningState, isPaused: isPausedState, isPausedByBreakpoint: isPausedByBreakpointState };
         } else {
-            return { isRunning: sharedIsRunning, isPaused: sharedIsPaused };
+            return { isRunning: sharedIsRunning, isPaused: sharedIsPaused, isPausedByBreakpoint: sharedIsPausedByBreakpoint };
         }
-    }, [isHost, isRunningState, isPausedState, sharedIsRunning, sharedIsPaused]);
+    }, [isHost, isRunningState, isPausedState, isPausedByBreakpointState, sharedIsRunning, sharedIsPaused, sharedIsPausedByBreakpoint]);
     
     const getIsRunning = useCallback(() => {
         return isRunningRef.current;
@@ -284,6 +291,8 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
         
         setIsPausedState(false);
         isPausedRef.current = false;
+        
+        setIsPausedByBreakpointState(false);
 
         resetAllAnimations(reactFlow);
 
@@ -294,9 +303,57 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
 
         toggleLockFlow(reactFlow, false);
         
+        // Clear breakpoint triggered states
+        reactFlow.setNodes(nodes => 
+            nodes.map(node => ({
+                ...node,
+                data: { ...node.data, isBreakpointTriggered: false }
+            }))
+        );
+        
         // Stop debugger recording
         stopRecording();
     }, [reactFlow, stopRecording]);
+
+    const pause = useCallback(() => {
+        if (!isRunningRef.current) {
+            return;
+        }
+
+        // Update both state and ref
+        setIsPausedState(true);
+        isPausedRef.current = true;
+
+        pauseCounterRef.current++;
+        
+        // Pause the SVG edge(s) animation
+        const svgElements = document.querySelectorAll('svg[id^="edge-animation-"]');
+        svgElements.forEach(svg => {
+            const svgElement = svg as SVGSVGElement;
+            
+            let currentTimeInMs = svgElement.getCurrentTime() * 1000;
+            let remainingTimeInMs = executionSpeedRef.current - currentTimeInMs;
+            
+            // if this is done at currentTime 0 or exceeding executionTime, perhaps catch intersection between old and new circle and new is not paused?
+            // => animations are handled in the same function in processNode, so this should not happen
+
+            if (currentTimeInMs <= 100){
+                // this is a hack to prevent the animation from stopping while fading in (motion.svg animation), which prevents from seeing the circle in a fixed position with offset
+
+                setTimeout(() => {
+                    if(isPausedRef.current) { // prevent this from running if the execution was resumed
+                        svgElement.pauseAnimations();
+
+                        remainingTimeRef.current = Math.abs(remainingTimeInMs - (100 - currentTimeInMs)); // abs just in case
+                    }
+                }, 100 - currentTimeInMs);
+            } else {
+                svgElement.pauseAnimations();
+
+                remainingTimeRef.current = Math.abs(remainingTimeInMs); // abs just in case
+            }
+        });
+    }, []);
 
     const processNode = useCallback(async (node: Node): Promise<{ targetNodeId: string | null, valuedVariables: ValuedVariable<VariableType>[] }> => {
         if (!isRunningRef.current || isPausedRef.current) {
@@ -311,7 +368,36 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
             // Reset previous node highlight and animated edges (node.id was the previous target node id)
             toggleNodeAnimations(reactFlow, currentNodeRef.current!, node.id, false);
         }
+
+        // If the node has a breakpoint, pause execution and wait for resume
+        // (before processing the node but after toggling animations off)
+        if (node.data.hasBreakpoint) {
+            // Mark the node as having triggered a breakpoint
+            reactFlow.updateNodeData(node.id, { isBreakpointTriggered: true });
+            
+            // Set that we're paused by a breakpoint
+            setIsPausedByBreakpointState(true);
+            
+            // Only pause if not already paused (to avoid issues if resume is called quickly)
+            if (!isPausedRef.current) {
+                pause();
+            }
+        }
         
+        // Wait here if paused (by breakpoint or manual pause)
+        while (isPausedRef.current) {
+            // If execution is stopped while paused, exit
+            if (!isRunningRef.current) {
+                return { targetNodeId: null, valuedVariables: [] };
+            }
+            // Wait for a short period before checking again to avoid a busy loop
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
+        if (!isRunningRef.current) {
+            return { targetNodeId: null, valuedVariables: [] };
+        }
+
         // Keep track of the active node
         currentNodeRef.current = node;
         setCurrentNode(node);
@@ -335,7 +421,7 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
 
                 // TODO: in processors, directly use this existingValuedVariableInstances instead of the node.data.currentValuedVariables? (optimization)
                 
-                const processor = getNodeProcessor(reactFlow, existingValuedVariableInstances, node as FlowNode, showInputDialog, getNodeVariables);
+                const processor = getNodeProcessor(reactFlow, existingValuedVariableInstances, node as FlowNode, showInputDialog, getNodeVariables, addOutput);
                 if (processor) {
                     processorResult = await processor.process();
 
@@ -431,7 +517,7 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
         toggleNodeAnimations(reactFlow, node, targetNodeId, true, executionSpeedRef.current);
         
         return { targetNodeId, valuedVariables };
-    }, [reactFlow, addExecutionStep, updateVariables, showInputDialog, getNodeVariables]);
+    }, [reactFlow, addExecutionStep, updateVariables, showInputDialog, getNodeVariables, stopExecution, pause]);
 
     const start = useCallback(() => {
         const startNode = findStartNode(reactFlow.getNodes());
@@ -446,6 +532,14 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
 
         // First, reset all animations from previous runs
         resetAllAnimations(reactFlow); // TODO: this unconditionally updates all node data and edge data AND STYLING. be careful
+
+        // Clear any previously triggered breakpoints
+        reactFlow.setNodes(nodes => 
+            nodes.map(node => ({
+                ...node,
+                data: { ...node.data, isBreakpointTriggered: false }
+            }))
+        );
 
         // Update both state and ref
         setIsRunningState(true);
@@ -496,52 +590,21 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
         clearOutputNodes();
     }, [stopExecution, clearErrorIndicators, clearOutputNodes]);
 
-    const pause = useCallback(() => {
-        if (!isRunningRef.current) {
-            return;
-        }
-
-        // Update both state and ref
-        setIsPausedState(true);
-        isPausedRef.current = true;
-
-        pauseCounterRef.current++;
-
-        // TODO: tests for execution logic + pausing and resuming
-        
-        // Pause the SVG edge(s) animation
-        const svgElements = document.querySelectorAll('svg[id^="edge-animation-"]');
-        svgElements.forEach(svg => {
-            const svgElement = svg as SVGSVGElement;
-            
-            let currentTimeInMs = svgElement.getCurrentTime() * 1000;
-            let remainingTimeInMs = executionSpeedRef.current - currentTimeInMs;
-            
-            // if this is done at currentTime 0 or exceeding executionTime, perhaps catch intersection between old and new circle and new is not paused?
-            // => animations are handled in the same function in processNode, so this should not happen
-
-            if (currentTimeInMs <= 100){
-                // this is a hack to prevent the animation from stopping while fading in (motion.svg animation), which prevents from seeing the circle in a fixed position with offset
-
-                setTimeout(() => {
-                    if(isPausedRef.current) { // prevent this from running if the execution was resumed
-                        svgElement.pauseAnimations();
-
-                        remainingTimeRef.current = Math.abs(remainingTimeInMs - (100 - currentTimeInMs)); // abs just in case
-                    }
-                }, 100 - currentTimeInMs);
-            } else {
-                svgElement.pauseAnimations();
-
-                remainingTimeRef.current = Math.abs(remainingTimeInMs); // abs just in case
-            }
-        });
-    }, []);
-
     const resume = useCallback(() => {
         if (!isPausedRef.current || !isRunningRef.current) {
             return;
         }
+
+        // Clear breakpoint triggered states when resuming
+        reactFlow.setNodes(nodes => 
+            nodes.map(node => ({
+                ...node,
+                data: { ...node.data, isBreakpointTriggered: false }
+            }))
+        );
+
+        // Clear the breakpoint pause state
+        setIsPausedByBreakpointState(false);
 
         // Resume the SVG edge(s) animation
         const svgElements = document.querySelectorAll('svg[id^="edge-animation-"]');
@@ -556,7 +619,7 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
         setIsPausedState(false);
         isPausedRef.current = false;
         
-    }, []);
+    }, [reactFlow]);
 
     const reset = useCallback(() => {
         stopExecution();
@@ -576,6 +639,7 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
     const state = {
         isRunning: getEffectiveState().isRunning,
         isPaused: getEffectiveState().isPaused,
+        isPausedByBreakpoint: getEffectiveState().isPausedByBreakpoint,
         currentNode: currentNode
     };
 

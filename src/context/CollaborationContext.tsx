@@ -26,6 +26,7 @@ interface CollaborationContextType {
   ySharedExecutionHistory: Y.Array<any> | null;
   ySharedVariableHistories: Y.Map<any> | null;
   ySharedCurrentVariables: Y.Map<any> | null;
+  ySharedOutputHistory: Y.Array<any> | null;
   ySharedIsRecording: Y.Map<any> | null;
 }
 
@@ -43,6 +44,7 @@ const CollaborationContext = createContext<CollaborationContextType>({
   ySharedExecutionHistory: null,
   ySharedVariableHistories: null,
   ySharedCurrentVariables: null,
+  ySharedOutputHistory: null,
   ySharedIsRecording: null,
 });
 
@@ -72,6 +74,7 @@ export const CollaborationProvider: React.FC<{ children: ReactNode }> = ({ child
   const [ySharedExecutionHistory, setYSharedExecutionHistory] = useState<Y.Array<any> | null>(null);
   const [ySharedVariableHistories, setYSharedVariableHistories] = useState<Y.Map<any> | null>(null);
   const [ySharedCurrentVariables, setYSharedCurrentVariables] = useState<Y.Map<any> | null>(null);
+  const [ySharedOutputHistory, setYSharedOutputHistory] = useState<Y.Array<any> | null>(null);
   const [ySharedIsRecording, setYSharedIsRecording] = useState<Y.Map<any> | null>(null);
 
   const joinRoom = (room: string, userName: string, currentFilename?: string) => {
@@ -85,6 +88,7 @@ export const CollaborationProvider: React.FC<{ children: ReactNode }> = ({ child
     const sharedExecutionHistory = doc.getArray<any>('executionHistory');
     const sharedVariableHistories = doc.getMap<any>('variableHistories');
     const sharedCurrentVariables = doc.getMap<any>('currentVariables');
+    const sharedOutputHistory = doc.getArray<any>('outputHistory');
     const sharedDebuggerMap = doc.getMap<any>('debugger');
     // initialize recording flag
     sharedDebuggerMap.set('isRecording', false);
@@ -105,6 +109,7 @@ export const CollaborationProvider: React.FC<{ children: ReactNode }> = ({ child
     setYSharedExecutionHistory(sharedExecutionHistory);
     setYSharedVariableHistories(sharedVariableHistories);
     setYSharedCurrentVariables(sharedCurrentVariables);
+    setYSharedOutputHistory(sharedOutputHistory);
     setYSharedIsRecording(sharedDebuggerMap);
   };
 
@@ -129,6 +134,7 @@ export const CollaborationProvider: React.FC<{ children: ReactNode }> = ({ child
     setYSharedExecutionHistory(null);
     setYSharedVariableHistories(null);
     setYSharedCurrentVariables(null);
+    setYSharedOutputHistory(null);
     setYSharedIsRecording(null);
   };
 
@@ -167,7 +173,7 @@ export const CollaborationProvider: React.FC<{ children: ReactNode }> = ({ child
   }, [awareness]);
 
   return (
-    <CollaborationContext.Provider value={{ ydoc, provider, awareness, users, joinRoom, leaveRoom, ySharedNodes, ySharedEdges, ySharedFilename, ySharedVariables, ySharedExecutionHistory, ySharedVariableHistories, ySharedCurrentVariables, ySharedIsRecording }}>
+    <CollaborationContext.Provider value={{ ydoc, provider, awareness, users, joinRoom, leaveRoom, ySharedNodes, ySharedEdges, ySharedFilename, ySharedVariables, ySharedExecutionHistory, ySharedVariableHistories, ySharedCurrentVariables, ySharedOutputHistory, ySharedIsRecording }}>
       {children}
     </CollaborationContext.Provider>
   );

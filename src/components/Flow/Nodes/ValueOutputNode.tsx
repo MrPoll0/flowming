@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card } from '@/components/ui/card';
 import { motion } from 'framer-motion';
-import { Printer } from 'lucide-react';
+import { ScrollText } from 'lucide-react';
 
 interface ValueOutputNodeData {
   value: any;
@@ -24,7 +24,7 @@ const ValueOutputNode: React.FC<{ data: ValueOutputNodeData }> = ({ data }) => {
       >
         <div className="p-3 space-y-2">
           <div className="font-semibold text-sm text-green-800 border-b border-green-200 pb-1 flex items-center gap-2">
-            <Printer className="h-4 w-4" />
+            <ScrollText className="h-4 w-4" />
             Output
           </div>
           <div className="font-mono text-sm bg-background px-2 py-1 rounded text-center break-all">

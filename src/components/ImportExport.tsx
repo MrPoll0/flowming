@@ -73,12 +73,9 @@ const ImportExport: React.FC = () => {
         const nodes = getNodes()
           .filter(node => node.type !== 'ErrorNode' && node.type !== 'ValueOutput') // Make sure to exclude ErrorNode and ValueOutput nodes, only core flowchart is exported
           .map(node => {
-            // Remove any transient state like `isError` from the data
-            if (node.data.isError) {
-              const { isError, ...restData } = node.data;
-              return { ...node, data: restData };
-            }
-            return node;
+            // Remove any transient state like `isError`, `hasBreakpoint`, and `isBreakpointTriggered` from the data
+            const { isError, hasBreakpoint, isBreakpointTriggered, ...restData } = node.data;
+            return { ...node, data: restData };
           });
         const edges = getEdges();
 
