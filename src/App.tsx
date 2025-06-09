@@ -1,6 +1,9 @@
 import './App.css';
 import '@xyflow/react/dist/style.css';
 
+// Import logo
+import logoSvg from '/logo.svg';
+
 // Import modular components
 import FlowContent from './components/Flow/FlowContent';
 import Panel from './components/Panel/Panel';
@@ -30,7 +33,7 @@ import {
 function AppHeader() {
   return (
     <div className="bg-muted/50 p-4 border-b border-border flex-shrink-0 flex items-center justify-between">
-      <img src="/logo.svg" alt="Flowming logo" className="h-9" />
+      <img src={logoSvg} alt="Flowming logo" className="h-9" />
       <ImportExport />
     </div>
   );
