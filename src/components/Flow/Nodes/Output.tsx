@@ -13,7 +13,7 @@ interface OutputNode extends BaseNode {
 }
 
 export class OutputProcessor implements NodeProcessor {
-  constructor(private reactFlow: ReactFlowInstance, private nodeId: string) {}
+  constructor(private reactFlow: ReactFlowInstance, private nodeId: string, private addOutput?: (node: any, value: any) => void) {}
   
   process(): ValuedVariable<VariableType>[] {
     const node = this.reactFlow.getNode(this.nodeId)!;
@@ -31,6 +31,11 @@ export class OutputProcessor implements NodeProcessor {
       const expr = data.expression instanceof Expression ? data.expression : Expression.fromObject(data.expression);
       if (!expr.isEmpty()) {
         const value = expr.calculateValue(expr.rightSide, null, currentValuedVariables);
+        
+        // Track output in debugger
+        if (this.addOutput) {
+          this.addOutput(node, value);
+        }
         
         const outputNode: FlowNode = {
           id: `output-display-${node.id}-${Date.now()}`,

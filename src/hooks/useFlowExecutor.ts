@@ -46,7 +46,7 @@ export interface IExecutorActions {
 
 export interface IExecutor extends IExecutorState, IExecutorActions {}
 
-function getNodeProcessor(reactFlow: ReactFlowInstance, valuedVariables: ValuedVariable<VariableType>[], node: FlowNode, showInputDialog: (title: string, variableType: 'string' | 'integer' | 'float' | 'boolean', description?: string, placeholder?: string) => Promise<string | null>, getNodeVariables: any): NodeProcessor | null {
+function getNodeProcessor(reactFlow: ReactFlowInstance, valuedVariables: ValuedVariable<VariableType>[], node: FlowNode, showInputDialog: (title: string, variableType: 'string' | 'integer' | 'float' | 'boolean', description?: string, placeholder?: string) => Promise<string | null>, getNodeVariables: any, addOutput: (node: Node, value: any) => void): NodeProcessor | null {
     switch (node.type) {
         case "DeclareVariable":
             return new DeclareVariableProcessor(reactFlow, node.id, valuedVariables, getNodeVariables);
@@ -57,7 +57,7 @@ function getNodeProcessor(reactFlow: ReactFlowInstance, valuedVariables: ValuedV
         case "Input":
             return new InputProcessor(reactFlow, node.id, showInputDialog);
         case "Output":
-            return new OutputProcessor(reactFlow, node.id);
+            return new OutputProcessor(reactFlow, node.id, addOutput);
         default:
             return null;
     }
@@ -66,7 +66,7 @@ function getNodeProcessor(reactFlow: ReactFlowInstance, valuedVariables: ValuedV
 export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorActions } {
     const reactFlow = useReactFlow();
     const { settings } = useSystemSettings();
-    const { addExecutionStep, updateVariables, startRecording, stopRecording } = useDebugger();
+    const { addExecutionStep, updateVariables, addOutput, startRecording, stopRecording } = useDebugger();
     const { showInputDialog } = useInputDialog();
     const { getNodeVariables } = useVariables();
     const { awareness, users } = useCollaboration();
@@ -421,7 +421,7 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
 
                 // TODO: in processors, directly use this existingValuedVariableInstances instead of the node.data.currentValuedVariables? (optimization)
                 
-                const processor = getNodeProcessor(reactFlow, existingValuedVariableInstances, node as FlowNode, showInputDialog, getNodeVariables);
+                const processor = getNodeProcessor(reactFlow, existingValuedVariableInstances, node as FlowNode, showInputDialog, getNodeVariables, addOutput);
                 if (processor) {
                     processorResult = await processor.process();
 

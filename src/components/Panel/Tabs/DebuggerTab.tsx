@@ -5,13 +5,14 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useDebugger } from '../../../context/DebuggerContext';
 import { useFlowExecutorState } from '../../../context/FlowExecutorContext';
-import { Clock, Variable, Play, Pause, Square, Bug } from 'lucide-react';
+import { Clock, Variable, Play, Pause, Square, Bug, Monitor } from 'lucide-react';
 
 const DebuggerTab = () => {
     const { 
         executionHistory, 
         variableHistories, 
         currentVariables, 
+        outputHistory,
         isRecording 
     } = useDebugger();
     const { isRunning, isPaused, isPausedByBreakpoint } = useFlowExecutorState();
@@ -65,7 +66,7 @@ const DebuggerTab = () => {
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-                <TabsList className="grid w-full grid-cols-2 mx-4 mt-4">
+                <TabsList className="grid w-full grid-cols-3 mx-4 mt-4">
                     <TabsTrigger value="variables" className="flex items-center gap-2">
                         <Variable className="h-4 w-4" />
                         Variables
@@ -73,6 +74,10 @@ const DebuggerTab = () => {
                     <TabsTrigger value="execution" className="flex items-center gap-2">
                         <Clock className="h-4 w-4" />
                         Execution Chain
+                    </TabsTrigger>
+                    <TabsTrigger value="output" className="flex items-center gap-2">
+                        <Monitor className="h-4 w-4" />
+                        Global Output
                     </TabsTrigger>
                 </TabsList>
 
@@ -210,6 +215,55 @@ const DebuggerTab = () => {
                                                     )}
                                                 </div>
                                             ))}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
+                    </TabsContent>
+
+                    <TabsContent value="output" className="h-full m-0 p-4 overflow-y-auto">
+                        {outputHistory.length === 0 ? (
+                            <Card>
+                                <CardContent className="p-6 text-center text-muted-foreground">
+                                    {isRecording ? (
+                                        "No outputs generated yet. Run the flow and process output nodes to see results here."
+                                    ) : (
+                                        "No execution data available. Start the flow to see output results."
+                                    )}
+                                </CardContent>
+                            </Card>
+                        ) : (
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="text-lg">Global Output</CardTitle>
+                                    <div className="text-sm text-muted-foreground">
+                                        {outputHistory.length} output{outputHistory.length !== 1 ? 's' : ''} generated
+                                    </div>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="space-y-3">
+                                        {outputHistory.map((output, index) => (
+                                            <div key={`${output.stepNumber}-${output.nodeId}-${index}`} className="p-4 bg-muted/30 rounded-lg">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <div className="flex items-center gap-3">
+                                                        <Badge variant="outline" className="text-xs">
+                                                            #{output.stepNumber}
+                                                        </Badge>
+                                                        <span className="font-medium text-sm">
+                                                            {output.visualId}
+                                                        </span>
+                                                    </div>
+                                                    <span className="text-xs text-muted-foreground">
+                                                        {formatTimestamp(output.timestamp)}
+                                                    </span>
+                                                </div>
+                                                <div className="mt-3">
+                                                    <div className="font-mono text-sm bg-background px-3 py-2 rounded border">
+                                                        {String(output.value)}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 </CardContent>
                             </Card>
