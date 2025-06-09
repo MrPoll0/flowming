@@ -4,6 +4,7 @@ import {
   Program, Statement, Expression as PyExpression, AssignmentStatement, IfStatement, WhileStatement, BlockStatement, Identifier, Literal, BinaryExpression, PrintStatement, UnsupportedNode, CallExpression, ASTNode
 } from '../models/pythonAST';
 import { Expression as DiagramExpression, ExpressionElement, Variable, IOperator, IExpression as DiagramIExpression } from '../models';
+import { buildAST, ExpressionASTNode as DiagramASTNode, UnaryOpNode, BinaryOpNode as DiagramBinaryOpNode, FunctionCallNode as DiagramFunctionCallNode, IdentifierNode as DiagramIdentifierNode, LiteralNode as DiagramLiteralNode } from '../models/ExpressionParser';
 
 // TODO: check bugs images + extensive automated testing
 
@@ -13,198 +14,118 @@ const getNodeVisualId = (cfg: CFG, nodeId: string): string => {
   return node?.data?.visualId || nodeId;
 };
 
-// Helper to convert Diagram ExpressionElement[] to Python AST Expression
-// TODO: proper error handling and equivalence with runtime errors in Expression calculation
-const convertDiagramExpressionToAST = (elements: ExpressionElement[], nodeId: string, cfg: CFG): PyExpression => {
+// Helper to translate a generic Diagram AST to a Python-specific AST
+const convertDiagramASTToPythonAST = (diagramNode: DiagramASTNode, nodeId: string, cfg: CFG): PyExpression => {
   const visualId = getNodeVisualId(cfg, nodeId);
   const unsupportedNode = (reason: string): UnsupportedNode =>
     ({ type: 'UnsupportedNode', reason, diagramNodeId: nodeId, visualId } as UnsupportedNode);
 
-  // Preprocessing step to distinguish unary minus and logical not
-  const processedElements: ExpressionElement[] = [];
-  for (let i = 0; i < elements.length; i++) {
-    const token = elements[i];
-    if (token.isOperator()) {
-      if (token.value === '-') {
-        const isUnary = (i === 0) || (elements[i-1].isOperator()) || (elements[i-1].value === '(');
-        if (isUnary) {
-          processedElements.push(new ExpressionElement(token.id, 'operator', '_UMINUS_', token.variable));
-        } else {
-          processedElements.push(token);
-        }
-      } else if (token.value === '!') {
-        // '!' is typically unary. Add more checks if it can be binary in your DSL.
-        processedElements.push(new ExpressionElement(token.id, 'operator', '_UNOT_', token.variable));
-      } else {
-        processedElements.push(token);
+  switch(diagramNode.type) {
+    case 'Literal': {
+      const literal = diagramNode as DiagramLiteralNode;
+      if (literal.valueType === 'boolean') {
+        return { type: 'Literal', value: literal.value, raw: literal.value ? 'True' : 'False', diagramNodeId: nodeId } as Literal;
       }
-    } else {
-      processedElements.push(token);
-    }
-  }
-
-  // Operator precedence and associativity (L for left, R for right)
-  const precedence: { [key: string]: { prec: number, assoc: 'L' | 'R' } } = {
-    '_UNOT_': { prec: 8, assoc: 'R' }, // Unary not
-    '_UMINUS_': { prec: 8, assoc: 'R' }, // Unary minus
-    '*':  { prec: 7, assoc: 'L' }, '/':  { prec: 7, assoc: 'L' }, '%':  { prec: 7, assoc: 'L' },
-    '+':  { prec: 6, assoc: 'L' }, '-':  { prec: 6, assoc: 'L' }, // Binary minus
-    '>':  { prec: 5, assoc: 'L' }, '<':  { prec: 5, assoc: 'L' }, '>=': { prec: 5, assoc: 'L' }, '<=': { prec: 5, assoc: 'L' },
-    '==': { prec: 4, assoc: 'L' }, '!=': { prec: 4, assoc: 'L' },
-    '&&': { prec: 3, assoc: 'L' }, // Logical AND
-    '||': { prec: 2, assoc: 'L' }  // Logical OR
-  };
-
-  const outputQueue: ExpressionElement[] = [];
-  const operatorStack: ExpressionElement[] = [];
-
-  // Shunting-yard algorithm to convert infix to RPN (Reverse Polish Notation)
-  processedElements.forEach(token => {
-    if (token.isLiteral() || token.isVariable()) {
-      outputQueue.push(token);
-    } else if (token.isFunction()) {
-      // Functions are treated as operands (push directly to output)
-      outputQueue.push(token);
-    } else if (token.isOperator()) {
-      const op1Value = token.value; // op1Value can be '_UMINUS_', etc.
-      if (op1Value === '(') {
-        operatorStack.push(token);
-      } else if (op1Value === ')') {
-        while (operatorStack.length > 0 && operatorStack[operatorStack.length - 1].value !== '(') {
-          outputQueue.push(operatorStack.pop()!);
-        }
-        if (operatorStack.length === 0) return unsupportedNode('Mismatched parentheses: missing opening parenthesis');
-        operatorStack.pop(); // Pop '('
-      } else { // An operator
-        const op1PrecedenceDetails = precedence[op1Value];
-        if (!op1PrecedenceDetails) return unsupportedNode(`Unknown operator: ${op1Value}`);
-
-        while (operatorStack.length > 0) {
-          const topOpToken = operatorStack[operatorStack.length - 1];
-          if (topOpToken.value === '(') break;
-          const op2Value = topOpToken.value;
-          const op2PrecedenceDetails = precedence[op2Value];
-          if (!op2PrecedenceDetails) return unsupportedNode(`Unknown operator on stack: ${op2Value}`);
-
-          if ((op1PrecedenceDetails.assoc === 'L' && op1PrecedenceDetails.prec <= op2PrecedenceDetails.prec) ||
-              (op1PrecedenceDetails.assoc === 'R' && op1PrecedenceDetails.prec < op2PrecedenceDetails.prec)) {
-            outputQueue.push(operatorStack.pop()!);
-          } else {
-            break;
-          }
-        }
-        operatorStack.push(token);
+      if (literal.valueType === 'string') {
+        return { type: 'Literal', value: literal.value, raw: JSON.stringify(literal.value), diagramNodeId: nodeId } as Literal;
       }
-    } else {
-      return unsupportedNode(`Invalid token type in expression: ${token.type}`);
-    }
-  });
-
-  while (operatorStack.length > 0) {
-    const op = operatorStack[operatorStack.length - 1];
-    if (op.value === '(' || op.value === ')') {
-      return unsupportedNode('Mismatched parentheses: extraneous parenthesis on stack');
-    }
-    outputQueue.push(operatorStack.pop()!);
-  }
-
-  // --- Convert RPN (outputQueue) to AST ---
-  const astStack: PyExpression[] = [];
-
-  if (outputQueue.length === 0 && processedElements.length > 0) {
-    return unsupportedNode('Invalid expression structure, RPN queue is empty but input was not.');
-  }
-  if (outputQueue.length === 0 && processedElements.length === 0) {
-    return { type: 'Literal', value: null, raw: 'None', diagramNodeId: nodeId } as Literal; // Empty expression
-  }
-
-  outputQueue.forEach(token => {
-    if (token.isLiteral()) {
-      const lowerValue = token.value.toLowerCase();
-      if (lowerValue === 'true') {
-        astStack.push({ type: 'Literal', value: true, raw: 'True', diagramNodeId: nodeId } as Literal);
-      } else if (lowerValue === 'false') {
-        astStack.push({ type: 'Literal', value: false, raw: 'False', diagramNodeId: nodeId } as Literal);
-      } else {
-        const num = parseFloat(token.value);
-        if (!isNaN(num)) {
-          astStack.push({ type: 'Literal', value: num, raw: token.value, diagramNodeId: nodeId } as Literal);
-        } else {
-          let strValue = token.value;
-          if ((strValue.startsWith("'") && strValue.endsWith("'")) || (strValue.startsWith('"') && strValue.endsWith('"'))) {
-            strValue = strValue.slice(1, -1);
-          }
-          astStack.push({ type: 'Literal', value: strValue, raw: JSON.stringify(strValue), diagramNodeId: nodeId } as Literal);
-        }
+       if (literal.value === null) {
+        return { type: 'Literal', value: null, raw: 'None', diagramNodeId: nodeId } as Literal;
       }
-    } else if (token.isVariable() && token.variable) {
-      astStack.push({ type: 'Identifier', name: token.variable.name, diagramNodeId: nodeId } as Identifier);
-    } else if (token.isFunction() && token.nestedExpression) {
-      // Handle function calls with nested expressions
-      const nestedAst = convertDiagramExpressionToAST(token.nestedExpression.rightSide, nodeId, cfg);
-      
-      const functionNameMap: { [key: string]: string } = {
-        'integer': 'int',
-        'string': 'str',
-        'float': 'float',
-        'boolean': 'bool'
-      };
-      
-      // Create function call expression
-      const funcName = functionNameMap[token.value] || token.value;
-      astStack.push({
-        type: 'CallExpression',
-        callee: { type: 'Identifier', name: funcName, diagramNodeId: nodeId },
-        arguments: nestedAst.type !== 'UnsupportedNode' ? [nestedAst] : [],
-        diagramNodeId: nodeId
-      } as CallExpression);
-    } else if (token.isOperator()) {
-      const operatorValue = token.value;
-      if (operatorValue === '_UNOT_') { // Unary Logical NOT
-        if (astStack.length < 1) return unsupportedNode('Insufficient operands for !_UNOT_ operator');
-        const operand = astStack.pop()!;
-        astStack.push({
+      // It's a number (integer or float)
+      return { type: 'Literal', value: literal.value, raw: String(literal.value), diagramNodeId: nodeId } as Literal;
+    }
+
+    case 'Identifier': {
+      const identifier = diagramNode as DiagramIdentifierNode;
+      return { type: 'Identifier', name: identifier.name, diagramNodeId: nodeId } as Identifier;
+    }
+    
+    case 'UnaryOp': {
+      const unaryOp = diagramNode as UnaryOpNode;
+      const operand = convertDiagramASTToPythonAST(unaryOp.operand, nodeId, cfg);
+      if (operand.type === 'UnsupportedNode') return operand;
+
+      if (unaryOp.operator === '!') {
+         return {
           type: 'BinaryExpression',
           operator: '==', // Represent 'not x' as 'x == False'
           left: operand,
           right: { type: 'Literal', value: false, raw: 'False', diagramNodeId: nodeId },
           diagramNodeId: nodeId
-        } as BinaryExpression);
-      } else if (operatorValue === '_UMINUS_') { // Unary Minus
-        if (astStack.length < 1) return unsupportedNode('Insufficient operands for unary _UMINUS_ operator');
-        const operand = astStack.pop()!;
-        astStack.push({
+        } as BinaryExpression;
+      }
+      if (unaryOp.operator === '-') {
+        return {
           type: 'BinaryExpression',
           operator: '-', // Represent '-x' as '0 - x'
           left: { type: 'Literal', value: 0, raw: '0', diagramNodeId: nodeId },
           right: operand,
           diagramNodeId: nodeId
-        } as BinaryExpression);
-      } else { // Binary operators
-        if (astStack.length < 2) return unsupportedNode(`Insufficient operands for operator ${operatorValue}`);
-        const right = astStack.pop()!;
-        const left = astStack.pop()!;
-        let opForAST = operatorValue as IOperator; // Cast, assuming other ops are IOperator
-        
-        // Python specific operator conversion for '&&' and '||'
-        if (opForAST === '&&') opForAST = 'and' as IOperator; // Ensure 'and' is compatible with IOperator or widen type
-        if (opForAST === '||') opForAST = 'or' as IOperator;  // Ensure 'or' is compatible with IOperator or widen type
-
-        astStack.push({ type: 'BinaryExpression', operator: opForAST, left, right, diagramNodeId: nodeId } as BinaryExpression);
+        } as BinaryExpression;
       }
-    } else {
-        return unsupportedNode(`Unknown token in RPN queue: ${token.value}`);
+      if (unaryOp.operator === '+') {
+        return operand; // Unary plus is a no-op
+      }
+      return unsupportedNode(`Unsupported unary operator: ${unaryOp.operator}`);
     }
-  });
 
-  if (astStack.length === 1) {
-    return astStack[0];
-  } else if (astStack.length === 0 && outputQueue.length > 0) {
-      return unsupportedNode('Valid RPN but AST stack empty - likely malformed RPN or operator issue.');
-  } else if (astStack.length > 1) {
-    return unsupportedNode('Malformed expression: too many values in AST stack. Operator missing?');
+    case 'BinaryOp': {
+      const binaryOp = diagramNode as DiagramBinaryOpNode;
+      const left = convertDiagramASTToPythonAST(binaryOp.left, nodeId, cfg);
+      const right = convertDiagramASTToPythonAST(binaryOp.right, nodeId, cfg);
+      
+      if (left.type === 'UnsupportedNode') return left;
+      if (right.type === 'UnsupportedNode') return right;
+
+      let opForAST = binaryOp.operator as IOperator | 'and' | 'or';
+      if (opForAST === '&&') opForAST = 'and';
+      if (opForAST === '||') opForAST = 'or';
+
+      return { type: 'BinaryExpression', operator: opForAST, left, right, diagramNodeId: nodeId } as BinaryExpression;
+    }
+
+    case 'FunctionCall': {
+      const funcCall = diagramNode as DiagramFunctionCallNode;
+      const argument = convertDiagramASTToPythonAST(funcCall.argument, nodeId, cfg);
+      if (argument.type === 'UnsupportedNode') return argument;
+
+      const functionNameMap: { [key: string]: string } = {
+        'integer': 'int', 'string': 'str', 'float': 'float', 'boolean': 'bool'
+      };
+      
+      const funcName = functionNameMap[funcCall.functionName] || funcCall.functionName;
+
+      return {
+        type: 'CallExpression',
+        callee: { type: 'Identifier', name: funcName, diagramNodeId: nodeId },
+        arguments: [argument],
+        diagramNodeId: nodeId
+      } as CallExpression;
+    }
+
+    default:
+      return unsupportedNode(`Unknown diagram AST node type: ${(diagramNode as any).type}`);
   }
-  return unsupportedNode('Failed to parse expression - unknown state.');
+}
+
+// Helper to convert Diagram ExpressionElement[] to Python AST Expression
+const convertDiagramExpressionToAST = (elements: ExpressionElement[], nodeId: string, cfg: CFG): PyExpression => {
+  const visualId = getNodeVisualId(cfg, nodeId);
+  const unsupportedNode = (reason: string): UnsupportedNode =>
+    ({ type: 'UnsupportedNode', reason, diagramNodeId: nodeId, visualId } as UnsupportedNode);
+
+  if (!elements || elements.length === 0) {
+    return { type: 'Literal', value: null, raw: 'None', diagramNodeId: nodeId } as Literal; // Empty expression
+  }
+  
+  try {
+    const diagramAST = buildAST(elements);
+    return convertDiagramASTToPythonAST(diagramAST, nodeId, cfg);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return unsupportedNode(`Failed to parse expression: ${message}`);
+  }
 };
 
 // Build a Control-Flow Graph (CFG) from nodes and edges
@@ -346,10 +267,14 @@ const generateNodeStatements = (node: FlowNode, nodeId: string, cfg: CFG): State
       if (node.data?.variable) {
         const v = node.data.variable as Variable;
         const target: Identifier = { type: 'Identifier', name: v.name, diagramNodeId: nodeId, visualId };
+        
+        const promptText = `Enter the value of '${v.name}' by keyboard`;
+        const promptLiteral: Literal = { type: 'Literal', value: promptText, raw: JSON.stringify(promptText), diagramNodeId: nodeId };
+
         const baseCall: CallExpression = { 
           type: 'CallExpression', 
           callee: { type: 'Identifier', name: 'input', diagramNodeId: nodeId, visualId }, 
-          arguments: [], 
+          arguments: [promptLiteral], 
           diagramNodeId: nodeId,
           visualId
         } as CallExpression;
@@ -408,7 +333,7 @@ const generateNodeStatements = (node: FlowNode, nodeId: string, cfg: CFG): State
   return stmts;
 };
 
-const buildAST = (
+const generateStatementsFromCFG = (
   cfg: CFG,
   loops: Map<string, Set<string>>,
   nodeId: string,
@@ -420,6 +345,18 @@ const buildAST = (
   // Handle invalid nodeId
   if (!nodeId || !cfg.nodesMap.has(nodeId)) {
     return [{ type: 'UnsupportedNode', reason: `Invalid or missing node ID: ${nodeId}`, diagramNodeId: nodeId, visualId: nodeId } as UnsupportedNode];
+  }
+
+  // Skip body nodes of do-while style loops from appearing outside the loop
+  if (inLoop === null) {
+    for (const [hdr, bodySet] of loops) {
+      if (hdr !== nodeId && bodySet.has(nodeId)) {
+        const succs = cfg.succMap.get(hdr) || [];
+        if (succs.some(e => e.target === nodeId)) {
+          return []; // Node will be handled inside loop generation
+        }
+      }
+    }
   }
 
   const visualId = getNodeVisualId(cfg, nodeId);
@@ -449,6 +386,30 @@ const buildAST = (
       elems.push(...diag.rightSide);
       const condExpr = convertDiagramExpressionToAST(elems, nodeId, cfg);
 
+      // Detect do-while style: single incoming predecessor implies body before test
+      const preds = cfg.predMap.get(nodeId) || [];
+      if (preds.length === 1) {
+        // Build body assignment from predecessor
+        const predNode = cfg.nodesMap.get(preds[0].source)!;
+        const bodyStmt = generateNodeStatements(predNode, preds[0].source, cfg);
+
+        // Build conditional pass statement
+        const passStmt: Statement[] = [];
+        // Build if for do-while exit
+        const ifStmt: IfStatement = {
+          type: 'IfStatement', test: condExpr,
+          consequent: { type: 'BlockStatement', body: passStmt },
+          diagramNodeId: nodeId, visualId
+        };
+        // Build infinite loop AST
+        const trueLit: Literal = { type: 'Literal', value: true, raw: 'True', diagramNodeId: nodeId, visualId } as Literal;
+        const whileStmt: WhileStatement = {
+          type: 'WhileStatement', test: trueLit,
+          body: { type: 'BlockStatement', body: [...bodyStmt, ifStmt] }, diagramNodeId: nodeId, visualId
+        } as WhileStatement;
+        return [whileStmt];
+      }
+
       // Case 1: YES branch loops back only → while(cond)
       if (yesBack.length > 0 && noBack.length === 0) {
         const bodyStmts: Statement[] = [...headerStmts];
@@ -456,7 +417,7 @@ const buildAST = (
 
         // Build body statements for YES branch
         yesBack.forEach(e => {
-          if (e.target && cfg.nodesMap.has(e.target)) bodyStmts.push(...buildAST(cfg, loops, e.target, loopVisited, nodeId));
+          if (e.target && cfg.nodesMap.has(e.target)) bodyStmts.push(...generateStatementsFromCFG(cfg, loops, e.target, loopVisited, nodeId));
         });
 
         // Build while statement for YES branch
@@ -468,7 +429,7 @@ const buildAST = (
 
         // After loop, take NO exit (next code outside loop)
         noEdges.filter(e => e.target && !loopBodyIds.has(e.target) && cfg.nodesMap.has(e.target))
-          .forEach(e => stmts.push(...buildAST(cfg, loops, e.target, visited, inLoop)));
+          .forEach(e => stmts.push(...generateStatementsFromCFG(cfg, loops, e.target, visited, inLoop)));
 
         return stmts;
       }
@@ -480,7 +441,7 @@ const buildAST = (
 
         // Build body statements for NO branch
         noBack.forEach(e => {
-          if (e.target && cfg.nodesMap.has(e.target)) bodyStmts.push(...buildAST(cfg, loops, e.target, loopVisited, nodeId));
+          if (e.target && cfg.nodesMap.has(e.target)) bodyStmts.push(...generateStatementsFromCFG(cfg, loops, e.target, loopVisited, nodeId));
         });
 
         // Negate the condition expression (i.e. while(!cond) instead of while(cond))
@@ -496,7 +457,7 @@ const buildAST = (
 
         // After loop, take YES exit (next code outside loop)
         yesEdges.filter(e => e.target && !loopBodyIds.has(e.target) && cfg.nodesMap.has(e.target))
-          .forEach(e => stmts.push(...buildAST(cfg, loops, e.target, visited, inLoop)));
+          .forEach(e => stmts.push(...generateStatementsFromCFG(cfg, loops, e.target, visited, inLoop)));
 
         return stmts;
       }
@@ -510,13 +471,13 @@ const buildAST = (
         // Build body statements for YES branch (consequent)
         const consequent: Statement[] = [];
         yesBack.forEach(e => {
-          if (e.target && cfg.nodesMap.has(e.target)) consequent.push(...buildAST(cfg, loops, e.target, yesVisited, nodeId));
+          if (e.target && cfg.nodesMap.has(e.target)) consequent.push(...generateStatementsFromCFG(cfg, loops, e.target, yesVisited, nodeId));
         });
 
         // Build body statements for NO branch (alternate)
         const alternate: Statement[] = [];
         noBack.forEach(e => {
-          if (e.target && cfg.nodesMap.has(e.target)) alternate.push(...buildAST(cfg, loops, e.target, noVisited, nodeId));
+          if (e.target && cfg.nodesMap.has(e.target)) alternate.push(...generateStatementsFromCFG(cfg, loops, e.target, noVisited, nodeId));
         });
 
         // Build if statement for YES/NO branches
@@ -546,7 +507,7 @@ const buildAST = (
       // Build body statements for nodes contained in the loop body
       (cfg.succMap.get(nodeId) || []).forEach(e => {
         if (e.target && loopBodyIds.has(e.target) && cfg.nodesMap.has(e.target)) {
-          bodyStmts.push(...buildAST(cfg, loops, e.target, loopVisited, nodeId));
+          bodyStmts.push(...generateStatementsFromCFG(cfg, loops, e.target, loopVisited, nodeId));
         }
       });
 
@@ -580,7 +541,7 @@ const buildAST = (
       // Start node: proceed to next node if available and it exists
       const outs = cfg.succMap.get(nodeId) || [];
       if (outs.length > 0 && outs[0].target && cfg.nodesMap.has(outs[0].target)) {
-        stmts.push(...buildAST(cfg, loops, outs[0].target, visited, inLoop));
+        stmts.push(...generateStatementsFromCFG(cfg, loops, outs[0].target, visited, inLoop));
       }
       return stmts;
     }
@@ -631,7 +592,7 @@ const buildAST = (
           const stmts: Statement[] = [ifStmt];
 
           // After if-else, process merge node and its successors
-          stmts.push(...buildAST(cfg, loops, mergeId, visited, inLoop));
+          stmts.push(...generateStatementsFromCFG(cfg, loops, mergeId, visited, inLoop));
           return stmts;
         }
       }
@@ -641,13 +602,18 @@ const buildAST = (
       const falseVisited = new Set(visited);
       
       // Build body statements for YES branch (consequent)
-      const cons = yesEdge?.target && cfg.nodesMap.has(yesEdge.target) ? buildAST(cfg, loops, yesEdge.target, trueVisited, inLoop) : [];
+      const cons = yesEdge?.target && cfg.nodesMap.has(yesEdge.target) ? generateStatementsFromCFG(cfg, loops, yesEdge.target, trueVisited, inLoop) : [];
       // Build body statements for NO branch (alternate)
-      const alt  = noEdge?.target && cfg.nodesMap.has(noEdge.target) ? buildAST(cfg, loops, noEdge.target, falseVisited, inLoop) : [];
+      const alt  = noEdge?.target && cfg.nodesMap.has(noEdge.target) ? generateStatementsFromCFG(cfg, loops, noEdge.target, falseVisited, inLoop) : [];
 
       // Build if statement
-      const ifStmt: IfStatement = { type: 'IfStatement', test,
-        consequent: { type: 'BlockStatement', body: cons }, diagramNodeId: nodeId, visualId };
+      const ifStmt: IfStatement = {
+        type: 'IfStatement',
+        test,
+        consequent: { type: 'BlockStatement', body: cons },
+        diagramNodeId: nodeId,
+        visualId
+      };
       if (alt.length) ifStmt.alternate = { type: 'BlockStatement', body: alt };
       stmts.push(ifStmt);
 
@@ -665,7 +631,7 @@ const buildAST = (
   const outs = cfg.succMap.get(nodeId) || [];
   if (outs.length && node.type !== 'Conditional' && node.type !== 'End') {
     const next = outs[0].target;
-    if (next && cfg.nodesMap.has(next)) stmts.push(...buildAST(cfg, loops, next, visited, inLoop));
+    if (next && cfg.nodesMap.has(next)) stmts.push(...generateStatementsFromCFG(cfg, loops, next, visited, inLoop));
   }
 
   return stmts;
@@ -691,15 +657,17 @@ export const generatePythonAST = (nodes: FlowNode[], edges: Edge[]): Program => 
     }
 
     const dom = computeDominators(cfg);
-    const loops = findNaturalLoops(cfg, dom); // Natural loop: back edges
-    const body = buildAST(cfg, loops, cfg.startId);
+    // Detect natural loops via back-edge patterns
+    const loops = findNaturalLoops(cfg, dom);
+
+    const body = generateStatementsFromCFG(cfg, loops, cfg.startId);
 
     // Handle empty program body
     if (!body || body.length === 0) {
       const visualId = getNodeVisualId(cfg, cfg.startId);
       return { 
         type: 'Program', 
-        body: [{ type: 'UnsupportedNode', reason: 'Empty diagram - only Start node with no connections', diagramNodeId: cfg.startId, visualId } as UnsupportedNode] 
+        body: [{ type: 'UnsupportedNode', reason: 'Empty diagram - only Start node with no meaningful connections', diagramNodeId: cfg.startId, visualId } as UnsupportedNode] 
       };
     }
     
@@ -726,7 +694,7 @@ const generateCodeFromASTNode = (astNode: ASTNode, indentLevel = 0): string => {
 
   switch (astNode.type) {
     case 'Program':
-      return (astNode as Program).body.map(stmt => generateCodeFromASTNode(stmt, indentLevel)).join('\n');
+      return (astNode as Program).body.map(stmt => generateCodeFromASTNode(stmt, indentLevel)).filter(s => s.trim()).join('\n');
     
     case 'AssignmentStatement':
       const assign = astNode as AssignmentStatement;
@@ -744,7 +712,7 @@ const generateCodeFromASTNode = (astNode: ASTNode, indentLevel = 0): string => {
       code += `${indent}if ${generateCodeFromASTNode(ifStmt.test)}:` + '\n';
       code += generateCodeFromASTNode(ifStmt.consequent, indentLevel + 1);
       if (ifStmt.alternate) {
-        code += `\n${indent}else:` + '\n';
+        code += '\n' + `${indent}else:` + '\n';
         code += generateCodeFromASTNode(ifStmt.alternate, indentLevel + 1);
       }
       return code;
@@ -752,9 +720,9 @@ const generateCodeFromASTNode = (astNode: ASTNode, indentLevel = 0): string => {
     case 'BlockStatement':
       const block = astNode as BlockStatement;
       if (block.body.length === 0) {
-        return `${indent}${INDENT_SPACE}pass\n`; // Python requires a statement in a block
+        return `${indent}pass`;
       }
-      return block.body.map(stmt => generateCodeFromASTNode(stmt, indentLevel)).join('\n') + (block.body.length > 0 ? '\n' : '');
+      return block.body.map(stmt => generateCodeFromASTNode(stmt, indentLevel)).filter(s => s.trim()).join('\n');
 
     case 'PrintStatement':
       const printStmt = astNode as PrintStatement;
@@ -810,6 +778,6 @@ const generateCodeFromASTNode = (astNode: ASTNode, indentLevel = 0): string => {
 };
 
 export const generatePythonCode = (nodes: FlowNode[], edges: Edge[]): string => {
-  const ast = generatePythonAST(nodes, edges);
-  return generateCodeFromASTNode(ast).trim();
+  const ASTProgram = generatePythonAST(nodes, edges);
+  return generateCodeFromASTNode(ASTProgram).trim();
 };
