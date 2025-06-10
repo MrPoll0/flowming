@@ -79,7 +79,7 @@ export const CollaborationProvider: React.FC<{ children: ReactNode }> = ({ child
 
   const joinRoom = (room: string, userName: string, currentFilename?: string) => {
     const doc = new Y.Doc();
-    const prov = new WebrtcProvider(room, doc, { signaling: ['ws://83.35.48.140:4444'] });
+    const prov = new WebrtcProvider(room, doc, { signaling: ['wss://dei.inf.uc3m.es/flowming/signaling/'] });
 
     const sharedNodes = doc.getMap<any>('nodes');
     const sharedEdges = doc.getMap<any>('edges');
