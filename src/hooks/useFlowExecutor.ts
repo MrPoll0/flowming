@@ -494,13 +494,11 @@ export function useFlowExecutor(): { state: IExecutorState, actions: IExecutorAc
                 targetNodeId = matchingConnection.target;
                 console.log(`Condition evaluated to ${conditionResult}, following '${targetLabel}' path to node ${targetNodeId}`);
             } else {
-                console.warn(`No edge labeled '${targetLabel}' found for condition result ${conditionResult}`);
-                
-                // Fallback: take any available edge if one with the right label doesn't exist
-                if (outgoingConnections.length > 0) {
-                    targetNodeId = outgoingConnections[0].target;
-                    console.log(`Using fallback edge to node ${targetNodeId}`);
-                }
+                console.warn(`No edge labeled '${targetLabel}' found for condition result ${conditionResult}. Stopping execution.`);
+
+                // If the required branch is missing, halt execution instead of using a fallback edge
+                stopExecution();
+                return { targetNodeId: null, valuedVariables };
             }
         } else {
             const connections = reactFlow.getNodeConnections({ nodeId: node.id });
