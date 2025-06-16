@@ -138,7 +138,7 @@ const DeclareVariable = memo(function DeclareVariableComponent({ data, id: nodeI
             {nodeVariables.map((variable) => (
               <div key={variable.id} className="mb-1 last:mb-0">
                 <Badge variant="secondary" className="font-mono text-sm">
-                  {variable.type} {variable.name}
+                  {variable.toDeclarationString()}
                 </Badge>
               </div>
             ))}
