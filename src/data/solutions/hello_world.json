@@ -1,0 +1,48 @@
+{
+  "nodes": [
+    {
+      "id": "start",
+      "type": "Start",
+      "position": { "x": 250, "y": 50 },
+      "data": {}
+    },
+    {
+      "id": "output",
+      "type": "Output",
+      "position": { "x": 250, "y": 200 },
+      "data": {
+        "expression": {
+          "rightSide": [
+            {
+              "id": "1",
+              "type": "literal",
+              "value": "\"Hello, World!\""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "end",
+      "type": "End",
+      "position": { "x": 250, "y": 350 },
+      "data": {}
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-start-output",
+      "source": "start",
+      "target": "output",
+      "sourceHandle": "bottom",
+      "targetHandle": "top-target"
+    },
+    {
+      "id": "e-output-end",
+      "source": "output",
+      "target": "end",
+      "sourceHandle": "bottom-source",
+      "targetHandle": "top"
+    }
+  ]
+} 

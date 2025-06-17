@@ -1,0 +1,57 @@
+[
+  {
+    "id": "hello_world",
+    "title": "Hello World",
+    "difficulty": "Easy",
+    "description": "Create a program that prints \"Hello, World!\" to the standard output.\n\nThis is the classic first program that introduces you to basic output operations.",
+    "testCases": [
+      { "input": "", "expectedOutput": "Hello, World!" }
+    ]
+  },
+  {
+    "id": "sum_two_numbers",
+    "title": "Sum Two Numbers",
+    "difficulty": "Easy",
+    "description": "Read two integers from input and output their sum.\n\nYour program should:\n1. Read the first integer\n2. Read the second integer\n3. Calculate and output their sum",
+    "testCases": [
+      { "input": "5\n3", "expectedOutput": "8" },
+      { "input": "10\n-2", "expectedOutput": "8" },
+      { "input": "0\n0", "expectedOutput": "0" }
+    ]
+  },
+  {
+    "id": "even_or_odd",
+    "title": "Even or Odd",
+    "difficulty": "Easy",
+    "description": "Read an integer and determine if it's even or odd.\n\nOutput \"Even\" if the number is even, \"Odd\" if it's odd.",
+    "testCases": [
+      { "input": "4", "expectedOutput": "Even" },
+      { "input": "7", "expectedOutput": "Odd" },
+      { "input": "0", "expectedOutput": "Even" }
+    ]
+  },
+  {
+    "id": "factorial",
+    "title": "Factorial Calculator",
+    "difficulty": "Medium",
+    "description": "Calculate the factorial of a given positive integer.\n\nThe factorial of n (written as n!) is the product of all positive integers less than or equal to n.\n\nFor example: 5! = 5 × 4 × 3 × 2 × 1 = 120",
+    "testCases": [
+      { "input": "5", "expectedOutput": "120" },
+      { "input": "3", "expectedOutput": "6" },
+      { "input": "1", "expectedOutput": "1" },
+      { "input": "0", "expectedOutput": "1" }
+    ]
+  },
+  {
+    "id": "fibonacci_sequence",
+    "title": "Fibonacci Sequence",
+    "difficulty": "Hard",
+    "description": "Generate the first n numbers of the Fibonacci sequence.\n\nThe Fibonacci sequence starts with 0 and 1, and each subsequent number is the sum of the two preceding ones.\n\nExample: 0, 1, 1, 2, 3, 5, 8, 13, 21, 34, ..."
+  },
+  {
+    "id": "prime_checker",
+    "title": "Prime Number Checker",
+    "difficulty": "Medium",
+    "description": "Determine if a given positive integer is a prime number.\n\nA prime number is a natural number greater than 1 that has no positive divisors other than 1 and itself.\n\nOutput \"Prime\" if the number is prime, \"Not Prime\" otherwise."
+  }
+] 
