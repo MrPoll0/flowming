@@ -1,4 +1,13 @@
-# Flowming
+<p align="center">
+  <a href="https://github.com/MrPoll0/flowming">
+    <img src="flowming/public/logo.svg" alt="Flowming Logo" width="400">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/MrPoll0/flowming/actions/workflows/test.yml"><img src="https://github.com/MrPoll0/flowming/actions/workflows/test.yml/badge.svg" alt="Build Status"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg" alt="License"></a>
+</p>
 
 Interactive web application for designing, executing and debugging algorithms using standard flowchart notation.
 
