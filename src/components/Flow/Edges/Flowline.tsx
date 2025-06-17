@@ -143,6 +143,7 @@ const Flowline: FC<EdgeProps<Edge<FlowlineData>>> = (props) => {
 
             {/* Edge animation */}
             {/* TODO: use Framer Motion for the ball animation too? (not really needed) */}
+            {/* TODO: animaton compatibility issues with at least Firefox */}
             <AnimatePresence>
                 {isAnimated && (
                     <motion.svg

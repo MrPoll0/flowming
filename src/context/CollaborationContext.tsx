@@ -51,6 +51,7 @@ const CollaborationContext = createContext<CollaborationContextType>({
 export const useCollaboration = () => useContext(CollaborationContext);
 
 // Predefined colors for users
+// TODO: use a better color palette
 const userColors = [
   { color: '#30bced', light: '#30bced33' },
   { color: '#6eeb83', light: '#6eeb8333' },
@@ -76,6 +77,11 @@ export const CollaborationProvider: React.FC<{ children: ReactNode }> = ({ child
   const [ySharedCurrentVariables, setYSharedCurrentVariables] = useState<Y.Map<any> | null>(null);
   const [ySharedOutputHistory, setYSharedOutputHistory] = useState<Y.Array<any> | null>(null);
   const [ySharedIsRecording, setYSharedIsRecording] = useState<Y.Map<any> | null>(null);
+
+  // y-websocket was needed for isSynced, y-webrtc no support   https://www.reddit.com/r/learnjavascript/comments/1kwrrtw/i_am_very_frustrated_yjs_is_not_working_with/
+  // TODO: use y-websocket but reliably? (previous issue: user in empty room -> a user with default diagram joins -> nodes are added to the empty room)
+  // TODO: change to ShareDB (OT)  https://github.com/share/sharedb
+  // ---> https://medium.com/@jaceksroga/creating-large-scale-sharedb-react-redux-application-cd7924a89ad
 
   const joinRoom = (room: string, userName: string, currentFilename?: string) => {
     const doc = new Y.Doc();

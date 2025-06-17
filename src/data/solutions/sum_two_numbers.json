@@ -1,0 +1,60 @@
+{
+  "nodes": [
+    {
+      "id": "start",
+      "type": "Start",
+      "position": { "x": 0, "y": 125 },
+      "data": {}
+    },
+    {
+      "id": "declare-vars",
+      "type": "DeclareVariable",
+      "position": { "x": 225, "y": 100 },
+      "data": {
+        "variables": [
+          { "name": "a", "type": "integer" },
+          { "name": "b", "type": "integer" }
+        ]
+      }
+    },
+    {
+      "id": "input-a",
+      "type": "Input",
+      "position": { "x": 250, "y": 275 },
+      "data": { "variableName": "a" }
+    },
+    {
+      "id": "input-b",
+      "type": "Input",
+      "position": { "x": -150, "y": 275 },
+      "data": { "variableName": "b" }
+    },
+    {
+      "id": "output-sum",
+      "type": "Output",
+      "position": { "x": -150, "y": 475 },
+      "data": {
+        "expression": {
+          "rightSide": [
+            { "id": "1", "type": "variable", "value": "a" },
+            { "id": "2", "type": "operator", "value": "+" },
+            { "id": "3", "type": "variable", "value": "b" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "end",
+      "type": "End",
+      "position": { "x": 120, "y": 475 },
+      "data": {}
+    }
+  ],
+  "edges": [
+    { "id": "e1", "source": "start", "target": "declare-vars", "sourceHandle": "right", "targetHandle": "left-target" },
+    { "id": "e2", "source": "declare-vars", "target": "input-a", "sourceHandle": "bottom-source", "targetHandle": "top-target" },
+    { "id": "e3", "source": "input-a", "target": "input-b", "sourceHandle": "left-source", "targetHandle": "right-target" },
+    { "id": "e4", "source": "input-b", "target": "output-sum", "sourceHandle": "bottom-source", "targetHandle": "top-target" },
+    { "id": "e5", "source": "output-sum", "target": "end", "sourceHandle": "right-source", "targetHandle": "left" }
+  ]
+} 
