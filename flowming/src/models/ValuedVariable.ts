@@ -1,4 +1,4 @@
-import { IVariable, ValueTypeMap, Variable, VariableType } from "./Variable";
+import { IVariable, ValueTypeMap, Variable, VariableType, ArraySubtype } from "./Variable";
 
 export interface IValuedVariable<T extends VariableType> extends IVariable {
     value: ValueTypeMap[T];
@@ -7,8 +7,8 @@ export interface IValuedVariable<T extends VariableType> extends IVariable {
 export class ValuedVariable<T extends VariableType> extends Variable implements IValuedVariable<T> {
     value: ValueTypeMap[T];
     
-    constructor(id: string, type: T, name: string, nodeId: string, value: ValueTypeMap[T]) {
-        super(id, type, name, nodeId);
+    constructor(id: string, type: T, name: string, nodeId: string, value: ValueTypeMap[T], arraySubtype?: ArraySubtype, arraySize?: number) {
+        super(id, type, name, nodeId, arraySubtype, arraySize);
         this.value = value;
     }
 
@@ -16,6 +16,9 @@ export class ValuedVariable<T extends VariableType> extends Variable implements 
      * Creates a string representation of the valued variable
      */
     toString(): string {
+        if (this.type === 'array' && Array.isArray(this.value)) {
+            return `${this.name}: [${this.value.join(', ')}]`;
+        }
         return `${this.name}: ${this.value}`;
     }
 
@@ -29,6 +32,8 @@ export class ValuedVariable<T extends VariableType> extends Variable implements 
             name: this.name,
             nodeId: this.nodeId,
             value: this.value,
+            arraySubtype: this.arraySubtype,
+            arraySize: this.arraySize,
         }
     }
 
@@ -36,7 +41,7 @@ export class ValuedVariable<T extends VariableType> extends Variable implements 
      * Creates a ValuedVariable from an object representation
      */
     static fromObject<T extends VariableType>(obj: IValuedVariable<T>): ValuedVariable<T> {
-        return new ValuedVariable(obj.id, obj.type as T, obj.name, obj.nodeId, obj.value);
+        return new ValuedVariable(obj.id, obj.type as T, obj.name, obj.nodeId, obj.value, obj.arraySubtype as ArraySubtype, obj.arraySize);
     }
 
     /**
@@ -46,7 +51,7 @@ export class ValuedVariable<T extends VariableType> extends Variable implements 
     static fromVariable<T extends VariableType>(variable: Variable, value: ValueTypeMap[T] | null): ValuedVariable<T> {
         // If value is provided and not null, use it
         if (value !== null && value !== undefined) {
-            return new ValuedVariable(variable.id, variable.type as T, variable.name, variable.nodeId, value);
+            return new ValuedVariable(variable.id, variable.type as T, variable.name, variable.nodeId, value, variable.arraySubtype, variable.arraySize);
         }
         
         // Initialize value with correct type (TODO: does this make sense? should it be undefined instead?)
@@ -65,10 +70,35 @@ export class ValuedVariable<T extends VariableType> extends Variable implements 
             case 'boolean':
                 initializedValue = false as ValueTypeMap[T];
                 break;
+            case 'array':
+                // Initialize array with default values based on subtype and size
+                const size = variable.arraySize || 10;
+                const subtype = variable.arraySubtype || 'integer';
+                let defaultValue: any;
+                
+                switch (subtype) {
+                    case 'string':
+                        defaultValue = '';
+                        break;
+                    case 'integer':
+                        defaultValue = 0;
+                        break;
+                    case 'float':
+                        defaultValue = 0.0;
+                        break;
+                    case 'boolean':
+                        defaultValue = false;
+                        break;
+                    default:
+                        defaultValue = 0;
+                }
+                
+                initializedValue = Array(size).fill(defaultValue) as ValueTypeMap[T];
+                break;
             default:
                 console.error(`Unsupported variable type: ${variable.type}`);
                 initializedValue = '' as ValueTypeMap[T];
         }
-        return new ValuedVariable(variable.id, variable.type as T, variable.name, variable.nodeId, initializedValue);
+        return new ValuedVariable(variable.id, variable.type as T, variable.name, variable.nodeId, initializedValue, variable.arraySubtype, variable.arraySize);
     }
 }

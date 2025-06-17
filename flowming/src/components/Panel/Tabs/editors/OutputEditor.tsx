@@ -36,6 +36,8 @@ import {
   ExpressionDropArea 
 } from './shared/DragAndDropComponents';
 import { CSS } from '@dnd-kit/utilities';
+import ArrayIndexDialog from '@/components/ui/ArrayIndexDialog';
+import { parseArrayAccess, parseExpressionString } from '@/utils/expressionParsing';
 
 // Available operators for expression building
 const operators = [
@@ -138,9 +140,18 @@ const OutputEditor = () => {
   const isInitialLoadRef = useRef(true);
   const previousNodeIdRef = useRef<string | null>(null);
   const [expression, setExpression] = useState<Expression | null>(null);
+  const [isIndexDialogOpen, setIsIndexDialogOpen] = useState(false);
+  const [arrayVariableForIndex, setArrayVariableForIndex] = useState<Variable | null>(null);
   const [outputTab, setOutputTab] = useState<'variables' | 'literals' | 'functions'>('variables');
   const [_activeId, setActiveId] = useState<string | null>(null);
   const [activeDraggableItem, setActiveDraggableItem] = useState<ExpressionElement | null>(null);
+  
+  // State for editing existing array access elements
+  const [editingElement, setEditingElement] = useState<ExpressionElement | null>(null);
+  const [initialExpression, setInitialExpression] = useState<Expression | null>(null);
+  const [initialRangeStart, setInitialRangeStart] = useState<Expression | null>(null);
+  const [initialRangeEnd, setInitialRangeEnd] = useState<Expression | null>(null);
+  const [initialTab, setInitialTab] = useState<'single' | 'range'>('single');
   
   const reactFlowInstance = useReactFlow();
   
@@ -281,6 +292,9 @@ const OutputEditor = () => {
         const variable = getAllVariables().find(v => v.id === varId);
         if (variable) {
           determinedActiveElement = new ExpressionElement(active.id, 'variable', variable.name, variable);
+          if (variable.type === 'array') {
+            determinedActiveElement.value = `${variable.name}[]`;
+          }
         }
       } else if (active.id.startsWith('op-')) {
         const op = active.id.replace('op-', '');
@@ -384,6 +398,19 @@ const OutputEditor = () => {
       return;
     }
 
+    // Intercept array variable drag
+    if (activeDraggableItem.type === 'variable' && activeDraggableItem.variable?.type === 'array') {
+      const overLocation = getElementLocationInfo(over.id, expression);
+      // Check if it's a valid drop target
+      if (overLocation && (overLocation.isMainDropArea || overLocation.isNestedDropArea || overLocation.isMainExpressionElement || overLocation.isNestedExpressionElement)) {
+        setArrayVariableForIndex(activeDraggableItem.variable);
+        setIsIndexDialogOpen(true);
+        setActiveId(null);
+        setActiveDraggableItem(null);
+        return; // Stop further processing
+      }
+    }
+
     const activeLocation = getElementLocationInfo(active.id, expression);
     const overLocation = getElementLocationInfo(over.id, expression);
 
@@ -463,6 +490,138 @@ const OutputEditor = () => {
     setActiveDraggableItem(null);
   };
 
+  // Handle add variable with array support
+  const handleAddVariable = (variable: Variable) => {
+    if (variable.type === 'array') {
+      setArrayVariableForIndex(variable);
+      setIsIndexDialogOpen(true);
+    } else if (selectedNode?.type === 'Output' && expression && !isRunning) {
+      const element = new ExpressionElement(
+        crypto.randomUUID(),
+        'variable',
+        variable.name,
+        variable
+      );
+      setExpression(prev => {
+        if (!prev) return null;
+        const newExpr = prev.clone();
+        newExpr.addElement(element);
+        return newExpr;
+      });
+    }
+  };
+
+  // Handle editing array access elements
+  const handleEditArrayAccess = (element: ExpressionElement) => {
+    if (!element.value.includes('[') || !element.value.includes(']')) return;
+    
+    const parsed = parseArrayAccess(element.value);
+    if (!parsed) return;
+
+    // Find the array variable
+    const arrayVar = getAllVariables().find(v => v.name === parsed.arrayName && v.type === 'array');
+    if (!arrayVar) return;
+
+    setEditingElement(element);
+    setArrayVariableForIndex(arrayVar);
+
+    if (parsed.isRange && parsed.rangeStart && parsed.rangeEnd) {
+      setInitialTab('range');
+      setInitialRangeStart(parseExpressionString(parsed.rangeStart, getAllVariables()));
+      setInitialRangeEnd(parseExpressionString(parsed.rangeEnd, getAllVariables()));
+      setInitialExpression(null);
+    } else if (parsed.indexExpression) {
+      setInitialTab('single');
+      setInitialExpression(parseExpressionString(parsed.indexExpression, getAllVariables()));
+      setInitialRangeStart(null);
+      setInitialRangeEnd(null);
+    }
+
+    setIsIndexDialogOpen(true);
+  };
+
+  // Handle dialog submission for editing
+  const handleDialogSubmit = (_: 'single', expr: Expression) => {
+    if (arrayVariableForIndex) {
+      const exprStr = expr.toString();
+      const newValue = `${arrayVariableForIndex.name}[${exprStr}]`;
+
+      if (editingElement) {
+        // Replace existing element
+        setExpression(prev => {
+          if (!prev) return null;
+          const newExpr = prev.clone();
+          const elementToUpdate = newExpr.findElement(editingElement.id);
+          if (elementToUpdate) {
+            elementToUpdate.value = newValue;
+          }
+          return newExpr;
+        });
+      } else {
+        // Add new element
+        const element = new ExpressionElement(crypto.randomUUID(), 'literal', newValue);
+        setExpression(prev => {
+          if (!prev) return null;
+          const newExpr = prev.clone();
+          newExpr.addElement(element);
+          return newExpr;
+        });
+      }
+    }
+    
+    // Reset state
+    setEditingElement(null);
+    setInitialExpression(null);
+    setInitialRangeStart(null);
+    setInitialRangeEnd(null);
+    setIsIndexDialogOpen(false);
+  };
+
+  // Handle dialog submission for range editing
+  const handleDialogSubmitRange = (_: 'range', start: Expression, end: Expression) => {
+    if (arrayVariableForIndex) {
+      const newValue = `${arrayVariableForIndex.name}[${start.toString()}:${end.toString()}]`;
+
+      if (editingElement) {
+        // Replace existing element
+        setExpression(prev => {
+          if (!prev) return null;
+          const newExpr = prev.clone();
+          const elementToUpdate = newExpr.findElement(editingElement.id);
+          if (elementToUpdate) {
+            elementToUpdate.value = newValue;
+          }
+          return newExpr;
+        });
+      } else {
+        // Add new element
+        const element = new ExpressionElement(crypto.randomUUID(), 'literal', newValue);
+        setExpression(prev => {
+          if (!prev) return null;
+          const newExpr = prev.clone();
+          newExpr.addElement(element);
+          return newExpr;
+        });
+      }
+    }
+    
+    // Reset state
+    setEditingElement(null);
+    setInitialExpression(null);
+    setInitialRangeStart(null);
+    setInitialRangeEnd(null);
+    setIsIndexDialogOpen(false);
+  };
+
+  // Handle dialog cancel
+  const handleDialogCancel = () => {
+    setEditingElement(null);
+    setInitialExpression(null);
+    setInitialRangeStart(null);
+    setInitialRangeEnd(null);
+    setIsIndexDialogOpen(false);
+  };
+
   // Don't render if not an Output node
   if (!selectedNode || selectedNode.type !== 'Output' || !expression) return null;
   
@@ -507,6 +666,7 @@ const OutputEditor = () => {
                         index={index}
                         removeExpressionElement={removeExpressionElement}
                         disabled={isRunning}
+                        onEdit={handleEditArrayAccess}
                       />
                     );
                   })}
@@ -538,18 +698,10 @@ const OutputEditor = () => {
                         key={`var-${variable.id}`}
                         id={`var-${variable.id}`}
                         type="variable"
-                        value={variable.name}
+                        value={variable.type === 'array' ? `${variable.name}[]` : variable.name}
                         backgroundColor="#d1e7ff"
                         disabled={isRunning}
-                        onClick={() => {
-                          const element = new ExpressionElement(
-                            crypto.randomUUID(),
-                            'variable',
-                            variable.name,
-                            variable
-                          );
-                          addExpressionElement(element);
-                        }}
+                        onClick={() => handleAddVariable(variable)}
                       />
                     ))}
                     {allVariables.length === 0 && (
@@ -752,12 +904,27 @@ const OutputEditor = () => {
           <div className={`
             px-2 py-1 m-1 rounded text-sm shadow-lg cursor-grabbing
             ${activeDraggableItem.type === 'variable' ? 'bg-blue-100' :
-              activeDraggableItem.type === 'operator' ? 'bg-red-100' : 'bg-green-100'}
+              activeDraggableItem.type === 'operator' ? 'bg-red-100' :
+              activeDraggableItem.type === 'literal' && activeDraggableItem.value.includes('[') && activeDraggableItem.value.includes(']') ? 'bg-blue-100' :
+              activeDraggableItem.type === 'literal' ? 'bg-green-100' : 'bg-purple-100'}
           `}>
             {activeDraggableItem.value}
           </div>
         ) : null}
       </DragOverlay>
+
+      {/* Render dialog */}
+      <ArrayIndexDialog
+        open={isIndexDialogOpen}
+        variableName={arrayVariableForIndex?.name || ''}
+        onCancel={handleDialogCancel}
+        onSubmit={handleDialogSubmit}
+        onSubmitRange={handleDialogSubmitRange}
+        initialExpression={initialExpression || undefined}
+        initialRangeStart={initialRangeStart || undefined}
+        initialRangeEnd={initialRangeEnd || undefined}
+        initialTab={initialTab}
+      />
     </DndContext>
   );
 };

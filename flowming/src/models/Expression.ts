@@ -2,6 +2,7 @@ import { Variable, VariableType, ValueTypeMap } from './Variable';
 import { ExpressionElement } from './ExpressionElement';
 import { ValuedVariable } from './ValuedVariable';
 import { buildAST } from './ExpressionParser';
+import { IVariable } from './Variable';
 
 export const operators = ['+', '-', '*', '/', '!', '%', '&&', '||', '==', '!=', '>', '<', '>=', '<=', '(', ')'];
 export type IOperator = typeof operators[number];
@@ -363,33 +364,51 @@ export class Expression implements IExpression {
   }
 
   /**
-   * Adds an element to the expression
+   * Finds an element by its ID recursively in the expression
    */
-  addElement(element: ExpressionElement): void {
-    this.rightSide.push(element);
+  findElement(id: string): ExpressionElement | undefined {
+    for (const element of this.rightSide) {
+      if (element.id === id) {
+        return element;
+      }
+      if (element.isFunction() && element.nestedExpression) {
+        const found = element.nestedExpression.findElement(id);
+        if (found) {
+          return found;
+        }
+      }
+    }
+    return undefined;
   }
 
   /**
-   * Removes an element from the expression by id
+   * Adds an element to the right side of the expression
    */
-  removeElement(id: string): void {
-    const filterRecursive = (elements: ExpressionElement[]): ExpressionElement[] => {
-      if (!elements) return [];
-      return elements.filter(e => {
-        if (e.id === id) {
-          return false;
-        }
-        if (e.isFunction() && e.nestedExpression) {
-          e.nestedExpression.removeElement(id);
-        }
-        return true;
-      });
-    };
+  addElement(element: ExpressionElement): Expression {
+    this.rightSide.push(element);
+    return this;
+  }
 
-    if (Array.isArray(this.leftSide)) {
-      this.leftSide = filterRecursive(this.leftSide as ExpressionElement[]);
-    }
-    this.rightSide = filterRecursive(this.rightSide);
+  /**
+   * Removes an element from the right side of the expression
+   */
+  removeElement(id: string): Expression {
+    // Recursively remove the element if it exists either on the top level or inside nested function calls
+    this.rightSide = this.rightSide.flatMap(e => {
+      // If this element matches the id, remove it by filtering it out
+      if (e.id === id) {
+        return [];
+      }
+
+      // If this is a function element, delegate the removal to its nested expression
+      if (e.isFunction() && e.nestedExpression) {
+        e.nestedExpression.removeElement(id);
+      }
+
+      return [e];
+    });
+
+    return this;
   }
 
   /**
@@ -485,9 +504,19 @@ export class Expression implements IExpression {
    * Creates an Expression from a plain object
    */
   static fromObject(obj: IExpression): Expression {
-    const leftSide = obj.equality ? (obj.leftSide as ExpressionElement[]).map(e => ExpressionElement.fromObject(e)) : obj.leftSide != undefined ? Variable.fromObject(obj.leftSide as Variable) : undefined;
+    let leftSide: Variable | ExpressionElement[] | undefined;
+    if (obj.leftSide) {
+      if (Array.isArray(obj.leftSide)) {
+        leftSide = obj.leftSide.map(e => ExpressionElement.fromObject(e));
+      } else {
+        leftSide = Variable.fromObject(obj.leftSide as IVariable);
+      }
+    } else {
+      leftSide = undefined;
+    }
+
     const rightSide = obj.rightSide.map(e => ExpressionElement.fromObject(e));
-    const equality = obj.equality;
-    return new Expression(leftSide, rightSide, equality);
+    
+    return new Expression(leftSide, rightSide, obj.equality);
   }
 }

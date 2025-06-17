@@ -7,9 +7,11 @@ import { IValuedVariable, ValuedVariable } from '../../../models/ValuedVariable'
 import { VariableType } from '../../../models/Variable';
 import { Badge } from '@/components/ui/badge';
 import BreakpointIndicator from './BreakpointIndicator';
+import { ExpressionElement } from '@/models/ExpressionElement';
 
 interface AssignVariableNode extends BaseNode {
   expression?: Expression;
+  leftSideIndex?: string;
 }
 
 export class AssignVariableProcessor implements NodeProcessor {
@@ -63,7 +65,24 @@ export class AssignVariableProcessor implements NodeProcessor {
 }
 
 const AssignVariable = memo(function AssignVariableComponent({ data, id: _nodeId }: { data: AssignVariableNode; id: string }) {
-  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, expression, width, height, visualId, isError, hasBreakpoint, isBreakpointTriggered } = data;
+  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, expression, width, height, visualId, isError, hasBreakpoint, isBreakpointTriggered, leftSideIndex } = data as AssignVariableNode & { leftSideIndex?: string };
+  
+  const buildDisplayString = () => {
+    if (!expression) return null;
+    const exprInstance = expression instanceof Expression ? expression : Expression.fromObject(expression);
+    // For assign variable expressions, leftSide is a Variable
+    if (exprInstance.leftSide instanceof Variable) {
+      const leftName = exprInstance.leftSide.name;
+      const leftDisplay = leftSideIndex ? `${leftName}[${leftSideIndex}]` : leftName;
+      const right = exprInstance.rightSide.map((e: any) => (e as ExpressionElement).toString()).join(' ');
+      return `${leftDisplay} = ${right}`;
+    }
+    // Fallback
+    return exprInstance.toString();
+  };
+
+  const displayString = buildDisplayString();
+
   return (
     <div 
       className={`assign-variable-node`}
@@ -108,7 +127,7 @@ const AssignVariable = memo(function AssignVariableComponent({ data, id: _nodeId
       {expression ? (
         <div className="mb-1">
           <Badge variant="outline" className="font-mono text-sm w-full justify-center">
-            {expression instanceof Expression ? expression.toString() : Expression.fromObject(expression).toString()}
+            {displayString}
           </Badge>
         </div>
       ) : (

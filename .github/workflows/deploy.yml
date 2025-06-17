@@ -3,6 +3,9 @@ name: Deploy to Server
 on:
   push:
     branches: [main]
+    paths:
+      - 'flowming/**'
+      - '.github/workflows/deploy.yml'
 
 jobs:
   build-and-deploy:
@@ -18,18 +21,18 @@ jobs:
           rm -f package-lock.json
 
       - name: Install dependencies
-        run: npm install
+        run: npm install --workspace=flowming
 
       - name: Run tests
-        run: npm test
+        run: npm test --workspace=flowming
 
       - name: Build project
-        run: npm run build
+        run: npm run build --workspace=flowming
 
       - name: Deploy files
         run: |
           rm -rf /var/www/flow-diagram/*
-          cp -a dist/* /var/www/flow-diagram/
+          cp -a flowming/dist/* /var/www/flow-diagram/
           chown -R github-runner:www-data /var/www/flow-diagram
 
       - name: Restart server
@@ -38,6 +41,8 @@ jobs:
 
       - name: Clean up
         run: |
-          rm -rf dist
+          rm -rf flowming/dist
           rm -rf node_modules
-          rm package-lock.json
+          rm -rf flowming/node_modules
+          rm -rf y-webrtc-server/node_modules
+          rm -f package-lock.json
