@@ -8,6 +8,8 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { ExpressionElement } from '../../../../../models';
 import { Button } from "@/components/ui/button";
+import React from 'react';
+import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 
 // Define props interfaces for components
 export interface DraggableExpressionElementProps {
@@ -15,10 +17,11 @@ export interface DraggableExpressionElementProps {
   index: number;
   removeExpressionElement: (id: string) => void;
   disabled: boolean;
+  onEdit?: (element: ExpressionElement) => void;
 }
 
 // Draggable expression element component
-export const DraggableExpressionElement = ({ element, removeExpressionElement, disabled }: DraggableExpressionElementProps) => {
+export const DraggableExpressionElement = ({ element, removeExpressionElement, disabled, onEdit }: DraggableExpressionElementProps) => {
   const {
     attributes,
     listeners,
@@ -28,9 +31,22 @@ export const DraggableExpressionElement = ({ element, removeExpressionElement, d
     isDragging
   } = useSortable({ id: element.id, disabled });
 
+  // Determine background color - treat array access as variables (blue)
   const bgColor = 
     element.type === 'variable' ? 'bg-blue-100' :
-    element.type === 'operator' ? 'bg-red-100' : 'bg-green-100';
+    element.type === 'operator' ? 'bg-red-100' : 
+    element.type === 'literal' && element.value.includes('[') && element.value.includes(']') ? 'bg-blue-100' :
+    element.type === 'literal' ? 'bg-green-100' : 'bg-purple-100';
+
+  // Check if this is an array access element that can be edited
+  const isArrayAccess = element.type === 'literal' && element.value.includes('[') && element.value.includes(']');
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (isArrayAccess && onEdit && !disabled) {
+      e.stopPropagation();
+      onEdit(element);
+    }
+  };
 
   return (
     <div
@@ -41,12 +57,15 @@ export const DraggableExpressionElement = ({ element, removeExpressionElement, d
       }}
       {...attributes}
       {...listeners}
+      onClick={handleClick}
       className={`
         group relative inline-block px-2 py-1 m-1 rounded text-sm
         ${bgColor}
         ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-grab'}
         ${isDragging ? 'opacity-0' : 'opacity-100'}
+        ${isArrayAccess && !disabled ? 'hover:ring-2 hover:ring-blue-300' : ''}
       `}
+      title={isArrayAccess && !disabled ? 'Click to edit array index' : ''}
     >
       <span>{element.value}</span>
       <Button
@@ -160,4 +179,76 @@ export const ExpressionDropArea = ({ id, children, disabled }: { id: string, chi
       {children}
     </div>
   );
-}; 
+};
+
+// START: FunctionExpressionElement (Moved from VariableAssignmentEditor)
+interface FunctionExpressionElementProps {
+  element: ExpressionElement;
+  removeExpressionElement: (id: string) => void;
+  disabled: boolean;
+}
+
+export const FunctionExpressionElement: React.FC<FunctionExpressionElementProps> = ({ element, removeExpressionElement, disabled }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: element.id, disabled });
+  
+  const nestedDropId = `nested-${element.id}`;
+  const nestedElements = element.nestedExpression?.rightSide || [];
+  const nestedItems = nestedElements.map(e => e.id);
+  
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      {...attributes}
+      {...listeners}
+      className={`
+        relative inline-flex items-center p-2 m-1 rounded-lg text-sm bg-purple-100 border border-purple-200
+        ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-grab hover:bg-purple-150'}
+        ${isDragging ? 'opacity-30' : 'opacity-100'}
+        transition-all duration-200
+      `}
+    >
+      <span className="font-medium text-purple-700 mr-1">{element.value}</span>
+      <span className="text-purple-600 font-bold">(</span>
+      <div className="flex-1 min-w-[60px] mx-1">
+        <ExpressionDropArea id={nestedDropId} disabled={disabled}>
+          <SortableContext items={nestedItems} strategy={horizontalListSortingStrategy}>
+            {nestedElements.length > 0 ? (
+              nestedElements.map((nestedElem: ExpressionElement, idx: number) => (
+                nestedElem.isFunction() ? (
+                  <FunctionExpressionElement
+                    key={nestedElem.id}
+                    element={nestedElem}
+                    removeExpressionElement={removeExpressionElement}
+                    disabled={disabled}
+                  />
+                ) : (
+                  <DraggableExpressionElement
+                    key={nestedElem.id}
+                    element={nestedElem}
+                    index={idx}
+                    removeExpressionElement={removeExpressionElement}
+                    disabled={disabled}
+                  />
+                )
+              ))
+            ) : (
+              <span className="text-purple-400 text-xs italic">drop here</span>
+            )}
+          </SortableContext>
+        </ExpressionDropArea>
+      </div>
+      <span className="text-purple-600 font-bold">)</span>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={(e) => { e.stopPropagation(); removeExpressionElement(element.id); }}
+        disabled={disabled}
+        className="ml-1 h-5 w-5 p-0 text-purple-600 hover:text-red-600 hover:bg-red-50 rounded-full"
+      >
+        ×
+      </Button>
+    </div>
+  );
+};
+// END: FunctionExpressionElement 

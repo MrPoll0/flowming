@@ -43,6 +43,8 @@ import {
   DraggablePaletteItem, 
   ExpressionDropArea 
 } from './shared/DragAndDropComponents';
+import ArrayIndexDialog from '@/components/ui/ArrayIndexDialog';
+import { parseArrayAccess, parseExpressionString } from '@/utils/expressionParsing';
 
 // Available operators for expression building
 const operators = [
@@ -149,6 +151,18 @@ const VariableAssignmentEditor = () => {
   const [assignmentTab, setAssignmentTab] = useState<'variables' | 'literals' | 'functions'>('variables');
   const [_activeId, setActiveId] = useState<string | null>(null);
   const [activeDraggableItem, setActiveDraggableItem] = useState<ExpressionElement | null>(null);
+  const [isIndexDialogOpen, setIsIndexDialogOpen] = useState(false);
+  const [arrayVariableForIndex, setArrayVariableForIndex] = useState<Variable | null>(null);
+  // Left-side (assignment target) index state
+  const [leftSideIndexString, setLeftSideIndexString] = useState<string | null>(null);
+  const [isEditingLeftSideIndex, setIsEditingLeftSideIndex] = useState(false);
+  
+  // State for editing existing array access elements
+  const [editingElement, setEditingElement] = useState<ExpressionElement | null>(null);
+  const [initialExpression, setInitialExpression] = useState<Expression | null>(null);
+  const [initialRangeStart, setInitialRangeStart] = useState<Expression | null>(null);
+  const [initialRangeEnd, setInitialRangeEnd] = useState<Expression | null>(null);
+  const [initialTab, setInitialTab] = useState<'single' | 'range'>('single');
   
   const reactFlowInstance = useReactFlow();
   
@@ -193,6 +207,11 @@ const VariableAssignmentEditor = () => {
           return;
         }
 
+        // Reset index state if variable type changed to non-array
+        if (varInstance.type !== 'array' && leftSideIndexString) {
+          setLeftSideIndexString(null);
+        }
+
         // Only update if the left side has changed or if the expression is null
         if (!expression || (expression.leftSide instanceof Variable && expression.leftSide.id !== varInstance.id)) {
           // Preserve right side if expression already exists and has one
@@ -202,24 +221,19 @@ const VariableAssignmentEditor = () => {
         if (expression !== null) setExpression(null);
       }
     }
-  }, [leftSideVariable, selectedNode, getAllVariables, expression]);
+  }, [leftSideVariable, selectedNode, getAllVariables, expression, leftSideIndexString]);
 
   // Update the node data when expression changes
   useEffect(() => {
     if (selectedNode?.type === 'AssignVariable' && !isInitialLoadRef.current) {
-      let updatedData;
-      if (expression) {
-        updatedData = {
-          expression: expression.toObject()
-        };
-      } else {
-        updatedData = { expression: null };
-      }
-      
-      // Update the node data
+      const updatedData: any = {
+        expression: expression ? expression.toObject() : null,
+        leftSideIndex: leftSideIndexString || undefined,
+      };
+
       reactFlowInstance.updateNodeData(selectedNode.id, updatedData);
     }
-  }, [expression, reactFlowInstance, selectedNode]);
+  }, [expression, leftSideIndexString, reactFlowInstance, selectedNode]);
 
   // Load assignment data when the selected node changes or when its data changes (for collaboration)
   useEffect(() => {
@@ -246,6 +260,12 @@ const VariableAssignmentEditor = () => {
             // Check if the variable with this ID still exists
             if (allVariables.some(v => v.id === varId)) {
               setLeftSideVariable(varId);
+              // Load stored leftSideIndex if present
+              if (selectedNode.data.leftSideIndex) {
+                setLeftSideIndexString(selectedNode.data.leftSideIndex as string);
+              } else {
+                setLeftSideIndexString(null);
+              }
               // Try to recreate the expression
               const leftVar = allVariables.find(v => v.id === varId);
               if (leftVar) {
@@ -262,12 +282,14 @@ const VariableAssignmentEditor = () => {
           // Only reset form state when it's a new node (not when collaborative data is cleared)
           setLeftSideVariable('');
           setExpression(null);
+          setLeftSideIndexString(null);
         }
       }
     } else {
       previousNodeIdRef.current = null;
       setLeftSideVariable('');
       setExpression(null);
+      setLeftSideIndexString(null);
     }
     
     isInitialLoadRef.current = false;
@@ -328,6 +350,9 @@ const VariableAssignmentEditor = () => {
         const variable = getAllVariables().find(v => v.id === varId);
         if (variable) {
           determinedActiveElement = new ExpressionElement(active.id, 'variable', variable.name, variable); 
+          if (variable.type === 'array') {
+            determinedActiveElement.value = `${variable.name}[]`;
+          }
         }
       } else if (active.id.startsWith('op-')) {
         const op = active.id.replace('op-', '');
@@ -431,6 +456,19 @@ const VariableAssignmentEditor = () => {
       return;
     }
     
+    // Intercept array variable drag
+    if (activeDraggableItem.type === 'variable' && activeDraggableItem.variable?.type === 'array') {
+      const overLocation = getElementLocationInfo(over.id, expression);
+      // Check if it's a valid drop target
+      if (overLocation && (overLocation.isMainDropArea || overLocation.isNestedDropArea || overLocation.isMainExpressionElement || overLocation.isNestedExpressionElement)) {
+        setArrayVariableForIndex(activeDraggableItem.variable);
+        setIsIndexDialogOpen(true);
+        setActiveId(null);
+        setActiveDraggableItem(null);
+        return; // Stop further processing
+      }
+    }
+
     const activeLocation = getElementLocationInfo(active.id, expression);
     const overLocation = getElementLocationInfo(over.id, expression);
 
@@ -510,371 +548,623 @@ const VariableAssignmentEditor = () => {
     setActiveDraggableItem(null);
   };
 
+  // Handle drop/click for array variable
+  const handleAddVariable = (variable: Variable) => {
+    if (variable.type === 'array') {
+      setArrayVariableForIndex(variable);
+      setIsIndexDialogOpen(true);
+    } else if (selectedNode?.type === 'AssignVariable' && expression && !isRunning) {
+      const element = new ExpressionElement(
+        crypto.randomUUID(),
+        'variable',
+        variable.name,
+        variable
+      );
+      setExpression(prev => {
+        if (!prev) return null;
+        const newExpr = prev.clone();
+        newExpr.addElement(element);
+        return newExpr;
+      });
+    }
+  };
+
+  // Modify variable dropdown change handler to support array index dialog
+  const handleLeftVariableChange = (value: string) => {
+    if (value === '__CLEAR__') {
+      setLeftSideVariable('');
+      setLeftSideIndexString(null);
+      return;
+    }
+
+    const variable = getAllVariables().find(v => v.id === value);
+    if (!variable) return;
+
+    setLeftSideVariable(variable.id);
+
+    if (variable.type === 'array') {
+      // Open index dialog immediately
+      setArrayVariableForIndex(variable);
+      setIsEditingLeftSideIndex(true);
+      // Prefill if already had an index
+      if (leftSideIndexString) {
+        const parsed = parseArrayAccess(`${variable.name}[${leftSideIndexString}]`);
+        if (parsed) {
+          if (parsed.isRange && parsed.rangeStart && parsed.rangeEnd) {
+            setInitialTab('range');
+            setInitialRangeStart(parseExpressionString(parsed.rangeStart, getAllVariables()));
+            setInitialRangeEnd(parseExpressionString(parsed.rangeEnd, getAllVariables()));
+            setInitialExpression(null);
+          } else if (parsed.indexExpression) {
+            setInitialTab('single');
+            setInitialExpression(parseExpressionString(parsed.indexExpression, getAllVariables()));
+            setInitialRangeStart(null);
+            setInitialRangeEnd(null);
+          }
+        }
+      } else {
+        setLeftSideIndexString(null);
+      }
+      setIsIndexDialogOpen(true);
+    } else {
+      setLeftSideIndexString(null);
+    }
+  };
+
+  // Override dialog submit handlers to manage left-side edits first
+  const handleDialogSubmit = (_: 'single', expr: Expression) => {
+    if (isEditingLeftSideIndex && arrayVariableForIndex) {
+      if (expr.isEmpty()) {
+        // Treat as cancel – clear variable selection
+        setLeftSideVariable('');
+        setLeftSideIndexString(null);
+      } else {
+        setLeftSideIndexString(expr.toString());
+      }
+      setIsEditingLeftSideIndex(false);
+      setIsIndexDialogOpen(false);
+      return;
+    }
+    if (arrayVariableForIndex) {
+      const exprStr = expr.toString();
+      const newValue = `${arrayVariableForIndex.name}[${exprStr}]`;
+
+      if (editingElement) {
+        // Replace existing element
+        setExpression(prev => {
+          if (!prev) return null;
+          const newExpr = prev.clone();
+          const elementToUpdate = newExpr.findElement(editingElement.id);
+          if (elementToUpdate) {
+            elementToUpdate.value = newValue;
+          }
+          return newExpr;
+        });
+      } else {
+        // Add new element
+        const element = new ExpressionElement(crypto.randomUUID(), 'literal', newValue);
+        setExpression(prev => {
+          if (!prev) return null;
+          const newExpr = prev.clone();
+          newExpr.addElement(element);
+          return newExpr;
+        });
+      }
+    }
+    
+    // Reset state
+    setEditingElement(null);
+    setInitialExpression(null);
+    setInitialRangeStart(null);
+    setInitialRangeEnd(null);
+    setIsIndexDialogOpen(false);
+  };
+
+  // Handle dialog submission for range editing
+  const handleDialogSubmitRange = (_: 'range', start: Expression, end: Expression) => {
+    if (isEditingLeftSideIndex && arrayVariableForIndex) {
+      if (start.isEmpty() || end.isEmpty()) {
+        setLeftSideVariable('');
+        setLeftSideIndexString(null);
+      } else {
+        setLeftSideIndexString(`${start.toString()}:${end.toString()}`);
+      }
+      setIsEditingLeftSideIndex(false);
+      setIsIndexDialogOpen(false);
+      return;
+    }
+    if (arrayVariableForIndex) {
+      const newValue = `${arrayVariableForIndex.name}[${start.toString()}:${end.toString()}]`;
+
+      if (editingElement) {
+        // Replace existing element
+        setExpression(prev => {
+          if (!prev) return null;
+          const newExpr = prev.clone();
+          const elementToUpdate = newExpr.findElement(editingElement.id);
+          if (elementToUpdate) {
+            elementToUpdate.value = newValue;
+          }
+          return newExpr;
+        });
+      } else {
+        // Add new element
+        const element = new ExpressionElement(crypto.randomUUID(), 'literal', newValue);
+        setExpression(prev => {
+          if (!prev) return null;
+          const newExpr = prev.clone();
+          newExpr.addElement(element);
+          return newExpr;
+        });
+      }
+    }
+    
+    // Reset state
+    setEditingElement(null);
+    setInitialExpression(null);
+    setInitialRangeStart(null);
+    setInitialRangeEnd(null);
+    setIsIndexDialogOpen(false);
+  };
+
+  // Handle dialog cancel
+  const handleDialogCancel = () => {
+    setEditingElement(null);
+    setInitialExpression(null);
+    setInitialRangeStart(null);
+    setInitialRangeEnd(null);
+    setIsIndexDialogOpen(false);
+
+    if (isEditingLeftSideIndex && !leftSideIndexString) {
+      // User canceled before providing an index -> deselect variable
+      setLeftSideVariable('');
+      setIsEditingLeftSideIndex(false);
+      setArrayVariableForIndex(null);
+    }
+  };
+
+  // Handler to edit existing array access elements on RHS (dragged literals)
+  const handleEditArrayAccess = (element: ExpressionElement) => {
+    if (!element.value.includes('[') || !element.value.includes(']')) return;
+
+    const parsed = parseArrayAccess(element.value);
+    if (!parsed) return;
+
+    const arrayVar = getAllVariables().find(v => v.name === parsed.arrayName && v.type === 'array');
+    if (!arrayVar) return;
+
+    setEditingElement(element);
+    setArrayVariableForIndex(arrayVar);
+
+    if (parsed.isRange && parsed.rangeStart && parsed.rangeEnd) {
+      setInitialTab('range');
+      setInitialRangeStart(parseExpressionString(parsed.rangeStart, getAllVariables()));
+      setInitialRangeEnd(parseExpressionString(parsed.rangeEnd, getAllVariables()));
+      setInitialExpression(null);
+    } else if (parsed.indexExpression) {
+      setInitialTab('single');
+      setInitialExpression(parseExpressionString(parsed.indexExpression, getAllVariables()));
+      setInitialRangeStart(null);
+      setInitialRangeEnd(null);
+    }
+
+    setIsIndexDialogOpen(true);
+  };
+
   // Don't render if not an AssignVariable node
   if (!selectedNode || selectedNode.type !== 'AssignVariable') return null;
   
   const allVariables = getAllVariables();
   
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={rectIntersection}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-    >
-      <div key={selectedNode.id}>        
-        {/* Assignment expression display box */}
-        <Card className="mb-4">
-          <CardHeader className="pb-2">
-            <div className="flex items-center gap-4">
-              <div className="flex-none min-w-[200px]">
-                <Label className="text-sm font-medium">Variable</Label>
-              </div>
-              <div className="flex-none w-6 text-center">
-                {/* Spacer for equals sign */}
-              </div>
-              <div className="flex-1">
-                <Label className="text-sm font-medium">Expression</Label>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="min-h-[50px] p-2 bg-muted/30 border rounded">
+    <>
+      <ArrayIndexDialog
+        open={isIndexDialogOpen}
+        variableName={arrayVariableForIndex?.name || ''}
+        onCancel={handleDialogCancel}
+        onSubmit={handleDialogSubmit}
+        onSubmitRange={handleDialogSubmitRange}
+        initialExpression={initialExpression || undefined}
+        initialRangeStart={initialRangeStart || undefined}
+        initialRangeEnd={initialRangeEnd || undefined}
+        initialTab={initialTab}
+      />
+      <DndContext
+        sensors={sensors}
+        collisionDetection={rectIntersection}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <div key={selectedNode.id}>        
+          {/* Assignment expression display box */}
+          <Card className="mb-4">
+            <CardHeader className="pb-2">
               <div className="flex items-center gap-4">
-                {/* Variable selection */}
                 <div className="flex-none min-w-[200px]">
-                  <Select
-                    value={leftSideVariable}
-                    onValueChange={(value) => setLeftSideVariable(value === '__CLEAR__' ? '' : value)}
-                    disabled={isRunning}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="No variable" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__CLEAR__">No variable</SelectItem>
-                      {allVariables.map(variable => (
-                        <SelectItem key={variable.id} value={variable.id}>
-                          {variable.name} ({variable.type})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label className="text-sm font-medium">Variable</Label>
                 </div>
-                
-                {/* Equals sign */}
                 <div className="flex-none w-6 text-center">
-                  <span className="text-lg font-bold">=</span>
+                  {/* Spacer for equals sign */}
                 </div>
-                
-                {/* Expression area */}
                 <div className="flex-1">
-                  {leftSideVariable && expression ? (
-                    <ExpressionDropArea id="expression-drop-area" disabled={isRunning}>
-                      <SortableContext
-                        items={expression.rightSide.map(item => item.id)}
-                        strategy={horizontalListSortingStrategy}
-                      >
-                        {expression.rightSide.map((element, index) => {
-                          if (element.type === 'function') {
+                  <Label className="text-sm font-medium">Expression</Label>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="min-h-[50px] p-2 bg-muted/30 border rounded">
+                <div className="flex items-center gap-4">
+                  {/* Variable selection */}
+                  <div className="flex-none min-w-[200px] flex items-center gap-2">
+                    <Select
+                      value={leftSideVariable}
+                      onValueChange={handleLeftVariableChange}
+                      disabled={isRunning}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="No variable" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__CLEAR__">No variable</SelectItem>
+                        {allVariables.map(variable => (
+                          <SelectItem key={variable.id} value={variable.id}>
+                            {variable.name} ({variable.type})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {/* Index display / edit button for arrays */}
+                    {(() => {
+                      const selectedVar = allVariables.find(v => v.id === leftSideVariable);
+                      if (selectedVar && selectedVar.type === 'array') {
+                        return (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={isRunning}
+                            onClick={() => {
+                              setArrayVariableForIndex(selectedVar);
+                              setIsEditingLeftSideIndex(true);
+                              // Prefill dialog with existing index if any
+                              if (leftSideIndexString) {
+                                const parsed = parseArrayAccess(`${selectedVar.name}[${leftSideIndexString}]`);
+                                if (parsed) {
+                                  if (parsed.isRange && parsed.rangeStart && parsed.rangeEnd) {
+                                    setInitialTab('range');
+                                    setInitialRangeStart(parseExpressionString(parsed.rangeStart, getAllVariables()));
+                                    setInitialRangeEnd(parseExpressionString(parsed.rangeEnd, getAllVariables()));
+                                    setInitialExpression(null);
+                                  } else if (parsed.indexExpression) {
+                                    setInitialTab('single');
+                                    setInitialExpression(parseExpressionString(parsed.indexExpression, getAllVariables()));
+                                    setInitialRangeStart(null);
+                                    setInitialRangeEnd(null);
+                                  }
+                                }
+                              } else {
+                                setInitialTab('single');
+                                setInitialExpression(new Expression(undefined, []));
+                                setInitialRangeStart(null);
+                                setInitialRangeEnd(null);
+                              }
+                              setIsIndexDialogOpen(true);
+                            }}
+                          >
+                            {leftSideIndexString ? `[${leftSideIndexString}]` : '[]'}
+                          </Button>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </div>
+                  
+                  {/* Equals sign */}
+                  <div className="flex-none w-6 text-center">
+                    <span className="text-lg font-bold">=</span>
+                  </div>
+                  
+                  {/* Expression area */}
+                  <div className="flex-1">
+                    {leftSideVariable && expression ? (
+                      <ExpressionDropArea id="expression-drop-area" disabled={isRunning}>
+                        <SortableContext
+                          items={expression.rightSide.map(item => item.id)}
+                          strategy={horizontalListSortingStrategy}
+                        >
+                          {expression.rightSide.map((element, index) => {
+                            if (element.type === 'function') {
+                              return (
+                                <FunctionExpressionElement
+                                  key={element.id}
+                                  element={element}
+                                  removeExpressionElement={removeExpressionElement}
+                                  disabled={isRunning}
+                                />
+                              );
+                            }
                             return (
-                              <FunctionExpressionElement
-                                key={element.id}
-                                element={element}
-                                removeExpressionElement={removeExpressionElement}
-                                disabled={isRunning}
-                              />
-                            );
-                          }
-                          return (
-                            <DraggableExpressionElement
+                                                          <DraggableExpressionElement
                               key={element.id}
                               element={element}
                               index={index}
                               removeExpressionElement={removeExpressionElement}
                               disabled={isRunning}
+                              onEdit={handleEditArrayAccess}
                             />
-                          );
-                        })}
-                      </SortableContext>
-                    </ExpressionDropArea>
-                  ) : (
-                    <div className="p-2.5 border-2 border-dashed border-gray-300 rounded min-h-[60px] flex items-center justify-center bg-transparent">
-                      <span className="text-muted-foreground text-sm italic">
-                        Select a variable to build expression
-                      </span>
-                    </div>
-                  )}
+                            );
+                          })}
+                        </SortableContext>
+                      </ExpressionDropArea>
+                    ) : (
+                      <div className="p-2.5 border-2 border-dashed border-gray-300 rounded min-h-[60px] flex items-center justify-center bg-transparent">
+                        <span className="text-muted-foreground text-sm italic">
+                          Select a variable to build expression
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        {/* Building blocks: variables, operators, literals */}
-        {leftSideVariable && (
-          <>
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              {/* Left column: Tabbed Variables and Literals */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <Tabs value={assignmentTab} onValueChange={(value) => setAssignmentTab(value as 'variables' | 'literals' | 'functions')} className="w-full">
-                    <TabsList className="grid grid-cols-3 w-full">
-                      <TabsTrigger value="variables">Variables</TabsTrigger>
-                      <TabsTrigger value="literals">Literals</TabsTrigger>
-                      <TabsTrigger value="functions">Functions</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                </CardHeader>
-                <CardContent>
-                  <Tabs value={assignmentTab} onValueChange={(value) => setAssignmentTab(value as 'variables' | 'literals' | 'functions')}>
-                    <TabsContent value="variables" className="mt-0">
-                      <div className="space-y-2">
-                        {allVariables.map(variable => (
-                          <DraggablePaletteItem
-                            key={`var-${variable.id}`}
-                            id={`var-${variable.id}`}
-                            type="variable"
-                            value={variable.name}
-                            backgroundColor="#d1e7ff"
-                            disabled={isRunning}
-                            onClick={() => {
-                              const element = new ExpressionElement(
-                                crypto.randomUUID(),
-                                'variable',
-                                variable.name,
-                                variable
-                              );
-                              addExpressionElement(element);
-                            }}
-                          />
-                        ))}
-                        {allVariables.length === 0 && (
-                          <div className="text-muted-foreground text-sm italic">No variables declared</div>
-                        )}
-                      </div>
-                    </TabsContent>
-                    
-                    <TabsContent value="literals" className="mt-0">
-                      <div className="space-y-3">
-                        {/* Boolean literals */}
-                        <div className="space-y-1">
-                          <Label className="text-xs font-medium">Boolean</Label>
-                          <div className="flex gap-1">
+            </CardContent>
+          </Card>
+          
+          {/* Building blocks: variables, operators, literals */}
+          {leftSideVariable && (
+            <>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                {/* Left column: Tabbed Variables and Literals */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <Tabs value={assignmentTab} onValueChange={(value) => setAssignmentTab(value as 'variables' | 'literals' | 'functions')} className="w-full">
+                      <TabsList className="grid grid-cols-3 w-full">
+                        <TabsTrigger value="variables">Variables</TabsTrigger>
+                        <TabsTrigger value="literals">Literals</TabsTrigger>
+                        <TabsTrigger value="functions">Functions</TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+                  </CardHeader>
+                  <CardContent>
+                    <Tabs value={assignmentTab} onValueChange={(value) => setAssignmentTab(value as 'variables' | 'literals' | 'functions')}>
+                      <TabsContent value="variables" className="mt-0">
+                        <div className="space-y-2">
+                          {allVariables.map(variable => (
                             <DraggablePaletteItem
-                              id="lit-boolean-true"
-                              type="literal"
-                              value="true"
-                              backgroundColor="#d1ffd1"
+                              key={`var-${variable.id}`}
+                              id={`var-${variable.id}`}
+                              type="variable"
+                              value={variable.type === 'array' ? `${variable.name}[]` : variable.name}
+                              backgroundColor="#d1e7ff"
                               disabled={isRunning}
-                              onClick={() => {
-                                const element = new ExpressionElement(
-                                  crypto.randomUUID(),
-                                  'literal',
-                                  'true'
-                                );
-                                addExpressionElement(element);
-                              }}
+                              onClick={() => handleAddVariable(variable)}
                             />
-                            <DraggablePaletteItem
-                              id="lit-boolean-false"
-                              type="literal"
-                              value="false"
-                              backgroundColor="#d1ffd1"
-                              disabled={isRunning}
-                              onClick={() => {
-                                const element = new ExpressionElement(
-                                  crypto.randomUUID(),
-                                  'literal',
-                                  'false'
-                                );
-                                addExpressionElement(element);
-                              }}
-                            />
-                          </div>
+                          ))}
+                          {allVariables.length === 0 && (
+                            <div className="text-muted-foreground text-sm italic">No variables declared</div>
+                          )}
                         </div>
+                      </TabsContent>
+                      
+                      <TabsContent value="literals" className="mt-0">
+                        <div className="space-y-3">
+                          {/* Boolean literals */}
+                          <div className="space-y-1">
+                            <Label className="text-xs font-medium">Boolean</Label>
+                            <div className="flex gap-1">
+                              <DraggablePaletteItem
+                                id="lit-boolean-true"
+                                type="literal"
+                                value="true"
+                                backgroundColor="#d1ffd1"
+                                disabled={isRunning}
+                                onClick={() => {
+                                  const element = new ExpressionElement(
+                                    crypto.randomUUID(),
+                                    'literal',
+                                    'true'
+                                  );
+                                  addExpressionElement(element);
+                                }}
+                              />
+                              <DraggablePaletteItem
+                                id="lit-boolean-false"
+                                type="literal"
+                                value="false"
+                                backgroundColor="#d1ffd1"
+                                disabled={isRunning}
+                                onClick={() => {
+                                  const element = new ExpressionElement(
+                                    crypto.randomUUID(),
+                                    'literal',
+                                    'false'
+                                  );
+                                  addExpressionElement(element);
+                                }}
+                              />
+                            </div>
+                          </div>
 
-                        {/* Integer literal */}
-                        <div className="space-y-1">
-                          <Label className="text-xs font-medium">Integer</Label>
-                          <div className="flex gap-1">
-                            <Input
-                              type="number"
-                              step="1"
-                              placeholder="Integer value" 
-                              id="integer-literal-input"
-                              className="flex-1 text-sm"
-                              disabled={isRunning}
-                            />
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                const input = document.getElementById('integer-literal-input') as HTMLInputElement;
-                                if (input && input.value) {
-                                  const value = parseInt(input.value).toString();
-                                  const element = new ExpressionElement(
-                                    crypto.randomUUID(),
-                                    'literal',
-                                    value
-                                  );
-                                  addExpressionElement(element);
-                                  input.value = '';
-                                }
-                              }}
-                              disabled={isRunning}
-                              className="text-xs px-2"
-                            >
-                              Add
-                            </Button>
+                          {/* Integer literal */}
+                          <div className="space-y-1">
+                            <Label className="text-xs font-medium">Integer</Label>
+                            <div className="flex gap-1">
+                              <Input
+                                type="number"
+                                step="1"
+                                placeholder="Integer value" 
+                                id="integer-literal-input"
+                                className="flex-1 text-sm"
+                                disabled={isRunning}
+                              />
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  const input = document.getElementById('integer-literal-input') as HTMLInputElement;
+                                  if (input && input.value) {
+                                    const value = parseInt(input.value).toString();
+                                    const element = new ExpressionElement(
+                                      crypto.randomUUID(),
+                                      'literal',
+                                      value
+                                    );
+                                    addExpressionElement(element);
+                                    input.value = '';
+                                  }
+                                }}
+                                disabled={isRunning}
+                                className="text-xs px-2"
+                              >
+                                Add
+                              </Button>
+                            </div>
+                          </div>
+                          
+                          {/* String literal */}
+                          <div className="space-y-1">
+                            <Label className="text-xs font-medium">String</Label>
+                            <div className="flex gap-1">
+                              <Input
+                                type="text"
+                                placeholder="String value"
+                                id="string-literal-input"
+                                className="flex-1 text-sm"
+                                disabled={isRunning}
+                              />
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  const input = document.getElementById('string-literal-input') as HTMLInputElement;
+                                  if (input && input.value) {
+                                    const value = input.value;
+                                    const element = new ExpressionElement(
+                                      crypto.randomUUID(),
+                                      'literal',
+                                      `"${value}"`
+                                    );
+                                    addExpressionElement(element);
+                                    input.value = '';
+                                  }
+                                }}
+                                disabled={isRunning}
+                                className="text-xs px-2"
+                              >
+                                Add
+                              </Button>
+                            </div>
+                          </div>
+                          
+                          {/* Float literal */}
+                          <div className="space-y-1">
+                            <Label className="text-xs font-medium">Float</Label>
+                            <div className="flex gap-1">
+                              <Input
+                                type="number"
+                                step="0.1"
+                                placeholder="Float value"
+                                id="float-literal-input"
+                                className="flex-1 text-sm"
+                                disabled={isRunning}
+                              />
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  const input = document.getElementById('float-literal-input') as HTMLInputElement;
+                                  if (input && input.value) {
+                                    const value = parseFloat(input.value).toString();
+                                    const element = new ExpressionElement(
+                                      crypto.randomUUID(),
+                                      'literal',
+                                      value
+                                    );
+                                    addExpressionElement(element);
+                                    input.value = '';
+                                  }
+                                }}
+                                disabled={isRunning}
+                                className="text-xs px-2"
+                              >
+                                Add
+                              </Button>
+                            </div>
                           </div>
                         </div>
-                        
-                        {/* String literal */}
-                        <div className="space-y-1">
-                          <Label className="text-xs font-medium">String</Label>
-                          <div className="flex gap-1">
-                            <Input
-                              type="text"
-                              placeholder="String value"
-                              id="string-literal-input"
-                              className="flex-1 text-sm"
+                      </TabsContent>
+                      
+                      <TabsContent value="functions" className="mt-0">
+                        <div className="space-y-2">
+                          {/* Conversion functions */}
+                          {['integer', 'string', 'float', 'boolean'].map(func => (
+                            <DraggablePaletteItem
+                              key={`func-${func}`}
+                              id={`func-${func}`}
+                              type="function"
+                              value={`${func}()`}
+                              backgroundColor="#d1d1ff"
                               disabled={isRunning}
-                            />
-                            <Button
-                              variant="outline"
-                              size="sm"
                               onClick={() => {
-                                const input = document.getElementById('string-literal-input') as HTMLInputElement;
-                                if (input && input.value) {
-                                  const value = input.value;
-                                  const element = new ExpressionElement(
-                                    crypto.randomUUID(),
-                                    'literal',
-                                    `"${value}"`
-                                  );
-                                  addExpressionElement(element);
-                                  input.value = '';
-                                }
+                                const element = new ExpressionElement(
+                                  crypto.randomUUID(),
+                                  'function',
+                                  func,
+                                  new Expression(undefined, [])
+                                );
+                                addExpressionElement(element);
                               }}
-                              disabled={isRunning}
-                              className="text-xs px-2"
-                            >
-                              Add
-                            </Button>
-                          </div>
-                        </div>
-                        
-                        {/* Float literal */}
-                        <div className="space-y-1">
-                          <Label className="text-xs font-medium">Float</Label>
-                          <div className="flex gap-1">
-                            <Input
-                              type="number"
-                              step="0.1"
-                              placeholder="Float value"
-                              id="float-literal-input"
-                              className="flex-1 text-sm"
-                              disabled={isRunning}
                             />
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                const input = document.getElementById('float-literal-input') as HTMLInputElement;
-                                if (input && input.value) {
-                                  const value = parseFloat(input.value).toString();
-                                  const element = new ExpressionElement(
-                                    crypto.randomUUID(),
-                                    'literal',
-                                    value
-                                  );
-                                  addExpressionElement(element);
-                                  input.value = '';
-                                }
-                              }}
-                              disabled={isRunning}
-                              className="text-xs px-2"
-                            >
-                              Add
-                            </Button>
-                          </div>
+                          ))}
                         </div>
-                      </div>
-                    </TabsContent>
-                    
-                    <TabsContent value="functions" className="mt-0">
-                      <div className="space-y-2">
-                        {/* Conversion functions */}
-                        {['integer', 'string', 'float', 'boolean'].map(func => (
-                          <DraggablePaletteItem
-                            key={`func-${func}`}
-                            id={`func-${func}`}
-                            type="function"
-                            value={`${func}()`}
-                            backgroundColor="#d1d1ff"
-                            disabled={isRunning}
-                            onClick={() => {
-                              const element = new ExpressionElement(
-                                crypto.randomUUID(),
-                                'function',
-                                func,
-                                new Expression(undefined, [])
-                              );
-                              addExpressionElement(element);
-                            }}
-                          />
-                        ))}
-                      </div>
-                    </TabsContent>
-                  </Tabs>
-                </CardContent>
-              </Card>
-              
-              {/* Right column: Operators */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Operators</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {operators.map(op => (
-                    <DraggablePaletteItem
-                      key={`op-${op}`}
-                      id={`op-${op}`}
-                      type="operator"
-                      value={op}
-                      backgroundColor="#ffd1d1"
-                      disabled={isRunning}
-                      onClick={() => {
-                        const element = new ExpressionElement(
-                          crypto.randomUUID(),
-                          'operator',
-                          op
-                        );
-                        addExpressionElement(element);
-                      }}
-                    />
-                  ))}
-                </CardContent>
-              </Card>
+                      </TabsContent>
+                    </Tabs>
+                  </CardContent>
+                </Card>
+                
+                {/* Right column: Operators */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Operators</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {operators.map(op => (
+                      <DraggablePaletteItem
+                        key={`op-${op}`}
+                        id={`op-${op}`}
+                        type="operator"
+                        value={op}
+                        backgroundColor="#ffd1d1"
+                        disabled={isRunning}
+                        onClick={() => {
+                          const element = new ExpressionElement(
+                            crypto.randomUUID(),
+                            'operator',
+                            op
+                          );
+                          addExpressionElement(element);
+                        }}
+                      />
+                    ))}
+                  </CardContent>
+                </Card>
+              </div>
+            </>
+          )}
+        </div>
+        
+        <DragOverlay>
+          {activeDraggableItem ? (
+            <div className={`
+              px-2 py-1 m-1 rounded text-sm shadow-lg cursor-grabbing
+              ${activeDraggableItem.type === 'variable' ? 'bg-blue-100' :
+                activeDraggableItem.type === 'operator' ? 'bg-red-100' :
+                activeDraggableItem.type === 'literal' ? 'bg-green-100' : 'bg-purple-100'}
+            `}>
+              {activeDraggableItem.value}
             </div>
-          </>
-        )}
-      </div>
-      
-      <DragOverlay>
-        {activeDraggableItem ? (
-          <div className={`
-            px-2 py-1 m-1 rounded text-sm shadow-lg cursor-grabbing
-            ${activeDraggableItem.type === 'variable' ? 'bg-blue-100' :
-              activeDraggableItem.type === 'operator' ? 'bg-red-100' :
-              activeDraggableItem.type === 'literal' ? 'bg-green-100' : 'bg-purple-100'}
-          `}>
-            {activeDraggableItem.value}
-          </div>
-        ) : null}
-      </DragOverlay>
-    </DndContext>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+    </>
   );
 };
 

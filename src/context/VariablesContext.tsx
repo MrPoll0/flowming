@@ -65,7 +65,7 @@ export const VariablesProvider: React.FC<VariablesProviderProps> = ({ children }
   const updateNodeVariables = useCallback((nodeId: string, nodeVariables: Variable[]): void => {
     setVariables(prevVariables => [
       ...prevVariables.filter(v => v.nodeId !== nodeId),
-      ...nodeVariables.map(v => new Variable(v.id, v.type, v.name, nodeId))
+      ...nodeVariables.map(v => new Variable(v.id, v.type, v.name, nodeId, v.arraySubtype, v.arraySize))
     ]);
   }, []);
 
