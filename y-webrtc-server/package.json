@@ -1,0 +1,13 @@
+{
+  "name": "y-webrtc-server",
+  "version": "1.0.0",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "lib0": "^0.2.62",
+    "ws": "^8.18.0"
+  }
+}
