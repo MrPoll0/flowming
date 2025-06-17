@@ -45,9 +45,42 @@ export class InputProcessor implements NodeProcessor {
       );
       
       if (input !== null && data.variable) {
+        // Convert the raw string input to the correct type based on the variable definition
+        let convertedValue: any = input;
+        switch (data.variable.type) {
+          case 'integer': {
+            const parsed = parseInt(input, 10);
+            if (isNaN(parsed)) {
+              throw new Error(`Invalid integer value: '${input}'.`);
+            }
+            convertedValue = parsed;
+            break;
+          }
+          case 'float': {
+            const parsed = parseFloat(input);
+            if (isNaN(parsed)) {
+              throw new Error(`Invalid float value: '${input}'.`);
+            }
+            convertedValue = parsed;
+            break;
+          }
+          case 'boolean': {
+            const lowered = input.trim().toLowerCase();
+            if (['true', '1', 'yes'].includes(lowered)) convertedValue = true;
+            else if (['false', '0', 'no'].includes(lowered)) convertedValue = false;
+            else {
+              throw new Error(`Invalid boolean value: '${input}'. Expected true/false.`);
+            }
+            break;
+          }
+          case 'string':
+          default:
+            convertedValue = input;
+        }
+
         // Convert IVariable to Variable before passing to fromVariable
         const variableObj = Variable.fromObject(data.variable);
-        const newValuedVariable = ValuedVariable.fromVariable(variableObj, input);
+        const newValuedVariable = ValuedVariable.fromVariable(variableObj, convertedValue);
         
         // Overwrite the existing variable
         const existingIndex = currentValuedVariables.findIndex(v => v.id === newValuedVariable.id);
