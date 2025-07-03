@@ -1,10 +1,10 @@
 import { FlowNode } from '../components/Flow/FlowTypes';
 import { Edge } from '@xyflow/react';
 import {
-  Program, Statement, Expression as PyExpression, AssignmentStatement, IfStatement, WhileStatement, BlockStatement, Identifier, Literal, BinaryExpression, PrintStatement, UnsupportedNode, CallExpression, ASTNode, BreakStatement
+  Program, Statement, Expression as PyExpression, AssignmentStatement, IfStatement, WhileStatement, BlockStatement, Identifier, Literal, BinaryExpression, PrintStatement, UnsupportedNode, CallExpression, ASTNode, BreakStatement, SubscriptExpression
 } from '../models/pythonAST';
-import { Expression as DiagramExpression, ExpressionElement, Variable, IOperator, IExpression as DiagramIExpression } from '../models';
-import { buildAST, ExpressionASTNode as DiagramASTNode, UnaryOpNode, BinaryOpNode as DiagramBinaryOpNode, FunctionCallNode as DiagramFunctionCallNode, IdentifierNode as DiagramIdentifierNode, LiteralNode as DiagramLiteralNode } from '../models/ExpressionParser';
+import { Expression as DiagramExpression, ExpressionElement, Variable, IOperator, IExpression as DiagramIExpression, VariableType } from '../models';
+import { buildAST, ExpressionASTNode as DiagramASTNode, UnaryOpNode, BinaryOpNode as DiagramBinaryOpNode, FunctionCallNode as DiagramFunctionCallNode, IdentifierNode as DiagramIdentifierNode, LiteralNode as DiagramLiteralNode, MemberAccessNode } from '../models/ExpressionParser';
 
 // TODO: check bugs images + extensive automated testing
 
@@ -38,6 +38,11 @@ const convertDiagramASTToPythonAST = (diagramNode: DiagramASTNode, nodeId: strin
 
     case 'Identifier': {
       const identifier = diagramNode as DiagramIdentifierNode;
+      if (identifier.variable.type === 'array' && identifier.variable.indexExpression && identifier.variable.indexExpression.length > 0) {
+        const indexExpr = convertDiagramExpressionToAST(identifier.variable.indexExpression as ExpressionElement[], nodeId, cfg);
+        const objId: Identifier = { type: 'Identifier', name: identifier.name, diagramNodeId: nodeId } as Identifier;
+        return { type: 'SubscriptExpression', object: objId, index: indexExpr, diagramNodeId: nodeId } as any;
+      }
       return { type: 'Identifier', name: identifier.name, diagramNodeId: nodeId } as Identifier;
     }
     
@@ -104,6 +109,14 @@ const convertDiagramASTToPythonAST = (diagramNode: DiagramASTNode, nodeId: strin
       } as CallExpression;
     }
 
+    case 'MemberAccess': {
+      const member = diagramNode as MemberAccessNode;
+      const obj = convertDiagramASTToPythonAST(member.object, nodeId, cfg);
+      const idx = convertDiagramASTToPythonAST(member.property, nodeId, cfg);
+      if (obj.type === 'UnsupportedNode' || idx.type === 'UnsupportedNode') return obj.type==='UnsupportedNode'?obj:idx;
+      return { type: 'SubscriptExpression', object: obj as Identifier, index: idx, diagramNodeId: nodeId } as any;
+    }
+
     default:
       return unsupportedNode(`Unknown diagram AST node type: ${(diagramNode as any).type}`);
   }
@@ -126,6 +139,16 @@ const convertDiagramExpressionToAST = (elements: ExpressionElement[], nodeId: st
     const message = error instanceof Error ? error.message : String(error);
     return unsupportedNode(`Failed to parse expression: ${message}`);
   }
+};
+
+// Helper to convert Variable (left side) into Python target (Identifier or SubscriptExpression)
+const variableToTarget = (v: Variable, nodeId: string, cfg: CFG): Identifier | SubscriptExpression => {
+  if (v.type === 'array' && v.indexExpression && v.indexExpression.length > 0) {
+    const idxAst = convertDiagramExpressionToAST(v.indexExpression as ExpressionElement[], nodeId, cfg);
+    const objId: Identifier = { type: 'Identifier', name: v.name, diagramNodeId: nodeId } as Identifier;
+    return { type: 'SubscriptExpression', object: objId, index: idxAst, diagramNodeId: nodeId } as any;
+  }
+  return { type: 'Identifier', name: v.name, diagramNodeId: nodeId } as Identifier;
 };
 
 // Build a Control-Flow Graph (CFG) from nodes and edges
@@ -252,7 +275,7 @@ const generateNodeStatements = (node: FlowNode, nodeId: string, cfg: CFG): State
       if (node.data?.expression) {
         const diag = DiagramExpression.fromObject(node.data.expression as DiagramIExpression);
         if (diag.leftSide instanceof Variable) {
-          const target: Identifier = { type: 'Identifier', name: diag.leftSide.name, diagramNodeId: nodeId, visualId };
+          const target = variableToTarget(diag.leftSide, nodeId, cfg);
           const val = convertDiagramExpressionToAST(diag.rightSide, nodeId, cfg);
           stmts.push(
             val.type !== 'UnsupportedNode'
@@ -266,7 +289,7 @@ const generateNodeStatements = (node: FlowNode, nodeId: string, cfg: CFG): State
     case 'Input': {
       if (node.data?.variable) {
         const v = node.data.variable as Variable;
-        const target: Identifier = { type: 'Identifier', name: v.name, diagramNodeId: nodeId, visualId };
+        const target = variableToTarget(v, nodeId, cfg);
         
         const promptText = `Enter the value of '${v.name}' by keyboard`;
         const promptLiteral: Literal = { type: 'Literal', value: promptText, raw: JSON.stringify(promptText), diagramNodeId: nodeId };
@@ -280,8 +303,13 @@ const generateNodeStatements = (node: FlowNode, nodeId: string, cfg: CFG): State
         } as CallExpression;
         let value: PyExpression = baseCall;
         
-        // TODO: new data types here
-        if (v.type === 'integer') {
+        // Handle type conversion.
+        let vType: VariableType = v.type;
+        if (v.type === 'array') {
+          vType = v.arraySubtype as VariableType;
+        }
+
+        if (vType === 'integer') {
           // int(input())
           value = { 
             type: 'CallExpression', 
@@ -290,7 +318,7 @@ const generateNodeStatements = (node: FlowNode, nodeId: string, cfg: CFG): State
             diagramNodeId: nodeId,
             visualId
           } as CallExpression;
-        } else if (v.type === 'float') {
+        } else if (vType === 'float') {
           // float(input())
           value = { 
             type: 'CallExpression', 
@@ -299,7 +327,7 @@ const generateNodeStatements = (node: FlowNode, nodeId: string, cfg: CFG): State
             diagramNodeId: nodeId,
             visualId
           } as CallExpression;
-        } else if (v.type === 'boolean') {
+        } else if (vType === 'boolean') {
           // bool(input())
           value = { 
             type: 'CallExpression', 
@@ -800,6 +828,10 @@ const generateCodeFromASTNode = (astNode: ASTNode, indentLevel = 0): string => {
       const callExpr = astNode as CallExpression;
       const callArgs = callExpr.arguments.map(arg => generateCodeFromASTNode(arg)).join(', ');
       return `${generateCodeFromASTNode(callExpr.callee)}(${callArgs})`;
+
+    case 'SubscriptExpression':
+      const sub = astNode as SubscriptExpression;
+      return `${generateCodeFromASTNode(sub.object)}[${generateCodeFromASTNode(sub.index)}]`;
 
     case 'UnsupportedNode':
       const unsupported = astNode as UnsupportedNode;

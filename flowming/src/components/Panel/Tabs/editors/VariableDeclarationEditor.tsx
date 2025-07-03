@@ -22,6 +22,7 @@ const VariableDeclarationEditor = () => {
   const [variables, setVariables] = useState<Variable[]>([]);
   const [arraySizeInputs, setArraySizeInputs] = useState<Record<string, string>>({});
   const [arraySizeErrors, setArraySizeErrors] = useState<Record<string, boolean>>({});
+  const [nameErrors, setNameErrors] = useState<Record<string, boolean>>({});
   const isInitialLoadRef = useRef(true);
   const updateTimeoutRef = useRef<number | null>(null);
   const previousNodeIdRef = useRef<string | null>(null);
@@ -138,6 +139,15 @@ const VariableDeclarationEditor = () => {
               updates.arraySize = v.arraySize !== undefined && v.arraySize > 0 ? v.arraySize : 10;
             }
             
+            if (field === 'name') {
+              const newName = String(value);
+              const isValid = Variable.isValidName(newName);
+              setNameErrors(prevErrs => ({ ...prevErrs, [id]: !isValid }));
+              if (!isValid) {
+                return v; // Skip invalid update
+              }
+            }
+            
             return v.update(updates);
           }
           return v;
@@ -163,40 +173,51 @@ const VariableDeclarationEditor = () => {
       <CardContent className="space-y-3">
         {variables.map((variable) => (
           <div key={variable.id} className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Select
-                value={variable.type}
-                onValueChange={(value) => updateVariable(variable.id, 'type', value)}
-                disabled={isRunning}
-              >
-                <SelectTrigger className="flex-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {variableTypes.map(type => (
-                    <SelectItem key={type} value={type}>{type}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              
-              <Input
-                value={variable.name}
-                onChange={(e) => updateVariable(variable.id, 'name', e.target.value)}
-                placeholder="Variable name"
-                className="flex-1"
-                disabled={isRunning}
-              />
-              
-              {variables.length > 1 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => deleteVariable(variable.id)}
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Select
+                  value={variable.type}
+                  onValueChange={(value) => updateVariable(variable.id, 'type', value)}
                   disabled={isRunning}
-                  className="px-2 text-destructive hover:text-destructive"
                 >
-                  ×
-                </Button>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {variableTypes.map(type => (
+                      <SelectItem key={type} value={type}>{type}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                
+                <Input
+                  value={variable.name}
+                  onChange={(e) => updateVariable(variable.id, 'name', e.target.value)}
+                  placeholder="Variable name"
+                  className={`flex-1 ${nameErrors[variable.id] ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+                  disabled={isRunning}
+                />
+                
+                {variables.length > 1 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => deleteVariable(variable.id)}
+                    disabled={isRunning}
+                    className="px-2 text-destructive hover:text-destructive"
+                  >
+                    ×
+                  </Button>
+                )}
+              </div>
+              
+              {nameErrors[variable.id] && (
+                <div className="flex items-center gap-1 text-destructive text-xs ml-1">
+                  <svg className="h-3 w-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <span>Variable names cannot contain square brackets [ ]</span>
+                </div>
               )}
             </div>
             

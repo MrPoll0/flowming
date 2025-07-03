@@ -34,9 +34,17 @@ export function InputDialog({
   onCancel,
 }: InputDialogProps) {
   const [value, setValue] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // Validation: disallow empty value except for string type
+    if (variableType !== 'string' && value.trim() === '') {
+      setError('Please enter a value.');
+      return;
+    }
+
+    setError(null);
     onSubmit(value);
     setValue('');
   };
@@ -72,7 +80,7 @@ export function InputDialog({
             type="number"
             step="1"
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={(e) => { setValue(e.target.value); if(error) setError(null); }}
             placeholder={placeholder || "Enter an integer"}
             className="w-full h-11 text-base"
             autoFocus
@@ -86,7 +94,7 @@ export function InputDialog({
             type="number"
             step="any"
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={(e) => { setValue(e.target.value); if(error) setError(null); }}
             placeholder={placeholder || "Enter a decimal number"}
             className="w-full h-11 text-base"
             autoFocus
@@ -100,7 +108,7 @@ export function InputDialog({
             id="input-value"
             type="text"
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={(e) => { setValue(e.target.value); if(error) setError(null); }}
             placeholder={placeholder || "Enter text"}
             className="w-full h-11 text-base"
             autoFocus
@@ -132,6 +140,14 @@ export function InputDialog({
               Value ({variableType})
             </Label>
             {renderInput()}
+            {error && (
+              <div className="flex items-center gap-1 text-destructive text-xs ml-1">
+                <svg className="h-3 w-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                <span>{error}</span>
+              </div>
+            )}
           </div>
           
           <DialogFooter className="pt-2">

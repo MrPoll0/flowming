@@ -1,3 +1,7 @@
+import type { IVariable } from './IVariable';
+import { ExpressionElement } from './ExpressionElement';
+import type { IExpressionElement } from './IExpressionElement';
+
 // Available variable types
 export const variableTypes = [
   'integer',
@@ -27,16 +31,6 @@ export type ValueTypeMap = {
   array: any[];
 };
 
-// Define the variable structure
-export interface IVariable {
-  id: string;
-  type: VariableType;
-  name: string;
-  nodeId: string; // ID of the node that declared this variable
-  arraySubtype?: ArraySubtype; // Only applicable when type is 'array'
-  arraySize?: number; // Only applicable when type is 'array'
-}
-
 export class Variable implements IVariable {
   id: string;
   type: VariableType;
@@ -44,17 +38,18 @@ export class Variable implements IVariable {
   nodeId: string;
   arraySubtype?: ArraySubtype;
   arraySize?: number;
+  indexExpression?: IExpressionElement[];
 
-  constructor(id: string, type: VariableType, name: string, nodeId: string, arraySubtype?: ArraySubtype, arraySize?: number) {
+  constructor(id: string, type: VariableType, name: string, nodeId: string, arraySubtype?: ArraySubtype, arraySize?: number, indexExpression?: IExpressionElement[]) {
     this.id = id;
     this.type = type;
     this.name = name;
     this.nodeId = nodeId;
+    this.indexExpression = indexExpression;
 
     // Ensure array metadata is always valid when the variable is an array
     if (type === 'array') {
-      // Fallback to integer subtype if none provided (should not normally happen)
-      this.arraySubtype = arraySubtype ?? 'integer';
+      this.arraySubtype = arraySubtype;
       // Enforce a positive, non-zero size. Default to 1 if invalid.
       const validSize = arraySize !== undefined && arraySize >= 1 ? arraySize : 1;
       this.arraySize = validSize;
@@ -68,6 +63,12 @@ export class Variable implements IVariable {
    * Creates a string representation of the variable
    */
   toString(): string {
+    // Render array element access when an index expression exists
+    if (this.indexExpression && this.indexExpression.length > 0) {
+      // Manually join to avoid circular dependency on Expression.toString()
+      const idxExprStr = this.indexExpression.map(e => (e as ExpressionElement).toString()).join(' ');
+      return `${this.name}[${idxExprStr}]`;
+    }
     return this.name;
   }
 
@@ -106,7 +107,8 @@ export class Variable implements IVariable {
       updates.name ?? this.name,
       updates.nodeId ?? this.nodeId,
       updates.hasOwnProperty('arraySubtype') ? updates.arraySubtype : this.arraySubtype,
-      updates.hasOwnProperty('arraySize') ? updates.arraySize : this.arraySize
+      updates.hasOwnProperty('arraySize') ? updates.arraySize : this.arraySize,
+      updates.hasOwnProperty('indexExpression') ? updates.indexExpression : this.indexExpression
     );
   }
 
@@ -114,7 +116,8 @@ export class Variable implements IVariable {
    * Clones the variable
    */
   clone(): Variable {
-    return new Variable(this.id, this.type, this.name, this.nodeId, this.arraySubtype, this.arraySize);
+    const clonedIndexExpr = this.indexExpression ? this.indexExpression.map(e => e.clone()) : undefined;
+    return new Variable(this.id, this.type, this.name, this.nodeId, this.arraySubtype, this.arraySize, clonedIndexExpr);
   }
 
   /**
@@ -127,14 +130,15 @@ export class Variable implements IVariable {
   /**
    * Creates an object representation of the variable
    */
-  toObject(): IVariable {
+  toObject(): any {
     return {
       id: this.id, 
       type: this.type, 
       name: this.name, 
       nodeId: this.nodeId,
       arraySubtype: this.arraySubtype,
-      arraySize: this.arraySize
+      arraySize: this.arraySize,
+      indexExpression: this.indexExpression ? this.indexExpression.map(e => e.toObject()) : undefined,
     };
   }
 
@@ -142,7 +146,17 @@ export class Variable implements IVariable {
    * Creates a Variable from a plain object
    */
   static fromObject(obj: IVariable): Variable {
-    return new Variable(obj.id, obj.type as VariableType, obj.name, obj.nodeId, obj.arraySubtype, obj.arraySize);
+    const idxExpr = obj.indexExpression
+      ? obj.indexExpression.map(e => ExpressionElement.fromObject(e))
+      : undefined;
+    return new Variable(obj.id, obj.type as VariableType, obj.name, obj.nodeId, obj.arraySubtype, obj.arraySize, idxExpr);
+  }
+
+  /**
+   * Checks if a variable name is valid (no reserved characters like '[' or ']').
+   */
+  static isValidName(name: string): boolean {
+    return !(/\[|\]/.test(name));
   }
 }
 

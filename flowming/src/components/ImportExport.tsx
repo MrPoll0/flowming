@@ -4,7 +4,7 @@ import { useVariables } from '../context/VariablesContext';
 import { useFilename } from '../context/FilenameContext';
 import { useFlowExecutorActions, useFlowExecutorState } from '../context/FlowExecutorContext';
 import { SelectedNodeContext } from '../context/SelectedNodeContext';
-import { Variable } from '../models';
+import { Variable, ExpressionElement } from '../models';
 import { Button } from './ui/button';
 import { Download, Upload, FileX } from 'lucide-react';
 import { useDebugger } from '../context/DebuggerContext';
@@ -117,6 +117,9 @@ const ImportExport: React.FC = () => {
     // Stop execution before importing
     stop();
 
+    // Reset selected node so DetailsTab shows System Settings during import
+    setSelectedNode(null);
+
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.flowming';
@@ -172,7 +175,14 @@ const ImportExport: React.FC = () => {
           });
         }
 
-        setNodes(flowData.nodes || []);
+        // Restore nodes and convert any indexExpression objects back to ExpressionElement instances
+        const restoredNodes = (flowData.nodes || []).map((n: any) => {
+          if (n.type === 'Input' && n.data?.variable?.indexExpression) {
+            n.data.variable.indexExpression = n.data.variable.indexExpression.map((elem: any) => ExpressionElement.fromObject(elem));
+          }
+          return n;
+        });
+        setNodes(restoredNodes);
         setEdges(flowData.edges || []);
 
         // Fit and center the view for the imported diagram
@@ -189,7 +199,7 @@ const ImportExport: React.FC = () => {
     };
 
     input.click();
-  }, [setNodes, setEdges, getNodes, updateNodeVariables, deleteNodeVariables, fitView, setFilename, stop]);
+  }, [setNodes, setEdges, getNodes, updateNodeVariables, deleteNodeVariables, fitView, setFilename, stop, setSelectedNode]);
 
   return (
     <div className="flex items-center gap-2">

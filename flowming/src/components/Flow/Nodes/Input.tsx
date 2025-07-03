@@ -2,10 +2,13 @@ import { Handle, Position, ReactFlowInstance } from '@xyflow/react';
 import { memo } from 'react';
 import { getNodeStyles } from '../../../utils/nodeStyles';
 import { BaseNode, NodeProcessor } from './NodeTypes';
-import { IVariable, VariableType, Variable } from '../../../models/Variable';
+import { VariableType, Variable } from '../../../models/Variable';
+import { IVariable } from '../../../models/IVariable';
 import { IValuedVariable, ValuedVariable } from '../../../models/ValuedVariable';
 import { Badge } from '@/components/ui/badge';
 import BreakpointIndicator from './BreakpointIndicator';
+import { Expression } from '../../../models/Expression';
+import { ExpressionElement } from '../../../models/ExpressionElement';
 
 interface InputNode extends BaseNode {
   variable?: IVariable;
@@ -39,7 +42,7 @@ export class InputProcessor implements NodeProcessor {
     if (data.variable) {
       const input = await this.showInputDialog(
         `Enter value for ${data.variable.name}`,
-        data.variable.type as 'string' | 'integer' | 'float' | 'boolean', // TODO: array
+        (data.variable.type === 'array' ? data.variable.arraySubtype : data.variable.type) as 'string' | 'integer' | 'float' | 'boolean',
         `Please enter a ${data.variable.type} value for the variable "${data.variable.name}" (Block ID: ${data.visualId}).`,
         `Enter ${data.variable.type} value...`
       );
@@ -47,7 +50,8 @@ export class InputProcessor implements NodeProcessor {
       if (input !== null && data.variable) {
         // Convert the raw string input to the correct type based on the variable definition
         let convertedValue: any = input;
-        switch (data.variable.type) {
+        const valueType = data.variable.type === 'array' ? data.variable.arraySubtype : data.variable.type;
+        switch (valueType) {
           case 'integer': {
             const parsed = parseInt(input, 10);
             if (isNaN(parsed)) {
@@ -80,14 +84,59 @@ export class InputProcessor implements NodeProcessor {
 
         // Convert IVariable to Variable before passing to fromVariable
         const variableObj = Variable.fromObject(data.variable);
-        const newValuedVariable = ValuedVariable.fromVariable(variableObj, convertedValue);
-        
-        // Overwrite the existing variable
-        const existingIndex = currentValuedVariables.findIndex(v => v.id === newValuedVariable.id);
-        if (existingIndex !== -1) {
-          currentValuedVariables[existingIndex] = newValuedVariable;
+
+        // If variable is an array and has an index expression, handle element assignment
+        if (variableObj.type === 'array' && variableObj.indexExpression && variableObj.indexExpression.length > 0) {
+          try {
+            // Evaluate index expression (must resolve to integer)
+            const indexExpr = new Expression(undefined, variableObj.indexExpression);
+            const idx = indexExpr.calculateValue(variableObj.indexExpression, 'integer', currentValuedVariables);
+
+            if (typeof idx !== 'number' || !Number.isInteger(idx)) {
+              throw new Error(`Array index for variable "${variableObj.name}" must evaluate to an integer.`);
+            }
+
+            // Locate existing valued variable or create a default one
+            let existingVarIdx = currentValuedVariables.findIndex(v => v.id === variableObj.id);
+            let existingValuedVar: ValuedVariable<VariableType>;
+            if (existingVarIdx !== -1) {
+              existingValuedVar = currentValuedVariables[existingVarIdx];
+            } else {
+              existingValuedVar = ValuedVariable.fromVariable(variableObj, null);
+            }
+
+            // Ensure array is initialized with correct size
+            const arraySize = variableObj.arraySize || (Array.isArray(existingValuedVar.value) ? existingValuedVar.value.length : 0);
+            if (idx < 0 || idx >= arraySize) {
+              throw new Error(`Array index ${idx} is out of bounds for "${variableObj.name}" (size ${arraySize}).`);
+            }
+
+            // Create updated array value
+            const updatedArray = Array.isArray(existingValuedVar.value) ? [...existingValuedVar.value] : new Array(arraySize).fill(null);
+            updatedArray[idx] = convertedValue;
+
+            const newValuedVariable = new ValuedVariable(variableObj.id, variableObj.type, variableObj.name, variableObj.nodeId, updatedArray, variableObj.arraySubtype, variableObj.arraySize);
+
+            if (existingVarIdx !== -1) {
+              currentValuedVariables[existingVarIdx] = newValuedVariable;
+            } else {
+              currentValuedVariables.push(newValuedVariable);
+            }
+          } catch (err) {
+            console.error(err);
+            throw err;
+          }
         } else {
-          currentValuedVariables.push(newValuedVariable);
+          // Scalar variable assignment
+          const newValuedVariable = ValuedVariable.fromVariable(variableObj, convertedValue);
+
+          // Overwrite the existing variable
+          const existingIndex = currentValuedVariables.findIndex(v => v.id === newValuedVariable.id);
+          if (existingIndex !== -1) {
+            currentValuedVariables[existingIndex] = newValuedVariable;
+          } else {
+            currentValuedVariables.push(newValuedVariable);
+          }
         }
       }
     }
@@ -99,6 +148,20 @@ export class InputProcessor implements NodeProcessor {
 const Input = memo(function InputComponent({ data, id: _nodeId }: { data: InputNode; id: string }) {
   const { isHovered, isSelected, isHighlighted, isCodeHighlighted, variable, width, height, visualId, isError, hasBreakpoint, isBreakpointTriggered } = data;
   
+  // Helper to stringify index expression for display
+  const getIndexString = (indexExpr?: any[]): string | null => {
+    if (!indexExpr || indexExpr.length === 0) return null;
+    try {
+      // Ensure all elements are ExpressionElement instances
+      const elems = (indexExpr as any[]).map((e: any): ExpressionElement =>
+        e instanceof ExpressionElement ? e : ExpressionElement.fromObject(e)
+      );
+      return new Expression(undefined, elems as any).toString();
+    } catch {
+      return null;
+    }
+  };
+
   return (
     <div 
       className={`input-node`}
@@ -147,7 +210,15 @@ const Input = memo(function InputComponent({ data, id: _nodeId }: { data: InputN
         {variable ? (
           <div className="text-center mb-1">
             <Badge variant="outline" className="font-mono text-sm">
-              {variable.name} = {variable.type}(👤)
+              {variable.name}
+              {variable.type === 'array' && (
+                <>
+                  [
+                  {getIndexString(variable.indexExpression) || ''}
+                  ]
+                </>
+              )}
+              {' '}= {(variable.type === 'array' ? variable.arraySubtype : variable.type)}(👤)
             </Badge>
           </div>
         ) : (

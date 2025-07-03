@@ -82,6 +82,13 @@ export interface CallExpression extends Expression {
   arguments: Expression[];
 }
 
+// arr[index]
+export interface SubscriptExpression extends Expression {
+  type: 'SubscriptExpression';
+  object: Identifier;
+  index: Expression;
+}
+
 // Special node for print (Python-specific convenience)
 export interface PrintStatement extends Statement {
   type: 'PrintStatement';

@@ -65,17 +65,26 @@ export class AssignVariableProcessor implements NodeProcessor {
 }
 
 const AssignVariable = memo(function AssignVariableComponent({ data, id: _nodeId }: { data: AssignVariableNode; id: string }) {
-  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, expression, width, height, visualId, isError, hasBreakpoint, isBreakpointTriggered, leftSideIndex } = data as AssignVariableNode & { leftSideIndex?: string };
+  const { isHovered, isSelected, isHighlighted, isCodeHighlighted, expression, width, height, visualId, isError, hasBreakpoint, isBreakpointTriggered } = data as AssignVariableNode;
   
   const buildDisplayString = () => {
     if (!expression) return null;
     const exprInstance = expression instanceof Expression ? expression : Expression.fromObject(expression);
+
+    // When the stored expression is effectively empty (no left or right side)
+    if (exprInstance.isEmpty()) return null;
+
     // For assign variable expressions, leftSide is a Variable
     if (exprInstance.leftSide instanceof Variable) {
-      const leftName = exprInstance.leftSide.name;
-      const leftDisplay = leftSideIndex ? `${leftName}[${leftSideIndex}]` : leftName;
+      const leftVar = exprInstance.leftSide;
+      let leftDisplay = leftVar.name;
+      if (leftVar.indexExpression && leftVar.indexExpression.length > 0) {
+        const idxStr = new Expression(undefined, leftVar.indexExpression as any).toString();
+        leftDisplay = `${leftVar.name}[${idxStr}]`;
+      }
       const right = exprInstance.rightSide.map((e: any) => (e as ExpressionElement).toString()).join(' ');
-      return `${leftDisplay} = ${right}`;
+      const str = `${leftDisplay} = ${right}`;
+      return str.trim() === '' ? null : str;
     }
     // Fallback
     return exprInstance.toString();
@@ -124,7 +133,7 @@ const AssignVariable = memo(function AssignVariableComponent({ data, id: _nodeId
         </div>
       )}
 
-      {expression ? (
+      {displayString ? (
         <div className="mb-1">
           <Badge variant="outline" className="font-mono text-sm w-full justify-center">
             {displayString}

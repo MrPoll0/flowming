@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -50,7 +51,7 @@ interface ArrayIndexDialogProps {
   initialExpression?: Expression;
   initialRangeStart?: Expression;
   initialRangeEnd?: Expression;
-  initialTab?: 'single' | 'range';
+  initialTab?: 'single' | 'range'; // NOTE: Only single index is supported for now, although there is some implementation for range (needs to consider operations between arrays, as a range results in an array)
 }
 
 const ArrayIndexDialog: React.FC<ArrayIndexDialogProps> = ({ 
@@ -65,7 +66,7 @@ const ArrayIndexDialog: React.FC<ArrayIndexDialogProps> = ({
   initialTab = 'single'
 }) => {
   const { getAllVariables } = useVariables();
-  const [tab, setTab] = useState<'single' | 'range'>(initialTab);
+  const [tab, setTab] = useState<'single' | 'range'>('single'); // Force single-index mode
   
   const [singleExpr, setSingleExpr] = useState<Expression>(initialExpression || new Expression(undefined, []));
   const [rangeStart, setRangeStart] = useState<Expression>(initialRangeStart || new Expression(undefined, []));
@@ -75,10 +76,13 @@ const ArrayIndexDialog: React.FC<ArrayIndexDialogProps> = ({
   const [activeItem, setActiveItem] = useState<ExpressionElement | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
+  // State for left palette tabs (Variables, Literals, Functions)
+  const [paletteTab, setPaletteTab] = useState<'variables' | 'literals' | 'functions'>('variables');
+
   // Reset expressions when dialog opens or when initial values change
   React.useEffect(() => {
     if (open) {
-      setTab(initialTab);
+      setTab('single'); // Always reset to single-index mode
       setSingleExpr(initialExpression || new Expression(undefined, []));
       setRangeStart(initialRangeStart || new Expression(undefined, []));
       setRangeEnd(initialRangeEnd || new Expression(undefined, []));
@@ -454,19 +458,176 @@ const ArrayIndexDialog: React.FC<ArrayIndexDialogProps> = ({
           </DialogHeader>
 
           <Tabs value={tab} onValueChange={(value) => setTab(value as 'single' | 'range')}>
-            <TabsList>
+            <TabsList className="grid w-full grid-cols-2 mb-4">
               <TabsTrigger value="single">Single Position</TabsTrigger>
-              <TabsTrigger value="range">Range</TabsTrigger>
+              <TabsTrigger value="range" disabled>Range</TabsTrigger>
             </TabsList>
             
             <TabsContent value="single">
-              <ExpressionBuilder
-                expression={singleExpr}
-                addExpressionElement={(type, value) => handleAddExpressionElement('single-index-drop', type, value)}
-                removeExpressionElement={(id) => handleRemoveExpressionElement('single-index-drop', id)}
-                dropAreaId="single-index-drop"
-                excludeVariables={(v: Variable) => v.type !== 'array'}
-              />
+              <div className="space-y-4">
+                {/* Expression display area */}
+                <Card className="mb-4">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Index Expression</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="min-h-[50px] p-2 bg-muted/30 border rounded">
+                      <ExpressionBuilder
+                        expression={singleExpr}
+                        addExpressionElement={(type, value) => handleAddExpressionElement('single-index-drop', type, value)}
+                        removeExpressionElement={(id) => handleRemoveExpressionElement('single-index-drop', id)}
+                        dropAreaId="single-index-drop"
+                        excludeVariables={(v: Variable) => v.type !== 'array'}
+                        showPalette={false}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* 2-column palette layout */}
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Left column: Variables, Literals, Functions */}
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <Tabs value={paletteTab} onValueChange={(val)=>setPaletteTab(val as 'variables' | 'literals' | 'functions')} className="w-full">
+                        <TabsList className="grid grid-cols-3 w-full">
+                          <TabsTrigger value="variables">Variables</TabsTrigger>
+                          <TabsTrigger value="literals">Literals</TabsTrigger>
+                          <TabsTrigger value="functions">Functions</TabsTrigger>
+                        </TabsList>
+                      </Tabs>
+                    </CardHeader>
+                    <CardContent>
+                      <Tabs value={paletteTab} onValueChange={(val)=>setPaletteTab(val as 'variables' | 'literals' | 'functions')}>
+                        {/* Variables */}
+                        <TabsContent value="variables" className="mt-0">
+                          <div className="space-y-2">
+                            {getAllVariables().filter(v => v.type !== 'array').map(variable => (
+                              <DraggablePaletteItem
+                                key={`var-${variable.id}`}
+                                id={`var-${variable.id}`}
+                                type="variable"
+                                value={variable.name}
+                                backgroundColor="#d1e7ff"
+                                disabled={false}
+                                onClick={() => handleAddExpressionElement('single-index-drop', 'variable', variable.id)}
+                              />
+                            ))}
+                            {getAllVariables().filter(v => v.type !== 'array').length === 0 && (
+                              <div className="text-muted-foreground text-sm italic">No variables available</div>
+                            )}
+                          </div>
+                        </TabsContent>
+
+                        {/* Literals */}
+                        <TabsContent value="literals" className="mt-0">
+                          <div className="space-y-3">
+                            {/* Boolean literals */}
+                            <div className="space-y-1">
+                              <Label className="text-xs font-medium">Boolean</Label>
+                              <div className="flex gap-1">
+                                {['true', 'false'].map(val => (
+                                  <DraggablePaletteItem
+                                    key={`lit-bool-${val}`}
+                                    id={`lit-bool-${val}`}
+                                    type="literal"
+                                    value={val}
+                                    backgroundColor="#d1ffd1"
+                                    disabled={false}
+                                    onClick={() => handleAddExpressionElement('single-index-drop', 'literal', val)}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Integer literal */}
+                            <div className="space-y-1">
+                              <Label className="text-xs font-medium">Integer</Label>
+                              <div className="flex gap-1">
+                                <Input type="number" step="1" placeholder="Integer" id="single-int-lit" className="flex-1 text-sm" />
+                                <Button variant="outline" size="sm" onClick={() => {
+                                  const input = document.getElementById('single-int-lit') as HTMLInputElement;
+                                  if (input && input.value) {
+                                    handleAddExpressionElement('single-index-drop', 'literal', parseInt(input.value).toString());
+                                    input.value = '';
+                                  }
+                                }} className="text-xs px-2">Add</Button>
+                              </div>
+                            </div>
+
+                            {/* String literal */}
+                            <div className="space-y-1">
+                              <Label className="text-xs font-medium">String</Label>
+                              <div className="flex gap-1">
+                                <Input type="text" placeholder="String" id="single-str-lit" className="flex-1 text-sm" />
+                                <Button variant="outline" size="sm" onClick={() => {
+                                  const input = document.getElementById('single-str-lit') as HTMLInputElement;
+                                  if (input && input.value) {
+                                    handleAddExpressionElement('single-index-drop', 'literal', `"${input.value}"`);
+                                    input.value = '';
+                                  }
+                                }} className="text-xs px-2">Add</Button>
+                              </div>
+                            </div>
+
+                            {/* Float literal */}
+                            <div className="space-y-1">
+                              <Label className="text-xs font-medium">Float</Label>
+                              <div className="flex gap-1">
+                                <Input type="number" step="0.1" placeholder="Float" id="single-float-lit" className="flex-1 text-sm" />
+                                <Button variant="outline" size="sm" onClick={() => {
+                                  const input = document.getElementById('single-float-lit') as HTMLInputElement;
+                                  if (input && input.value) {
+                                    handleAddExpressionElement('single-index-drop', 'literal', parseFloat(input.value).toString());
+                                    input.value = '';
+                                  }
+                                }} className="text-xs px-2">Add</Button>
+                              </div>
+                            </div>
+                          </div>
+                        </TabsContent>
+
+                        {/* Functions */}
+                        <TabsContent value="functions" className="mt-0">
+                          <div className="space-y-2">
+                            {['integer', 'string', 'float', 'boolean'].map(func => (
+                              <DraggablePaletteItem
+                                key={`func-${func}`}
+                                id={`func-${func}`}
+                                type="function"
+                                value={`${func}()`}
+                                backgroundColor="#d1d1ff"
+                                disabled={false}
+                                onClick={() => handleAddExpressionElement('single-index-drop', 'function', func)}
+                              />
+                            ))}
+                          </div>
+                        </TabsContent>
+                      </Tabs>
+                    </CardContent>
+                  </Card>
+
+                  {/* Right column: Operators */}
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">Operators</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {operators.map(op => (
+                        <DraggablePaletteItem
+                          key={`op-${op}`}
+                          id={`op-${op}`}
+                          type="operator"
+                          value={op}
+                          backgroundColor="#ffd1d1"
+                          disabled={false}
+                          onClick={() => handleAddExpressionElement('single-index-drop', 'operator', op)}
+                        />
+                      ))}
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
             </TabsContent>
 
             <TabsContent value="range">
@@ -631,7 +792,6 @@ const ArrayIndexDialog: React.FC<ArrayIndexDialogProps> = ({
                 <div className={`px-2 py-1 m-1 rounded text-sm shadow-lg cursor-grabbing
                     ${activeItem.type === 'variable' ? 'bg-blue-100' :
                       activeItem.type === 'operator' ? 'bg-red-100' :
-                      activeItem.type === 'literal' && activeItem.value.includes('[') && activeItem.value.includes(']') ? 'bg-blue-100' :
                       activeItem.type === 'literal' ? 'bg-green-100' : 'bg-purple-100'}`}>
                     {activeItem.value}
                 </div>
