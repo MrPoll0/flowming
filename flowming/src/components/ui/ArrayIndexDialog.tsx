@@ -460,7 +460,12 @@ const ArrayIndexDialog: React.FC<ArrayIndexDialogProps> = ({
           <Tabs value={tab} onValueChange={(value) => setTab(value as 'single' | 'range')}>
             <TabsList className="grid w-full grid-cols-2 mb-4">
               <TabsTrigger value="single">Single Position</TabsTrigger>
-              <TabsTrigger value="range" disabled>Range</TabsTrigger>
+              <TabsTrigger value="range" disabled className="flex items-center justify-center gap-1.5">
+                <span>Range</span>
+                <span className="text-[10px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded-full border border-yellow-200 font-medium leading-none">
+                  WIP
+                </span>
+              </TabsTrigger>
             </TabsList>
             
             <TabsContent value="single">
