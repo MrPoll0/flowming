@@ -35,11 +35,12 @@ export const DraggableExpressionElement = ({ element, removeExpressionElement, d
   const bgColor = 
     element.type === 'variable' ? 'bg-blue-100' :
     element.type === 'operator' ? 'bg-red-100' : 
-    element.type === 'literal' && element.value.includes('[') && element.value.includes(']') ? 'bg-blue-100' :
     element.type === 'literal' ? 'bg-green-100' : 'bg-purple-100';
 
   // Check if this is an array access element that can be edited
-  const isArrayAccess = element.type === 'literal' && element.value.includes('[') && element.value.includes(']');
+  const isArrayAccess = (
+    element.type === 'variable' && !!element.variable?.indexExpression && element.variable.indexExpression.length > 0
+  );
 
   const handleClick = (e: React.MouseEvent) => {
     if (isArrayAccess && onEdit && !disabled) {

@@ -25,7 +25,7 @@ import { NodeBlock } from '../Toolbar/ToolbarTypes';
 import ContextMenu from './ContextMenu';
 import { useDnD } from '../../context/DnDContext';
 import { useFlowExecutorState } from '../../context/FlowExecutorContext';
-import { Expression, Variable } from '../../models';
+import { Expression, Variable, ExpressionElement } from '../../models';
 import { decisionEdgeLabels } from './Nodes/Conditional';
 import FilenameEditor from '../FilenameEditor';
 import { useCollaboration } from '../../context/CollaborationContext';
@@ -659,6 +659,40 @@ const FlowContent: React.FC = () => {
 
     if (!needsUpdate) return;
 
+    // Helper to recursively update ExpressionElement lists (array index expressions)
+    const updateElements = (elements: any[]): ExpressionElement[] => {
+      return elements.flatMap((rawElem: any) => {
+        // Ensure we are working with an ExpressionElement instance (objects coming from Yjs/serialization won't have class methods)
+        const elem: ExpressionElement = rawElem instanceof ExpressionElement
+          ? rawElem
+          : ExpressionElement.fromObject(rawElem);
+
+        if (elem.type !== 'variable') {
+          // Propagate into nested function calls, if any
+          if (elem.isFunction() && elem.nestedExpression) {
+            elem.nestedExpression.rightSide = updateElements(elem.nestedExpression.rightSide);
+          }
+          return [elem];
+        }
+
+        const match = variables.find(v => v.id === elem.variable?.id);
+        if (!match) return []; // Variable deleted -> drop element
+
+        const clonedVar = match.clone();
+        if (elem.variable?.indexExpression && clonedVar.type === 'array') {
+          const newIdx = updateElements(elem.variable.indexExpression as ExpressionElement[]);
+          if (newIdx.length > 0) clonedVar.indexExpression = newIdx;
+        }
+
+        // If index expression became empty, remove the whole variable element
+        if (elem.variable?.indexExpression && (!clonedVar.indexExpression || clonedVar.indexExpression.length === 0)) {
+          return [];
+        }
+
+        return [new ExpressionElement(elem.id, elem.type, clonedVar.toString(), clonedVar)];
+      });
+    };
+
     setNodes(prevNodes => prevNodes.map(node => {
       if ((node.type === 'AssignVariable' || node.type === 'Conditional' || node.type === 'Output') && node.data.expression) {
         try {
@@ -668,13 +702,59 @@ const FlowContent: React.FC = () => {
           const expression = Expression.fromObject(currentExprData);
           expression.updateVariables(variables);
 
+          // Cleanup for left-side Variable (especially array element assignments)
+          if (expression.leftSide instanceof Variable) {
+            const leftSideId = expression.leftSide.id;
+            const leftMatch = variables.find(v => v.id === leftSideId);
+
+            if (!leftMatch) {
+              expression.leftSide = undefined; // Variable removed entirely
+            } else {
+              const leftClone = leftMatch.clone();
+
+              // Recursively update its index expression (if any)
+              if (expression.leftSide.indexExpression && expression.leftSide.indexExpression.length > 0) {
+                const updatedIdx = updateElements(expression.leftSide.indexExpression as ExpressionElement[]);
+                if (updatedIdx.length > 0) {
+                  leftClone.indexExpression = updatedIdx;
+                }
+              }
+
+              // If after update the index expression is gone, drop the left side reference
+              if (expression.leftSide.indexExpression && (!leftClone.indexExpression || leftClone.indexExpression.length === 0)) {
+                expression.leftSide = undefined;
+              } else {
+                expression.leftSide = leftClone;
+              }
+            }
+          } else if (Array.isArray(expression.leftSide)) {
+            const cleanedLeft = updateElements(expression.leftSide as ExpressionElement[]);
+            if (cleanedLeft.length > 0) {
+              expression.leftSide = cleanedLeft;
+            } else {
+              expression.leftSide = undefined;
+            }
+          }
+
           return { ...node, data: { ...node.data, expression: expression.toObject() } };
         } catch {
           return { ...node, data: { ...node.data, expression: null } };
         }
       } else if (node.type === 'Input' && node.data.variable) {
         const updatedVariable = variables.find(v => v.id === node.data.variable?.id);
-        return { ...node, data: { ...node.data, variable: updatedVariable ? JSON.parse(JSON.stringify(updatedVariable)) : undefined } };
+        if (updatedVariable) {
+          const varCopy = updatedVariable.clone();
+          if (node.data.variable.indexExpression && node.data.variable.indexExpression.length > 0) {
+            const updatedIdx = updateElements(node.data.variable.indexExpression as ExpressionElement[]);
+            if (updatedIdx.length > 0) {
+              varCopy.indexExpression = updatedIdx;
+            } else {
+              return { ...node, data: { ...node.data, variable: undefined } };
+            }
+          }
+          return { ...node, data: { ...node.data, variable: varCopy } };
+        }
+        return { ...node, data: { ...node.data, variable: undefined } };
       }
 
       return node;
@@ -862,6 +942,16 @@ const FlowContent: React.FC = () => {
           // TODO: cannot move draggable elements in expression builder if its >= 2 lines height (only horizontally)
 
           // Timer: https://www.timeanddate.com/countdown/generic?iso=20250616T12&p0=%3A&font=cursive
+
+          // IDEA: Declare variable block could not be a block, and a simply display in some corner of the flow
+          // It would be displayed as a square with a form just like the one in the editor for Declare
+          // In this way, adding a "irrelevant" block wouldn't be needed and you would have a global, easy-to-access
+          // form to view and modify declared variables across the whole program
+          // (and also, it would be easier to add a new variable to the program)
+          // Does order of DeclareVariable nodes matter in the flow currently? I don't think so
+
+          // TODO: stricter type checking between float and integer?
+          // TODO: stricter display format for float (.0)
       >
         <Controls />
         <Background variant={BackgroundVariant.Lines} gap={12} size={1} />

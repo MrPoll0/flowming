@@ -47,6 +47,22 @@ const DebuggerTab = () => {
         }
     };
 
+    /**
+     * Formats a variable value for display.
+     * Arrays are shown with brackets and comma-separated elements (e.g., [1, 2, 3]).
+     * Non-arrays are stringified as-is.
+     */
+    const formatValue = (value: any): string => {
+        if (Array.isArray(value)) {
+            return `[${value.map(v => formatValue(v)).join(', ')}]`;
+        }
+        // Properly format strings with quotes
+        if (typeof value === 'string') {
+            return JSON.stringify(value);
+        }
+        return String(value);
+    };
+
     return (
         <div className="h-full flex flex-col">
             {/* Status header */}
@@ -111,7 +127,7 @@ const DebuggerTab = () => {
                                                                 {variable.name}:
                                                             </span>
                                                             <span className="font-mono text-sm bg-muted px-2 py-1 rounded">
-                                                                {variable.value}
+                                                                {formatValue(variable.value)}
                                                             </span>
                                                         </div>
                                                     </div>
@@ -144,7 +160,7 @@ const DebuggerTab = () => {
                                                                                     →
                                                                                 </span>
                                                                                 <span className="font-mono text-sm bg-background px-2 py-1 rounded">
-                                                                                    {change.value}
+                                                                                    {formatValue(change.value)}
                                                                                 </span>
                                                                             </div>
                                                                             <span className="text-xs text-muted-foreground">

@@ -1,8 +1,8 @@
-import { Variable, VariableType, ValueTypeMap } from './Variable';
+import { Variable, VariableType, ValueTypeMap, ArraySubtype } from './Variable';
 import { ExpressionElement } from './ExpressionElement';
 import { ValuedVariable } from './ValuedVariable';
 import { buildAST } from './ExpressionParser';
-import { IVariable } from './Variable';
+import type { IVariable } from './IVariable';
 
 export const operators = ['+', '-', '*', '/', '!', '%', '&&', '||', '==', '!=', '>', '<', '>=', '<=', '(', ')'];
 export type IOperator = typeof operators[number];
@@ -46,13 +46,19 @@ interface BinaryOpNode extends BaseASTNode {
   right: ExpressionASTNode;
 }
 
+interface MemberAccessNode extends BaseASTNode {
+  type: 'MemberAccess';
+  object: IdentifierNode;
+  property: ExpressionASTNode;
+}
+
 interface FunctionCallNode extends BaseASTNode {
   type: 'FunctionCall';
   functionName: 'integer' | 'string' | 'float' | 'boolean';
   argument: ExpressionASTNode;
 }
 
-type ExpressionASTNode = LiteralNode | IdentifierNode | UnaryOpNode | BinaryOpNode | FunctionCallNode;
+type ExpressionASTNode = LiteralNode | IdentifierNode | UnaryOpNode | BinaryOpNode | FunctionCallNode | MemberAccessNode;
 
 
 export class Expression implements IExpression {
@@ -60,7 +66,11 @@ export class Expression implements IExpression {
   rightSide: ExpressionElement[];
   equality?: IEquality;
 
-  constructor(leftSide: Variable | ExpressionElement[] | undefined, rightSide: ExpressionElement[] = [], equality?: IEquality) {
+  constructor(
+    leftSide: Variable | ExpressionElement[] | undefined,
+    rightSide: ExpressionElement[] = [],
+    equality?: IEquality
+  ) {
     if(leftSide != undefined){ 
       if (equality && (!Array.isArray(leftSide) || leftSide.some(e => !(e instanceof ExpressionElement)))) {
         throw new Error('leftSide must be an array of ExpressionElement instances');
@@ -96,7 +106,8 @@ export class Expression implements IExpression {
   calculateValue(
     exprElements: ExpressionElement[],
     exprTyping: VariableType | null,
-    currentValuedVariables: ValuedVariable<VariableType>[]
+    currentValuedVariables: ValuedVariable<VariableType>[],
+    arraySubtype?: ArraySubtype
   ): ValueTypeMap[VariableType] {
     try {
       if (exprElements.length === 0) {
@@ -123,6 +134,14 @@ export class Expression implements IExpression {
         if (exprTyping === 'integer' && result.type === 'float') {
           return Math.floor(Number(result.value));
         }
+
+        if (exprTyping === 'array') {
+          // Make sure that the result is the correct type for the array subtype
+          if (result.type !== arraySubtype) {
+            throw new Error(`Type mismatch: Cannot assign a value of type '${result.type}' to a variable of type '${arraySubtype}'.`);
+          }
+          return result.value;
+        }
         
         throw new Error(`Type mismatch: Cannot assign a value of type '${result.type}' to a variable of type '${exprTyping}'.`);
       }
@@ -147,6 +166,37 @@ export class Expression implements IExpression {
       case 'Identifier':
         const v = currentValuedVariables.find(vv => vv.id === node.variable.id);
         if (!v) throw new Error(`Variable "${node.name}" does not have a value assigned.`);
+
+        // If the identifier represents an array element (indexExpression present), evaluate the index and return that element
+        if (node.variable.type === 'array' && node.variable.indexExpression && node.variable.indexExpression.length > 0) {
+          let idx: number;
+          try {
+            idx = this.calculateValue(
+              node.variable.indexExpression as any,
+              'integer',
+              currentValuedVariables
+            ) as number;
+          } catch (err: any) {
+            const msg = err?.message ?? '';
+            if (msg.includes('Type mismatch')) {
+              throw new Error(`Array index for "${node.name}" must be an integer.`);
+            }
+            // Propagate all other errors untouched
+            throw err;
+          }
+          if (!Number.isInteger(idx)) { // This should never happen, as the index expression is already validated to be an integer in calculateValue
+            throw new Error(`Array index for "${node.name}" must be an integer.`);
+          }
+
+          const arr = Array.isArray(v.value) ? v.value : [];
+          const size = v.arraySize ?? arr.length;
+          if (idx < 0 || idx >= size) {
+            throw new Error(`Array index ${idx} is out of bounds for "${node.name}" (size ${size}).`);
+          }
+          const subtype = v.arraySubtype!;
+          return { value: arr[idx], type: subtype };
+        }
+
         return { value: v.value, type: v.type };
 
       case 'FunctionCall':
@@ -281,10 +331,124 @@ export class Expression implements IExpression {
    * and the calculated value from the expression and the current values for variables
    */
   assignValue(currentValuedVariables: ValuedVariable<VariableType>[]): ValuedVariable<VariableType> {
-    if (!(this.leftSide instanceof Variable)) throw new Error('leftSide must be a Variable instance');
+    // NOTE: operations between arrays will be always single values, as you must always specify an index for the array
+    // This means that operations like concatenation and so on are not allowed between whole arrays
+    // So the return value will always be a single value (and we only care for type checking for the subtype)
 
-    const value = this.calculateValue(this.rightSide, this.leftSide.type, currentValuedVariables);
-    return new ValuedVariable(this.leftSide.id, this.leftSide.type, this.leftSide.name, this.leftSide.nodeId, value);
+    // NOTE: calculateValue for array element returns the whole array with the corresponding index modified
+    // the variable value holds the whole array (for debugging purposes and future implementations)
+    
+    if (this.leftSide instanceof Variable) {
+      // Array variable assignment requires indexExpression stored in Variable
+      if (this.leftSide.type === 'array') {
+        if (!this.leftSide.indexExpression || this.leftSide.indexExpression.length === 0) {
+          throw new Error(`Cannot assign directly to array variable "${this.leftSide.name}". Use array index access instead (e.g., ${this.leftSide.name}[index] = value).`);
+        }
+        return this.#assignArrayValue(this.leftSide, this.leftSide.indexExpression, currentValuedVariables);
+      }
+
+      const value = this.calculateValue(this.rightSide, this.leftSide.type, currentValuedVariables, this.leftSide.arraySubtype);
+      return new ValuedVariable(
+        this.leftSide.id,
+        this.leftSide.type,
+        this.leftSide.name,
+        this.leftSide.nodeId,
+        value as Exclude<ValueTypeMap[VariableType], any[]>, // Type is already validated as non-array above
+        this.leftSide.arraySubtype,
+        this.leftSide.arraySize
+      );
+    } else {
+      throw new Error('leftSide must be a Variable instance');
+    }
+  }
+
+  /**
+   * Handles array index assignments like arr[i-2] = value
+   * 
+   * Note: This method performs complex AST operations which can take significant time (non-trivial).
+   *         (this is not a problem for now)
+   * 
+   * @param arrayVarDef The array variable definition
+   * @param indexExprElements The array access expression elements
+   * @param currentValuedVariables The current state of variables
+   * @returns The updated ValuedVariable with the modified array
+   */
+  #assignArrayValue(arrayVarDef: Variable, indexExprElements: ExpressionElement[], currentValuedVariables: ValuedVariable<VariableType>[]): ValuedVariable<VariableType> {
+    try {
+      // Construct tokens: Variable token, '[' token, ...indexExprElements, ']' token
+      const arrayVarElement = new ExpressionElement(crypto.randomUUID(), 'variable', arrayVarDef.name, arrayVarDef);
+      const openBracket = new ExpressionElement(crypto.randomUUID(), 'operator', '[');
+      const closeBracket = new ExpressionElement(crypto.randomUUID(), 'operator', ']');
+
+      const tokens: ExpressionElement[] = [arrayVarElement, openBracket, ...indexExprElements, closeBracket];
+      const leftAST = buildAST(tokens);
+      
+      if (leftAST.type !== 'MemberAccess') {
+        throw new Error('Left side of array assignment must be an array access expression (e.g., arr[index])');
+      }
+
+      const memberAccess = leftAST as MemberAccessNode;
+      
+      // Find (or lazily initialize) the target array variable in the current valued variables set
+      let arrayVar = currentValuedVariables.find(vv => vv.id === memberAccess.object.variable.id);
+
+      // If the array variable has not been initialized yet (i.e., it has been declared but no
+      // valued-variable instance exists in the current execution scope), create it on the fly so
+      // that the assignment can proceed. This situation can arise when the DeclareVariable node
+      // has executed but, due to asynchronous propagation of node data, the valued variable did
+      // not reach this node before the assignment executes.
+      if (!arrayVar) {
+        arrayVar = ValuedVariable.fromVariable(memberAccess.object.variable, null);
+        currentValuedVariables.push(arrayVar);
+      }
+
+      // Validate array structure and constraints
+      if (!Array.isArray(arrayVar.value)) {
+        throw new Error(`Variable "${memberAccess.object.name}" is not a valid array.`);
+      }
+      
+      const subtype = arrayVar.arraySubtype;
+      const arraySize = arrayVar.arraySize;
+      if (!subtype) throw new Error(`Array "${memberAccess.object.name}" does not have a defined subtype.`);
+      if (!arraySize || arraySize < 1) throw new Error(`Array "${memberAccess.object.name}" does not have a valid size defined.`);
+
+      // Enforce fixed-length constraint
+      if (arrayVar.value.length !== arraySize) {
+        throw new Error(`Array "${memberAccess.object.name}" has incorrect length: expected ${arraySize}, but got ${arrayVar.value.length}.`);
+      }
+
+      // Evaluate the index expression
+      const indexResult = this.#evaluateAST(memberAccess.property, currentValuedVariables);
+      if (indexResult.type !== 'integer') {
+        throw new Error(`Array index for "${memberAccess.object.name}" must be an integer, but got ${indexResult.type}.`);
+      }
+      const index = indexResult.value;
+
+      // Bounds checking
+      if (index < 0 || index >= arraySize) {
+        throw new Error(`Array index ${index} is out of bounds for "${memberAccess.object.name}" (fixed size ${arraySize}).`);
+      }
+
+      // Evaluate the right side to get the new value
+      const newValue = this.calculateValue(this.rightSide, subtype, currentValuedVariables);
+
+      // Create a copy of the array and update the specified index
+      const updatedArray = [...arrayVar.value];
+      updatedArray[index] = newValue;
+
+      // Return the updated ValuedVariable with the modified array
+      return new ValuedVariable(
+        arrayVar.id,
+        arrayVar.type,
+        arrayVar.name,
+        arrayVar.nodeId,
+        updatedArray,
+        arrayVar.arraySubtype,
+        arrayVar.arraySize
+      );
+    } catch (e) {
+      throw e;
+    }
   }
 
   /**
@@ -412,20 +576,6 @@ export class Expression implements IExpression {
   }
 
   /**
-   * Inserts an element at a specific position
-   */
-  insertElementAt(element: ExpressionElement, index: number): void {
-    this.rightSide.splice(index, 0, element);
-  }
-
-  /**
-   * Updates the variable in the leftSide of the expression
-   */
-  updateLeftSide(variable: Variable): void {
-    this.leftSide = variable;
-  }
-
-  /**
    * Updates the expression with new values
    */
   update(updates: Partial<Expression>): void {
@@ -441,16 +591,40 @@ export class Expression implements IExpression {
    * Updates the variables in the expression
    */
   updateVariables(variables: Variable[]): void {
+    // Helper to update ExpressionElement lists based on current variable set, removing missing vars
+    const processElements = (elements: ExpressionElement[]): ExpressionElement[] => {
+      return elements.flatMap(elem => {
+        if (elem.type !== 'variable') return [elem];
+        const vMatch = variables.find(vv => vv.id === elem.variable?.id);
+        if (!vMatch) return []; // Variable deleted -> remove element
+        const elemVarClone = vMatch.clone();
+        if (elem.variable?.indexExpression && elemVarClone.type === 'array') {
+          elemVarClone.indexExpression = processElements(elem.variable.indexExpression as ExpressionElement[]);
+        }
+        if (elem.variable?.indexExpression && (!elemVarClone.indexExpression || elemVarClone.indexExpression.length === 0)) {
+          return []; // index expression emptied -> remove the variable element entirely
+        }
+        return [new ExpressionElement(elem.id, elem.type, elemVarClone.toString(), elemVarClone)];
+      });
+    };
+
     // Update the leftSide variable if it exists in the variable list
-    if(this.leftSide != undefined){ 
+    if (this.leftSide != undefined) {
       if (this.leftSide instanceof Variable) {
+        const existingIndexExpr = this.leftSide.indexExpression;
         const leftSideVariable = variables.find(v => v.id === (this.leftSide as Variable).id);
         if (!leftSideVariable) {
-            // If no left side variable is found, expression is invalid
-            // TODO: do not unmount expression when LHS variable deselected or not found (?)
-            throw new Error(`Variable with id ${this.leftSide.id} not found`);
+          // If no left side variable is found, expression is invalid
+          // TODO: do not unmount expression when LHS variable deselected or not found (?)
+          throw new Error(`Variable with id ${this.leftSide.id} not found`);
         }
-        this.leftSide = leftSideVariable;
+
+        // Preserve array index expression (if any) when replacing the variable reference.
+        const updatedVar = leftSideVariable.clone();
+        if (existingIndexExpr && updatedVar.type === 'array') {
+          updatedVar.indexExpression = existingIndexExpr;
+        }
+        this.leftSide = updatedVar;
       } else {
         this.leftSide = this.leftSide?.flatMap(e => {
           if (e.type !== 'variable') return [e];
@@ -458,7 +632,16 @@ export class Expression implements IExpression {
           // If no variable is found, delete expression element (by flattening [])
           if (!variable) return [];
           
-          const expressionElement = new ExpressionElement(e.id, e.type, variable.name, variable);
+          // Preserve indexExpression if present
+          const updatedVar = variable.clone();
+          if (e.variable?.indexExpression && updatedVar.type === 'array') {
+            updatedVar.indexExpression = processElements(e.variable.indexExpression as ExpressionElement[]);
+          }
+          if (e.variable?.indexExpression && (!updatedVar.indexExpression || updatedVar.indexExpression.length === 0)) {
+            // index became empty -> remove entire variable element
+            return [];
+          }
+          const expressionElement = new ExpressionElement(e.id, e.type, updatedVar.toString(), updatedVar);
           return [expressionElement];
         });
       }
@@ -470,7 +653,16 @@ export class Expression implements IExpression {
       // If no variable is found, delete expression element (by flattening [])
       if (!variable) return [];
       
-      const expressionElement = new ExpressionElement(e.id, e.type, variable.name, variable);
+      // Preserve indexExpression if present
+      const updatedVar = variable.clone();
+      if (e.variable?.indexExpression && updatedVar.type === 'array') {
+        updatedVar.indexExpression = processElements(e.variable.indexExpression as ExpressionElement[]);
+      }
+      if (e.variable?.indexExpression && (!updatedVar.indexExpression || updatedVar.indexExpression.length === 0)) {
+        // index became empty -> remove entire variable element
+        return [];
+      }
+      const expressionElement = new ExpressionElement(e.id, e.type, updatedVar.toString(), updatedVar);
       return [expressionElement];
     });
   }
@@ -481,9 +673,11 @@ export class Expression implements IExpression {
   isEmpty(): boolean {
     if(this.leftSide != undefined){ 
       if(this.equality) {
+        // For conditionals, leftSide is ExpressionElement[]
         return (this.leftSide as ExpressionElement[]).length === 0 && this.rightSide.length === 0;
       }
-      return !(this.leftSide as Variable) && this.rightSide.length === 0;
+      // Array access assignment is ExpressionElement[] (?)
+      return (!(this.leftSide as Variable) || (this.leftSide as ExpressionElement[]).length === 0) && this.rightSide.length === 0;
     }
 
     return this.rightSide.length === 0;

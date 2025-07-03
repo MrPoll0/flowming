@@ -37,7 +37,6 @@ import {
 } from './shared/DragAndDropComponents';
 import { CSS } from '@dnd-kit/utilities';
 import ArrayIndexDialog from '@/components/ui/ArrayIndexDialog';
-import { parseArrayAccess, parseExpressionString } from '@/utils/expressionParsing';
 
 // Available operators for expression building
 const operators = [
@@ -67,10 +66,11 @@ interface FunctionExpressionElementProps {
   element: ExpressionElement;
   removeExpressionElement: (id: string) => void;
   disabled: boolean;
+  onEdit?: (element: ExpressionElement) => void;
 }
 
 // Function block component for nesting
-const FunctionExpressionElement: React.FC<FunctionExpressionElementProps> = ({ element, removeExpressionElement, disabled }) => {
+const FunctionExpressionElement: React.FC<FunctionExpressionElementProps> = ({ element, removeExpressionElement, disabled, onEdit }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: element.id, disabled });
 
   const nestedDropId = `nested-${element.id}`;
@@ -103,6 +103,7 @@ const FunctionExpressionElement: React.FC<FunctionExpressionElementProps> = ({ e
                     element={nestedElem}
                     removeExpressionElement={removeExpressionElement}
                     disabled={disabled}
+                    onEdit={onEdit}
                   />
                 ) : (
                   <DraggableExpressionElement
@@ -111,6 +112,7 @@ const FunctionExpressionElement: React.FC<FunctionExpressionElementProps> = ({ e
                     index={idx}
                     removeExpressionElement={removeExpressionElement}
                     disabled={disabled}
+                    onEdit={onEdit}
                   />
                 )
               ))
@@ -149,9 +151,7 @@ const OutputEditor = () => {
   // State for editing existing array access elements
   const [editingElement, setEditingElement] = useState<ExpressionElement | null>(null);
   const [initialExpression, setInitialExpression] = useState<Expression | null>(null);
-  const [initialRangeStart, setInitialRangeStart] = useState<Expression | null>(null);
-  const [initialRangeEnd, setInitialRangeEnd] = useState<Expression | null>(null);
-  const [initialTab, setInitialTab] = useState<'single' | 'range'>('single');
+  const [initialTab, setInitialTab] = useState<'single'>('single');
   
   const reactFlowInstance = useReactFlow();
   
@@ -399,7 +399,7 @@ const OutputEditor = () => {
     }
 
     // Intercept array variable drag
-    if (activeDraggableItem.type === 'variable' && activeDraggableItem.variable?.type === 'array') {
+    if (activeDraggableItem.type === 'variable' && activeDraggableItem.variable?.type === 'array' && (!activeDraggableItem.variable.indexExpression || activeDraggableItem.variable.indexExpression.length === 0)) {
       const overLocation = getElementLocationInfo(over.id, expression);
       // Check if it's a valid drop target
       if (overLocation && (overLocation.isMainDropArea || overLocation.isNestedDropArea || overLocation.isMainExpressionElement || overLocation.isNestedExpressionElement)) {
@@ -513,29 +513,19 @@ const OutputEditor = () => {
 
   // Handle editing array access elements
   const handleEditArrayAccess = (element: ExpressionElement) => {
-    if (!element.value.includes('[') || !element.value.includes(']')) return;
-    
-    const parsed = parseArrayAccess(element.value);
-    if (!parsed) return;
+    if (!element.variable || !(element.variable instanceof Variable)) return;
+    const elemVar = element.variable as Variable;
+    if (elemVar.type !== 'array') return;
 
-    // Find the array variable
-    const arrayVar = getAllVariables().find(v => v.name === parsed.arrayName && v.type === 'array');
-    if (!arrayVar) return;
-
+    const arrayVar = getAllVariables().find(v => v.id === elemVar.id && v.type === 'array') || elemVar;
+ 
     setEditingElement(element);
     setArrayVariableForIndex(arrayVar);
-
-    if (parsed.isRange && parsed.rangeStart && parsed.rangeEnd) {
-      setInitialTab('range');
-      setInitialRangeStart(parseExpressionString(parsed.rangeStart, getAllVariables()));
-      setInitialRangeEnd(parseExpressionString(parsed.rangeEnd, getAllVariables()));
-      setInitialExpression(null);
-    } else if (parsed.indexExpression) {
-      setInitialTab('single');
-      setInitialExpression(parseExpressionString(parsed.indexExpression, getAllVariables()));
-      setInitialRangeStart(null);
-      setInitialRangeEnd(null);
-    }
+    setInitialTab('single');
+    const idxExpr = elemVar.indexExpression && elemVar.indexExpression.length > 0
+      ? elemVar.indexExpression.map(e => e.clone())
+      : [];
+    setInitialExpression(new Expression(undefined, idxExpr));
 
     setIsIndexDialogOpen(true);
   };
@@ -543,8 +533,18 @@ const OutputEditor = () => {
   // Handle dialog submission for editing
   const handleDialogSubmit = (_: 'single', expr: Expression) => {
     if (arrayVariableForIndex) {
-      const exprStr = expr.toString();
-      const newValue = `${arrayVariableForIndex.name}[${exprStr}]`;
+      if (expr.isEmpty()) {
+        // Ignore empty index
+        // TODO: ideally error message and block action
+        setEditingElement(null);
+        setIsIndexDialogOpen(false);
+        setArrayVariableForIndex(null);
+        return;
+      }
+      // Build variable clone with index expression directly
+      const idxExpr = expr.rightSide.map(e => e.clone());
+      const variableClone = arrayVariableForIndex.clone();
+      (variableClone as any).indexExpression = idxExpr;
 
       if (editingElement) {
         // Replace existing element
@@ -553,13 +553,14 @@ const OutputEditor = () => {
           const newExpr = prev.clone();
           const elementToUpdate = newExpr.findElement(editingElement.id);
           if (elementToUpdate) {
-            elementToUpdate.value = newValue;
+            elementToUpdate.type = 'variable';
+            elementToUpdate.setVariable(variableClone);
           }
           return newExpr;
         });
       } else {
         // Add new element
-        const element = new ExpressionElement(crypto.randomUUID(), 'literal', newValue);
+        const element = new ExpressionElement(crypto.randomUUID(), 'variable', '', variableClone);
         setExpression(prev => {
           if (!prev) return null;
           const newExpr = prev.clone();
@@ -572,44 +573,6 @@ const OutputEditor = () => {
     // Reset state
     setEditingElement(null);
     setInitialExpression(null);
-    setInitialRangeStart(null);
-    setInitialRangeEnd(null);
-    setIsIndexDialogOpen(false);
-  };
-
-  // Handle dialog submission for range editing
-  const handleDialogSubmitRange = (_: 'range', start: Expression, end: Expression) => {
-    if (arrayVariableForIndex) {
-      const newValue = `${arrayVariableForIndex.name}[${start.toString()}:${end.toString()}]`;
-
-      if (editingElement) {
-        // Replace existing element
-        setExpression(prev => {
-          if (!prev) return null;
-          const newExpr = prev.clone();
-          const elementToUpdate = newExpr.findElement(editingElement.id);
-          if (elementToUpdate) {
-            elementToUpdate.value = newValue;
-          }
-          return newExpr;
-        });
-      } else {
-        // Add new element
-        const element = new ExpressionElement(crypto.randomUUID(), 'literal', newValue);
-        setExpression(prev => {
-          if (!prev) return null;
-          const newExpr = prev.clone();
-          newExpr.addElement(element);
-          return newExpr;
-        });
-      }
-    }
-    
-    // Reset state
-    setEditingElement(null);
-    setInitialExpression(null);
-    setInitialRangeStart(null);
-    setInitialRangeEnd(null);
     setIsIndexDialogOpen(false);
   };
 
@@ -617,8 +580,6 @@ const OutputEditor = () => {
   const handleDialogCancel = () => {
     setEditingElement(null);
     setInitialExpression(null);
-    setInitialRangeStart(null);
-    setInitialRangeEnd(null);
     setIsIndexDialogOpen(false);
   };
 
@@ -656,6 +617,7 @@ const OutputEditor = () => {
                           element={element}
                           removeExpressionElement={removeExpressionElement}
                           disabled={isRunning}
+                          onEdit={handleEditArrayAccess}
                         />
                       );
                     }
@@ -905,7 +867,6 @@ const OutputEditor = () => {
             px-2 py-1 m-1 rounded text-sm shadow-lg cursor-grabbing
             ${activeDraggableItem.type === 'variable' ? 'bg-blue-100' :
               activeDraggableItem.type === 'operator' ? 'bg-red-100' :
-              activeDraggableItem.type === 'literal' && activeDraggableItem.value.includes('[') && activeDraggableItem.value.includes(']') ? 'bg-blue-100' :
               activeDraggableItem.type === 'literal' ? 'bg-green-100' : 'bg-purple-100'}
           `}>
             {activeDraggableItem.value}
@@ -919,10 +880,10 @@ const OutputEditor = () => {
         variableName={arrayVariableForIndex?.name || ''}
         onCancel={handleDialogCancel}
         onSubmit={handleDialogSubmit}
-        onSubmitRange={handleDialogSubmitRange}
+        onSubmitRange={undefined as any}
         initialExpression={initialExpression || undefined}
-        initialRangeStart={initialRangeStart || undefined}
-        initialRangeEnd={initialRangeEnd || undefined}
+        initialRangeStart={undefined as any}
+        initialRangeEnd={undefined as any}
         initialTab={initialTab}
       />
     </DndContext>

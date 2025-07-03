@@ -1,4 +1,5 @@
-import { IVariable, ValueTypeMap, Variable, VariableType, ArraySubtype } from "./Variable";
+import { ValueTypeMap, Variable, VariableType, ArraySubtype } from "./Variable";
+import { IVariable } from './IVariable';
 
 export interface IValuedVariable<T extends VariableType> extends IVariable {
     value: ValueTypeMap[T];
@@ -23,9 +24,17 @@ export class ValuedVariable<T extends VariableType> extends Variable implements 
     }
 
     /**
+     * Clones the valued variable
+     */
+    clone<T extends VariableType>(): ValuedVariable<T> {
+        const clonedValue = Array.isArray(this.value) ? [...this.value] : this.value;
+        return new ValuedVariable(this.id, this.type as T, this.name, this.nodeId, clonedValue as ValueTypeMap[T], this.arraySubtype, this.arraySize);
+    }
+
+    /**
      * Creates an object representation of the valued variable
      */
-    toObject(): IValuedVariable<T> {
+    toObject(): any {
         return {
             id: this.id,
             type: this.type,
@@ -71,7 +80,7 @@ export class ValuedVariable<T extends VariableType> extends Variable implements 
                 initializedValue = false as ValueTypeMap[T];
                 break;
             case 'array':
-                // Initialize array with default values based on subtype and size
+                // Array is initialized by filling size with default values based on subtype
                 const size = variable.arraySize || 10;
                 const subtype = variable.arraySubtype || 'integer';
                 let defaultValue: any;

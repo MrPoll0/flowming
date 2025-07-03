@@ -30,13 +30,19 @@ export interface BinaryOpNode extends BaseASTNode {
   right: ExpressionASTNode;
 }
 
+export interface MemberAccessNode extends BaseASTNode {
+  type: 'MemberAccess';
+  object: IdentifierNode;
+  property: ExpressionASTNode;
+}
+
 export interface FunctionCallNode extends BaseASTNode {
   type: 'FunctionCall';
   functionName: 'integer' | 'string' | 'float' | 'boolean';
   argument: ExpressionASTNode;
 }
 
-export type ExpressionASTNode = LiteralNode | IdentifierNode | UnaryOpNode | BinaryOpNode | FunctionCallNode;
+export type ExpressionASTNode = LiteralNode | IdentifierNode | UnaryOpNode | BinaryOpNode | FunctionCallNode | MemberAccessNode;
 
 // Parser Implementation
 export function buildAST(elements: ExpressionElement[]): ExpressionASTNode {
@@ -161,8 +167,20 @@ export function buildAST(elements: ExpressionElement[]): ExpressionASTNode {
       return parseLiteral(tok.value);
     }
     if (tok.isVariable() && tok.variable) {
-      next();
-      return { type: 'Identifier', name: tok.variable.name, variable: tok.variable };
+      const idNode: IdentifierNode = { type: 'Identifier', name: tok.variable.name, variable: tok.variable };
+      next(); // Consume identifier token
+
+      if (peek()?.value === '[') {
+          if (idNode.variable.type !== 'array') {
+              throw new Error(`Variable "${idNode.name}" is not an array and cannot be indexed.`);
+          }
+          next(); // Consume '['
+          const indexExpr = parseEquality();
+          expectOperator(']');
+          return { type: 'MemberAccess', object: idNode, property: indexExpr };
+      }
+      
+      return idNode;
     }
     if (tok.isFunction()) {
       const fnTok = next();

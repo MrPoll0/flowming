@@ -44,7 +44,6 @@ import {
   ExpressionDropArea 
 } from './shared/DragAndDropComponents';
 import ArrayIndexDialog from '@/components/ui/ArrayIndexDialog';
-import { parseArrayAccess, parseExpressionString } from '@/utils/expressionParsing';
 
 // Available operators for expression building
 const operators = [
@@ -74,10 +73,11 @@ interface FunctionExpressionElementProps {
   element: ExpressionElement;
   removeExpressionElement: (id: string) => void;
   disabled: boolean;
+  onEdit?: (element: ExpressionElement) => void;
 }
 
 // Function block component for nesting
-const FunctionExpressionElement: React.FC<FunctionExpressionElementProps> = ({ element, removeExpressionElement, disabled }) => {
+const FunctionExpressionElement: React.FC<FunctionExpressionElementProps> = ({ element, removeExpressionElement, disabled, onEdit }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: element.id, disabled });
   
   const nestedDropId = `nested-${element.id}`;
@@ -110,6 +110,7 @@ const FunctionExpressionElement: React.FC<FunctionExpressionElementProps> = ({ e
                     element={nestedElem}
                     removeExpressionElement={removeExpressionElement}
                     disabled={disabled}
+                    onEdit={onEdit}
                   />
                 ) : (
                   <DraggableExpressionElement
@@ -118,6 +119,7 @@ const FunctionExpressionElement: React.FC<FunctionExpressionElementProps> = ({ e
                     index={idx}
                     removeExpressionElement={removeExpressionElement}
                     disabled={disabled}
+                    onEdit={onEdit}
                   />
                 )
               ))
@@ -154,15 +156,13 @@ const VariableAssignmentEditor = () => {
   const [isIndexDialogOpen, setIsIndexDialogOpen] = useState(false);
   const [arrayVariableForIndex, setArrayVariableForIndex] = useState<Variable | null>(null);
   // Left-side (assignment target) index state
-  const [leftSideIndexString, setLeftSideIndexString] = useState<string | null>(null);
+  const [leftSideIndexExprElems, setLeftSideIndexExprElems] = useState<ExpressionElement[] | null>(null);
   const [isEditingLeftSideIndex, setIsEditingLeftSideIndex] = useState(false);
   
   // State for editing existing array access elements
   const [editingElement, setEditingElement] = useState<ExpressionElement | null>(null);
   const [initialExpression, setInitialExpression] = useState<Expression | null>(null);
-  const [initialRangeStart, setInitialRangeStart] = useState<Expression | null>(null);
-  const [initialRangeEnd, setInitialRangeEnd] = useState<Expression | null>(null);
-  const [initialTab, setInitialTab] = useState<'single' | 'range'>('single');
+  const [initialTab, setInitialTab] = useState<'single'>('single');
   
   const reactFlowInstance = useReactFlow();
   
@@ -208,32 +208,33 @@ const VariableAssignmentEditor = () => {
         }
 
         // Reset index state if variable type changed to non-array
-        if (varInstance.type !== 'array' && leftSideIndexString) {
-          setLeftSideIndexString(null);
+        if (varInstance.type !== 'array' && leftSideIndexExprElems && leftSideIndexExprElems.length > 0) {
+          setLeftSideIndexExprElems(null);
         }
 
         // Only update if the left side has changed or if the expression is null
         if (!expression || (expression.leftSide instanceof Variable && expression.leftSide.id !== varInstance.id)) {
-          // Preserve right side if expression already exists and has one
-          setExpression(new Expression(varInstance, expression?.rightSide || []));
+          // Preserve right side and indexExpression if exists
+          const varClone = varInstance.clone();
+          if (leftSideIndexExprElems && leftSideIndexExprElems.length > 0) {
+            (varClone as any).indexExpression = leftSideIndexExprElems.map(e => e.clone());
+          }
+          setExpression(new Expression(varClone, expression?.rightSide || []));
         }
       } else { // AssignVariable selected, but no variable chosen for its LHS, so reset expression
         if (expression !== null) setExpression(null);
       }
     }
-  }, [leftSideVariable, selectedNode, getAllVariables, expression, leftSideIndexString]);
+  }, [leftSideVariable, selectedNode, getAllVariables, expression, leftSideIndexExprElems]);
 
   // Update the node data when expression changes
   useEffect(() => {
     if (selectedNode?.type === 'AssignVariable' && !isInitialLoadRef.current) {
-      const updatedData: any = {
+      reactFlowInstance.updateNodeData(selectedNode.id, {
         expression: expression ? expression.toObject() : null,
-        leftSideIndex: leftSideIndexString || undefined,
-      };
-
-      reactFlowInstance.updateNodeData(selectedNode.id, updatedData);
+      });
     }
-  }, [expression, leftSideIndexString, reactFlowInstance, selectedNode]);
+  }, [expression, reactFlowInstance, selectedNode]);
 
   // Load assignment data when the selected node changes or when its data changes (for collaboration)
   useEffect(() => {
@@ -256,24 +257,32 @@ const VariableAssignmentEditor = () => {
           const allVariables = getAllVariables();
 
           try {
-            const varId = selectedNode.data.expression.leftSide.id;
-            // Check if the variable with this ID still exists
-            if (allVariables.some(v => v.id === varId)) {
+            const exprObj = selectedNode.data.expression;
+            const exprLoaded = Expression.fromObject(exprObj);
+
+            // Verify variable still exists
+            if (exprLoaded.leftSide instanceof Variable) {
+              const varId = exprLoaded.leftSide.id;
+              if (!allVariables.some(v => v.id === varId)) throw new Error("Variable no longer exists");
               setLeftSideVariable(varId);
-              // Load stored leftSideIndex if present
-              if (selectedNode.data.leftSideIndex) {
-                setLeftSideIndexString(selectedNode.data.leftSideIndex as string);
+
+              if (exprLoaded.leftSide.indexExpression && exprLoaded.leftSide.indexExpression.length > 0) {
+                const clonedElems = exprLoaded.leftSide.indexExpression.map(e => e.clone());
+                setLeftSideIndexExprElems(clonedElems);
               } else {
-                setLeftSideIndexString(null);
+                setLeftSideIndexExprElems(null);
               }
-              // Try to recreate the expression
-              const leftVar = allVariables.find(v => v.id === varId);
-              if (leftVar) {
-                const rightSide = selectedNode.data.expression.rightSide?.map((elem: any) => 
-                  ExpressionElement.fromObject(elem)
-                ) || [];
-                setExpression(new Expression(leftVar, rightSide));
+
+              // Replace leftSide reference with current variable definition + keep indexExpression
+              const currentVar = allVariables.find(v => v.id === varId)?.clone();
+              if (currentVar) {
+                if (exprLoaded.leftSide.indexExpression && currentVar.type === 'array') {
+                  currentVar.indexExpression = exprLoaded.leftSide.indexExpression.map(e => e.clone());
+                }
+                exprLoaded.leftSide = currentVar;
               }
+
+              setExpression(exprLoaded);
             }
           } catch (error) {
             console.error('Error creating expression:', error);
@@ -282,18 +291,45 @@ const VariableAssignmentEditor = () => {
           // Only reset form state when it's a new node (not when collaborative data is cleared)
           setLeftSideVariable('');
           setExpression(null);
-          setLeftSideIndexString(null);
+          setLeftSideIndexExprElems(null);
         }
       }
     } else {
       previousNodeIdRef.current = null;
       setLeftSideVariable('');
       setExpression(null);
-      setLeftSideIndexString(null);
+      setLeftSideIndexExprElems(null);
     }
     
     isInitialLoadRef.current = false;
   }, [selectedNode, selectedNode?.data?.expression, getAllVariables]);
+
+  // Update indexExpression whenever the index string changes.
+  useEffect(() => {
+    if (!leftSideVariable) return;
+
+    const selectedVar = getAllVariables().find(v => v.id === leftSideVariable);
+    if (!selectedVar || selectedVar.type !== 'array') return;
+
+    const idxExprElems = leftSideIndexExprElems ? leftSideIndexExprElems.map(e => e.clone()) : undefined;
+
+    setExpression(prev => {
+      if (!prev) return prev;
+
+      if (!(prev.leftSide instanceof Variable)) return prev;
+
+      // Only update when the index expression actually changed to avoid unnecessary re-renders
+      const prevSerialized = JSON.stringify(prev.leftSide.indexExpression ?? []);
+      const newSerialized = JSON.stringify(idxExprElems ?? []);
+      if (prevSerialized === newSerialized) return prev;
+
+      const newExpr = prev.clone();
+      if (newExpr.leftSide instanceof Variable) {
+        newExpr.leftSide.indexExpression = idxExprElems;
+      }
+      return newExpr;
+    });
+  }, [leftSideIndexExprElems, leftSideVariable]);
 
   // Expression building functions
   const addExpressionElement = (element: ExpressionElement) => {
@@ -457,7 +493,7 @@ const VariableAssignmentEditor = () => {
     }
     
     // Intercept array variable drag
-    if (activeDraggableItem.type === 'variable' && activeDraggableItem.variable?.type === 'array') {
+    if (activeDraggableItem.type === 'variable' && activeDraggableItem.variable?.type === 'array' && (!activeDraggableItem.variable.indexExpression || activeDraggableItem.variable.indexExpression.length === 0)) {
       const overLocation = getElementLocationInfo(over.id, expression);
       // Check if it's a valid drop target
       if (overLocation && (overLocation.isMainDropArea || overLocation.isNestedDropArea || overLocation.isMainExpressionElement || overLocation.isNestedExpressionElement)) {
@@ -569,11 +605,17 @@ const VariableAssignmentEditor = () => {
     }
   };
 
+  // Helper to derive a string representation when needed (UI only)
+  const getIndexString = () =>
+    leftSideIndexExprElems && leftSideIndexExprElems.length > 0
+      ? new Expression(undefined, leftSideIndexExprElems).toString()
+      : null;
+
   // Modify variable dropdown change handler to support array index dialog
   const handleLeftVariableChange = (value: string) => {
     if (value === '__CLEAR__') {
       setLeftSideVariable('');
-      setLeftSideIndexString(null);
+      setLeftSideIndexExprElems(null);
       return;
     }
 
@@ -586,28 +628,17 @@ const VariableAssignmentEditor = () => {
       // Open index dialog immediately
       setArrayVariableForIndex(variable);
       setIsEditingLeftSideIndex(true);
-      // Prefill if already had an index
-      if (leftSideIndexString) {
-        const parsed = parseArrayAccess(`${variable.name}[${leftSideIndexString}]`);
-        if (parsed) {
-          if (parsed.isRange && parsed.rangeStart && parsed.rangeEnd) {
-            setInitialTab('range');
-            setInitialRangeStart(parseExpressionString(parsed.rangeStart, getAllVariables()));
-            setInitialRangeEnd(parseExpressionString(parsed.rangeEnd, getAllVariables()));
-            setInitialExpression(null);
-          } else if (parsed.indexExpression) {
-            setInitialTab('single');
-            setInitialExpression(parseExpressionString(parsed.indexExpression, getAllVariables()));
-            setInitialRangeStart(null);
-            setInitialRangeEnd(null);
-          }
-        }
+      // Prefill dialog with existing index if any
+      if (leftSideIndexExprElems && leftSideIndexExprElems.length > 0) {
+        setInitialTab('single');
+        setInitialExpression(new Expression(undefined, leftSideIndexExprElems.map(e => e.clone())));
       } else {
-        setLeftSideIndexString(null);
+        setInitialTab('single');
+        setInitialExpression(new Expression(undefined, []));
       }
       setIsIndexDialogOpen(true);
     } else {
-      setLeftSideIndexString(null);
+      setLeftSideIndexExprElems(null);
     }
   };
 
@@ -617,17 +648,26 @@ const VariableAssignmentEditor = () => {
       if (expr.isEmpty()) {
         // Treat as cancel – clear variable selection
         setLeftSideVariable('');
-        setLeftSideIndexString(null);
+        setLeftSideIndexExprElems(null);
       } else {
-        setLeftSideIndexString(expr.toString());
+        setLeftSideIndexExprElems(expr.rightSide.map(e => e.clone()));
       }
       setIsEditingLeftSideIndex(false);
       setIsIndexDialogOpen(false);
       return;
     }
     if (arrayVariableForIndex) {
-      const exprStr = expr.toString();
-      const newValue = `${arrayVariableForIndex.name}[${exprStr}]`;
+      if (expr.isEmpty()) {
+        // Ignore empty index
+        setEditingElement(null);
+        setIsIndexDialogOpen(false);
+        setArrayVariableForIndex(null);
+        return;
+      }
+      const elemVar = arrayVariableForIndex as Variable;
+      const idxExpr = expr.rightSide.map(e => e.clone());
+      const variableClone = elemVar.clone();
+      variableClone.indexExpression = idxExpr;
 
       if (editingElement) {
         // Replace existing element
@@ -636,13 +676,14 @@ const VariableAssignmentEditor = () => {
           const newExpr = prev.clone();
           const elementToUpdate = newExpr.findElement(editingElement.id);
           if (elementToUpdate) {
-            elementToUpdate.value = newValue;
+            elementToUpdate.type = 'variable';
+            elementToUpdate.setVariable(variableClone);
           }
           return newExpr;
         });
       } else {
         // Add new element
-        const element = new ExpressionElement(crypto.randomUUID(), 'literal', newValue);
+        const element = new ExpressionElement(crypto.randomUUID(), 'variable', '', variableClone);
         setExpression(prev => {
           if (!prev) return null;
           const newExpr = prev.clone();
@@ -655,55 +696,6 @@ const VariableAssignmentEditor = () => {
     // Reset state
     setEditingElement(null);
     setInitialExpression(null);
-    setInitialRangeStart(null);
-    setInitialRangeEnd(null);
-    setIsIndexDialogOpen(false);
-  };
-
-  // Handle dialog submission for range editing
-  const handleDialogSubmitRange = (_: 'range', start: Expression, end: Expression) => {
-    if (isEditingLeftSideIndex && arrayVariableForIndex) {
-      if (start.isEmpty() || end.isEmpty()) {
-        setLeftSideVariable('');
-        setLeftSideIndexString(null);
-      } else {
-        setLeftSideIndexString(`${start.toString()}:${end.toString()}`);
-      }
-      setIsEditingLeftSideIndex(false);
-      setIsIndexDialogOpen(false);
-      return;
-    }
-    if (arrayVariableForIndex) {
-      const newValue = `${arrayVariableForIndex.name}[${start.toString()}:${end.toString()}]`;
-
-      if (editingElement) {
-        // Replace existing element
-        setExpression(prev => {
-          if (!prev) return null;
-          const newExpr = prev.clone();
-          const elementToUpdate = newExpr.findElement(editingElement.id);
-          if (elementToUpdate) {
-            elementToUpdate.value = newValue;
-          }
-          return newExpr;
-        });
-      } else {
-        // Add new element
-        const element = new ExpressionElement(crypto.randomUUID(), 'literal', newValue);
-        setExpression(prev => {
-          if (!prev) return null;
-          const newExpr = prev.clone();
-          newExpr.addElement(element);
-          return newExpr;
-        });
-      }
-    }
-    
-    // Reset state
-    setEditingElement(null);
-    setInitialExpression(null);
-    setInitialRangeStart(null);
-    setInitialRangeEnd(null);
     setIsIndexDialogOpen(false);
   };
 
@@ -711,11 +703,9 @@ const VariableAssignmentEditor = () => {
   const handleDialogCancel = () => {
     setEditingElement(null);
     setInitialExpression(null);
-    setInitialRangeStart(null);
-    setInitialRangeEnd(null);
     setIsIndexDialogOpen(false);
 
-    if (isEditingLeftSideIndex && !leftSideIndexString) {
+    if (isEditingLeftSideIndex && leftSideIndexExprElems && leftSideIndexExprElems.length === 0) {
       // User canceled before providing an index -> deselect variable
       setLeftSideVariable('');
       setIsEditingLeftSideIndex(false);
@@ -725,28 +715,17 @@ const VariableAssignmentEditor = () => {
 
   // Handler to edit existing array access elements on RHS (dragged literals)
   const handleEditArrayAccess = (element: ExpressionElement) => {
-    if (!element.value.includes('[') || !element.value.includes(']')) return;
+    if (!element.variable || !(element.variable instanceof Variable)) return;
+    if (element.variable.type !== 'array' || !element.variable.indexExpression || element.variable.indexExpression.length === 0) return;
 
-    const parsed = parseArrayAccess(element.value);
-    if (!parsed) return;
-
-    const arrayVar = getAllVariables().find(v => v.name === parsed.arrayName && v.type === 'array');
-    if (!arrayVar) return;
+    const elemVar = element.variable as Variable;
+    const arrayVar = getAllVariables().find(v => v.id === elemVar.id && v.type === 'array') || elemVar;
 
     setEditingElement(element);
     setArrayVariableForIndex(arrayVar);
 
-    if (parsed.isRange && parsed.rangeStart && parsed.rangeEnd) {
-      setInitialTab('range');
-      setInitialRangeStart(parseExpressionString(parsed.rangeStart, getAllVariables()));
-      setInitialRangeEnd(parseExpressionString(parsed.rangeEnd, getAllVariables()));
-      setInitialExpression(null);
-    } else if (parsed.indexExpression) {
-      setInitialTab('single');
-      setInitialExpression(parseExpressionString(parsed.indexExpression, getAllVariables()));
-      setInitialRangeStart(null);
-      setInitialRangeEnd(null);
-    }
+    setInitialTab('single');
+    setInitialExpression(new Expression(undefined, elemVar.indexExpression!.map(e => e.clone())));
 
     setIsIndexDialogOpen(true);
   };
@@ -763,10 +742,10 @@ const VariableAssignmentEditor = () => {
         variableName={arrayVariableForIndex?.name || ''}
         onCancel={handleDialogCancel}
         onSubmit={handleDialogSubmit}
-        onSubmitRange={handleDialogSubmitRange}
+        onSubmitRange={undefined as any}
         initialExpression={initialExpression || undefined}
-        initialRangeStart={initialRangeStart || undefined}
-        initialRangeEnd={initialRangeEnd || undefined}
+        initialRangeStart={undefined as any}
+        initialRangeEnd={undefined as any}
         initialTab={initialTab}
       />
       <DndContext
@@ -826,31 +805,17 @@ const VariableAssignmentEditor = () => {
                               setArrayVariableForIndex(selectedVar);
                               setIsEditingLeftSideIndex(true);
                               // Prefill dialog with existing index if any
-                              if (leftSideIndexString) {
-                                const parsed = parseArrayAccess(`${selectedVar.name}[${leftSideIndexString}]`);
-                                if (parsed) {
-                                  if (parsed.isRange && parsed.rangeStart && parsed.rangeEnd) {
-                                    setInitialTab('range');
-                                    setInitialRangeStart(parseExpressionString(parsed.rangeStart, getAllVariables()));
-                                    setInitialRangeEnd(parseExpressionString(parsed.rangeEnd, getAllVariables()));
-                                    setInitialExpression(null);
-                                  } else if (parsed.indexExpression) {
-                                    setInitialTab('single');
-                                    setInitialExpression(parseExpressionString(parsed.indexExpression, getAllVariables()));
-                                    setInitialRangeStart(null);
-                                    setInitialRangeEnd(null);
-                                  }
-                                }
+                              if (leftSideIndexExprElems && leftSideIndexExprElems.length > 0) {
+                                setInitialTab('single');
+                                setInitialExpression(new Expression(undefined, leftSideIndexExprElems.map(e => e.clone())));
                               } else {
                                 setInitialTab('single');
                                 setInitialExpression(new Expression(undefined, []));
-                                setInitialRangeStart(null);
-                                setInitialRangeEnd(null);
                               }
                               setIsIndexDialogOpen(true);
                             }}
                           >
-                            {leftSideIndexString ? `[${leftSideIndexString}]` : '[]'}
+                            {getIndexString() ? `[${getIndexString()}]` : '[]'}
                           </Button>
                         );
                       }
@@ -879,18 +844,19 @@ const VariableAssignmentEditor = () => {
                                   element={element}
                                   removeExpressionElement={removeExpressionElement}
                                   disabled={isRunning}
+                                  onEdit={handleEditArrayAccess}
                                 />
                               );
                             }
                             return (
-                                                          <DraggableExpressionElement
-                              key={element.id}
-                              element={element}
-                              index={index}
-                              removeExpressionElement={removeExpressionElement}
-                              disabled={isRunning}
-                              onEdit={handleEditArrayAccess}
-                            />
+                              <DraggableExpressionElement
+                                key={element.id}
+                                element={element}
+                                index={index}
+                                removeExpressionElement={removeExpressionElement}
+                                disabled={isRunning}
+                                onEdit={handleEditArrayAccess}
+                              />
                             );
                           })}
                         </SortableContext>
