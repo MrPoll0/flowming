@@ -97,11 +97,12 @@ The first time you open a pull request you will be asked to sign our **Contribut
 
 ## 📚 Project Thesis
 
-This repository includes the full bachelor's thesis (Spanish) that motivated the project, detailing state-of-the-art, design decisions and user evaluation.
+This repository includes the full bachelor's thesis (Spanish, TFG) that motivated the project, detailing state-of-the-art, design decisions and user evaluation.
 
 *Title:* "Aplicación web para el diseño y ejecución de diagramas de flujo"  
 *Author:* Daniel Pérez Fernández  
-*Advisor*: Álvaro Montero Montes    
+*Advisor*: Álvaro Montero Montes  
+*Grade*: 10 out of 10     
 **Universidad Carlos III de Madrid**, 2025    
 
 You can find the PDF and additional assets in the `docs/` release section.
